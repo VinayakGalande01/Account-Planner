@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: hsl(222 47% 7%); /* Slightly darker for more depth */
+  --color-foreground: hsl(210 40% 98%);
+  
+  --color-card: hsl(222 47% 10%);
+  --color-card-foreground: hsl(210 40% 98%);
+  
+  --color-primary: hsl(45 93% 58%); /* Gold */
+  --color-secondary: hsl(160 84% 45%); /* Emerald */
+  
+  --color-muted: hsl(217 32% 17%);
+  --color-muted-foreground: hsl(215 20% 70%);
+  
+  --color-accent: hsl(217 32% 20%);
+  --color-border: hsl(217 32% 20%);
+  
+  --radius-lg: 0.5rem; /* Tighter radius for ERP feel */
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    border-color: var(--color-border);
+  }
+  
+  body {
+    background-color: var(--color-background);
+  }
+}
+
+.glass-card {
+  background-color: color-mix(in srgb, var(--color-card) 60%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, white 10%, transparent);
+  border-radius: var(--radius-lg);
+}
+
+.premium-gradient {
+  background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 20%, transparent), var(--color-background), color-mix(in srgb, var(--color-secondary) 10%, transparent));
+}
+
+@keyframes slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.5s ease-out forwards;
+}
