@@ -1,47 +1,138 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════
+   ACCOUNT PLANNER — TACTICAL COMMAND CENTER
+   Design System v2.0 — "Every pixel is a weapon."
+   ═══════════════════════════════════════════════════════════ */
+
 @theme {
-  --color-background: hsl(222 47% 7%); /* Slightly darker for more depth */
-  --color-foreground: hsl(210 40% 98%);
-  
-  --color-card: hsl(222 47% 10%);
-  --color-card-foreground: hsl(210 40% 98%);
-  
-  --color-primary: hsl(45 93% 58%); /* Gold */
-  --color-secondary: hsl(160 84% 45%); /* Emerald */
-  
-  --color-muted: hsl(217 32% 17%);
-  --color-muted-foreground: hsl(215 20% 70%);
-  
-  --color-accent: hsl(217 32% 20%);
-  --color-border: hsl(217 32% 20%);
-  
-  --radius-lg: 0.5rem; /* Tighter radius for ERP feel */
+  /* ── Base Palette ── */
+  --color-background: #030303;
+  --color-foreground: #f4f4f5;
+
+  --color-card: #0a0a0b;
+  --color-card-foreground: #f4f4f5;
+
+  /* ── Primary: Cobalt Blue ── */
+  --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+
+  /* ── Secondary: Electric Violet (AI/System states) ── */
+  --color-secondary: #7c3aed;
+  --color-secondary-foreground: #ffffff;
+
+  /* ── Neutral Scale ── */
+  --color-muted: #141414;
+  --color-muted-foreground: #71717a;
+
+  --color-accent: #1a1a1a;
+  --color-border: #1a1a1a;
+
+  /* ── Semantic Colors ── */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  /* ── Radius ── */
+  --radius-lg: 0.5rem;
+  --radius-md: 0.375rem;
+  --radius-sm: 0.25rem;
 }
 
 @layer base {
   :root {
     color-scheme: dark;
   }
-  
-  *, ::after, ::before, ::backdrop, ::file-selector-button {
+
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
     border-color: var(--color-border);
   }
-  
+
   body {
     background-color: var(--color-background);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Tabular nums for all financial data */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   GLASS SURFACES
+   ═══════════════════════════════════════════════════════════ */
+
 .glass-card {
-  background-color: color-mix(in srgb, var(--color-card) 60%, transparent);
-  backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, white 10%, transparent);
+  background-color: color-mix(in srgb, var(--color-card) 70%, transparent);
+  backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, white 6%, transparent);
   border-radius: var(--radius-lg);
 }
 
-.premium-gradient {
-  background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 20%, transparent), var(--color-background), color-mix(in srgb, var(--color-secondary) 10%, transparent));
+.glass-surface {
+  background-color: color-mix(in srgb, var(--color-card) 40%, transparent);
+  backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid color-mix(in srgb, white 4%, transparent);
+  border-radius: var(--radius-lg);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DATA CELL — for financial/tabular data alignment
+   ═══════════════════════════════════════════════════════════ */
+
+.data-cell {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TERMINAL SCAN-LINE OVERLAY
+   ═══════════════════════════════════════════════════════════ */
+
+.terminal-scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 1px,
+    rgba(255, 255, 255, 0.015) 1px,
+    rgba(255, 255, 255, 0.015) 2px
+  );
+  z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ANIMATIONS & KEYFRAMES
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes loading-bar {
+  0% { transform: scaleX(0); transform-origin: left; }
+  50% { transform: scaleX(0.7); transform-origin: left; }
+  100% { transform: scaleX(0.7); transform-origin: left; }
+}
+
+@keyframes loading-bar-complete {
+  0% { transform: scaleX(0.7); }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 4px currentColor; }
+  50% { box-shadow: 0 0 12px currentColor, 0 0 24px currentColor; }
 }
 
 @keyframes slide-up {
@@ -49,6 +140,185 @@
   to { transform: translateY(0); opacity: 1; }
 }
 
+@keyframes fade-in-row {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes system-scan {
+  0% { left: -30%; }
+  100% { left: 130%; }
+}
+
 .animate-slide-up {
   animation: slide-up 0.5s ease-out forwards;
+}
+
+.animate-blink-cursor {
+  animation: blink-cursor 1s steps(1) infinite;
+}
+
+.animate-loading-bar {
+  animation: loading-bar 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-fade-row {
+  animation: fade-in-row 0.3s ease-out both;
+}
+
+/* System pulse indicator */
+.system-pulse {
+  position: relative;
+}
+.system-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.3;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCROLLBAR — Hidden but functional
+   ═══════════════════════════════════════════════════════════ */
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Slim tactical scrollbar */
+.scrollbar-tactical {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.06) transparent;
+}
+.scrollbar-tactical::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-tactical::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-tactical::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATUS TAG GLOW EFFECTS
+   ═══════════════════════════════════════════════════════════ */
+
+.glow-cobalt {
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.4), inset 0 0 8px rgba(37, 99, 235, 0.1);
+}
+.glow-violet {
+  box-shadow: 0 0 8px rgba(124, 58, 237, 0.4), inset 0 0 8px rgba(124, 58, 237, 0.1);
+}
+.glow-amber {
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4), inset 0 0 8px rgba(245, 158, 11, 0.1);
+}
+.glow-emerald {
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4), inset 0 0 8px rgba(16, 185, 129, 0.1);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOOLTIP (Pure CSS — no JS dependency)
+   ═══════════════════════════════════════════════════════════ */
+
+[data-tooltip] {
+  position: relative;
+}
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 10px;
+  background: #1a1a1a;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 100;
+}
+[data-tooltip]:hover::after {
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LANDING PAGE — Marquee Ticker
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GHOST TABLE — Skeleton loading rows
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes ghost-pulse {
+  0%, 100% { opacity: 0.04; }
+  50% { opacity: 0.08; }
+}
+
+.ghost-row {
+  animation: ghost-pulse 1.8s ease-in-out infinite;
+}
+
+.ghost-cell {
+  height: 10px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 50%, rgba(255,255,255,0.06) 100%);
+  background-size: 200% 100%;
+  animation: ghost-shimmer 2s ease-in-out infinite;
+}
+
+@keyframes ghost-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOPOGRAPHIC MAP — Strategy page overlay
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes topo-draw {
+  0% { stroke-dashoffset: 1000; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.topo-line {
+  stroke-dasharray: 1000;
+  animation: topo-draw 8s linear infinite;
+}
+
+@keyframes topo-pulse {
+  0%, 100% { opacity: 0.03; }
+  50% { opacity: 0.08; }
+}
+
+.topo-overlay {
+  animation: topo-pulse 4s ease-in-out infinite;
 }

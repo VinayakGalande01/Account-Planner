@@ -217,6 +217,39 @@ async def chat(request: ChatRequest):
     except Exception as e:
         return {"type": "text", "response": f"Connection Failure. (Error: {str(e)})"}
 
+
+# ─── New Tactical Endpoints ───────────────────────────────────
+
+@app.get("/api/health")
+async def health_check():
+    """System health check — pinged by the frontend sidebar every 15s."""
+    return {
+        "status": "operational",
+        "engine": "loaded",
+        "sheets": list(engine.data.keys()),
+    }
+
+@app.get("/api/accounts/enriched")
+async def get_enriched_accounts():
+    """Returns all accounts with computed health scores, pipeline values, and last activity dates."""
+    try:
+        enriched = engine.get_enriched_accounts_list()
+        return enriched
+    except Exception as e:
+        return []
+
+@app.get("/api/pipeline/summary")
+async def get_pipeline_summary():
+    """Returns aggregated pipeline data grouped by stage."""
+    try:
+        analysis = engine.get_pipeline_analysis()
+        return analysis
+    except Exception as e:
+        return {"total_value": 0, "weighted_value": 0, "deal_count": 0, "stage_summary": {}}
+
+
+# ─── Existing Endpoints ───────────────────────────────────────
+
 @app.get("/")
 async def root():
     return {"message": "Account Planner Agent API is running"}

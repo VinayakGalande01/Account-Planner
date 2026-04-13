@@ -1,61 +1,61 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Zap, PieChart, ShieldAlert, Activity, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+interface KPIData {
+  label: string;
+  value: string;
+  change: string;
+  changeType: 'up' | 'down' | 'neutral';
+  icon: React.ElementType;
+  iconColor: string;
+}
+
+const staticKPIs: KPIData[] = [
+  { label: 'Global Health', value: '84%', change: '+2.4%', changeType: 'up', icon: Zap, iconColor: 'text-emerald-500' },
+  { label: 'Pipe Value', value: '$12.4M', change: '+12%', changeType: 'up', icon: PieChart, iconColor: 'text-primary' },
+  { label: 'Churn Risk', value: '04', change: '$210K', changeType: 'down', icon: ShieldAlert, iconColor: 'text-red-500' },
+  { label: 'AI Utilization', value: '92%', change: 'ACTIVE', changeType: 'neutral', icon: Activity, iconColor: 'text-secondary' },
+];
 
 export default function KPIGrid() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-      <div className="bg-card border border-white/5 p-6 rounded-lg">
-        <div className="flex justify-between items-start mb-4">
-          <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Global Health</p>
-          <div className="p-1 bg-emerald-500/10 rounded">
-            <Zap className="w-3 h-3 text-emerald-500" />
-          </div>
-        </div>
-        <div className="flex items-end justify-between">
-          <p className="text-3xl font-black text-foreground">84%</p>
-          <div className="flex items-center gap-1 text-emerald-500 text-[10px] font-bold">
-            <ArrowUpRight className="w-3 h-3" /> 2.4%
-          </div>
-        </div>
-      </div>
-      <div className="bg-card border border-white/5 p-6 rounded-lg">
-         <div className="flex justify-between items-start mb-4">
-            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Pipe Value</p>
-            <PieChart className="w-3 h-3 text-primary" />
-         </div>
-         <div className="flex items-end justify-between">
-            <p className="text-3xl font-black text-foreground">$12.4M</p>
-            <div className="flex items-center gap-1 text-primary text-[10px] font-bold">
-               <ArrowUpRight className="w-3 h-3" /> 12%
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {staticKPIs.map((kpi, idx) => {
+        const Icon = kpi.icon;
+        return (
+          <motion.div
+            key={kpi.label}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: idx * 0.08, ease: 'easeOut' }}
+            className="bg-[#080808] border border-white/[0.04] p-5 rounded-md hover:scale-[1.01] hover:shadow-[inset_0_0_20px_rgba(37,99,235,0.03)] transition-all duration-200 cursor-default group"
+          >
+            <div className="flex justify-between items-start mb-3">
+              <p className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.12em] font-[family-name:var(--font-mono)]">
+                {kpi.label}
+              </p>
+              <div className="p-1 bg-white/[0.03] rounded">
+                <Icon className={`w-3 h-3 ${kpi.iconColor}`} />
+              </div>
             </div>
-         </div>
-      </div>
-      <div className="bg-card border border-white/5 p-6 rounded-lg">
-         <div className="flex justify-between items-start mb-4">
-            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Churn Risk</p>
-            <ShieldAlert className="w-3 h-3 text-rose-500" />
-         </div>
-         <div className="flex items-end justify-between">
-            <p className="text-3xl font-black text-foreground">04</p>
-            <div className="flex items-center gap-1 text-rose-500 text-[10px] font-bold">
-               <ArrowDownRight className="w-3 h-3" /> $210K
+            <div className="flex items-end justify-between">
+              <p className="text-2xl font-black text-foreground data-cell">{kpi.value}</p>
+              <div className={`flex items-center gap-1 text-[10px] font-bold ${
+                kpi.changeType === 'up' ? 'text-emerald-500/70 drop-shadow-[0_0_4px_rgba(16,185,129,0.15)]' :
+                kpi.changeType === 'down' ? 'text-red-500/70 drop-shadow-[0_0_4px_rgba(239,68,68,0.15)]' :
+                'text-secondary/60'
+              }`}>
+                {kpi.changeType === 'up' && <ArrowUpRight className="w-3 h-3" />}
+                {kpi.changeType === 'down' && <ArrowDownRight className="w-3 h-3" />}
+                <span className="font-[family-name:var(--font-mono)]">{kpi.change}</span>
+              </div>
             </div>
-         </div>
-      </div>
-      <div className="bg-card border border-white/5 p-6 rounded-lg hidden lg:block">
-         <div className="flex justify-between items-start mb-4">
-            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">AI Utilization</p>
-            <Activity className="w-3 h-3 text-secondary" />
-         </div>
-         <div className="flex items-end justify-between">
-            <p className="text-3xl font-black text-foreground">92%</p>
-            <div className="flex items-center gap-1 text-secondary text-[10px] font-bold italic">
-               PREMIUM
-            </div>
-         </div>
-      </div>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

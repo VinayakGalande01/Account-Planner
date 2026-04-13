@@ -145,6 +145,60 @@ class DataEngine:
             "stage_summary": df.groupby('Stage')['Amount_USD'].sum().to_dict()
         }
 
+    def get_enriched_accounts_list(self):
+        """Returns all accounts enriched with health scores, pipeline values, and activity dates."""
+        accounts = self.data.get('account')
+        if accounts is None:
+            return []
+
+        opps = self.data.get('opportunity')
+        activities = self.data.get('activity')
+        result = []
+
+        for _, acc_row in accounts.iterrows():
+            account_id = acc_row['Account_ID']
+            record = {
+                'Account_ID': str(acc_row.get('Account_ID', '')),
+                'Account_Name': str(acc_row.get('Account_Name', '')),
+                'Account_Tier': str(acc_row.get('Account_Tier', '')),
+                'Industry': str(acc_row.get('Industry', '')),
+                'Territory': str(acc_row.get('Territory', '')),
+                'Annual_Revenue_USD': float(acc_row.get('Annual_Revenue_USD', 0)) if pd.notna(acc_row.get('Annual_Revenue_USD')) else 0,
+                'Country': str(acc_row.get('Country', '')),
+            }
+
+            # Pipeline value
+            if opps is not None and not opps.empty:
+                acc_opps = opps[opps['Account_ID'] == account_id]
+                open_opps = acc_opps[~acc_opps['Stage'].isin(['Closed Won', 'Closed Lost'])]
+                record['total_pipeline_value'] = float(open_opps['Amount_USD'].sum()) if not open_opps.empty else 0
+                record['open_deal_count'] = int(len(open_opps))
+            else:
+                record['total_pipeline_value'] = 0
+                record['open_deal_count'] = 0
+
+            # Last activity date
+            if activities is not None and not activities.empty:
+                acc_acts = activities[activities['Account_ID'] == account_id]
+                if not acc_acts.empty:
+                    last_date = acc_acts['Activity_Date'].max()
+                    record['last_activity_date'] = str(last_date)[:10] if pd.notna(last_date) else None
+                else:
+                    record['last_activity_date'] = None
+            else:
+                record['last_activity_date'] = None
+
+            # Health score
+            try:
+                health = self.calculate_health_score(account_id)
+                record['health_score'] = health.get('overall_score', 0) if isinstance(health, dict) and 'error' not in health else 0
+            except:
+                record['health_score'] = 0
+
+            result.append(record)
+
+        return result
+
     def get_formatted_account_data(self, account_id: str):
         """Formats all 5 sheets into the requested APEX schema for LLM context."""
         output = []

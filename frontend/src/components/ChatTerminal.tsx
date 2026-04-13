@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Terminal, CheckCircle2, AlertTriangle, ShieldCheck, Target, TrendingUp, Zap, ChevronRight } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Bot, User, Terminal, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message {
@@ -11,17 +11,30 @@ interface Message {
   data?: any;
 }
 
+type ProcessingStage = 'idle' | 'analyzing' | 'fetching' | 'inferring' | 'complete';
+
+const stageConfig: Record<ProcessingStage, { label: string; className: string }> = {
+  idle: { label: '', className: '' },
+  analyzing: { label: 'SYSTEM: ANALYZING', className: 'text-blue-400 glow-cobalt' },
+  fetching: { label: 'DATA: FETCHING', className: 'text-violet-400 glow-violet' },
+  inferring: { label: 'MODEL: INFERRING', className: 'text-amber-400 glow-amber' },
+  complete: { label: 'COMPLETE', className: 'text-emerald-400 glow-emerald' },
+};
+
 export default function ChatTerminal({ externalCommand }: { externalCommand?: string }) {
   const [messages, setMessages] = useState<Message[]>([
-    { 
-      role: 'assistant', 
-      type: 'text', 
-      content: 'Welcome, Strategic Advisor. I have analyzed your portfolio. Which account shall we deep-dive into today?' 
-    }
+    {
+      role: 'assistant',
+      type: 'text',
+      content: 'APEX v2.1 initialized. Portfolio loaded. Awaiting directive.',
+    },
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [processingStage, setProcessingStage] = useState<ProcessingStage>('idle');
+  const [displayedResponse, setDisplayedResponse] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const stageTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (externalCommand) {
@@ -33,16 +46,51 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, isTyping, displayedResponse]);
+
+  // Staggered text reveal effect
+  const animateTextReveal = useCallback((fullText: string, onComplete: () => void) => {
+    const maxAnimChars = 200;
+    const charsToAnimate = Math.min(fullText.length, maxAnimChars);
+    let current = 0;
+
+    setDisplayedResponse('');
+
+    const timer = setInterval(() => {
+      current += 1;
+      if (current >= charsToAnimate) {
+        setDisplayedResponse(fullText);
+        clearInterval(timer);
+        onComplete();
+      } else {
+        setDisplayedResponse(fullText.substring(0, current));
+      }
+    }, 12);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Rotate through processing stages
+  const startProcessingStages = useCallback(() => {
+    setProcessingStage('analyzing');
+    stageTimerRef.current = setTimeout(() => {
+      setProcessingStage('fetching');
+      stageTimerRef.current = setTimeout(() => {
+        setProcessingStage('inferring');
+      }, 1500);
+    }, 1200);
+  }, []);
 
   const handleSend = async (overrideInput?: string) => {
     const textToSend = overrideInput || input;
     if (!textToSend.trim()) return;
 
     const userMsg: Message = { role: 'user', content: textToSend, type: 'text' };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     if (!overrideInput) setInput('');
     setIsTyping(true);
+    setDisplayedResponse(null);
+    startProcessingStages();
 
     try {
       const response = await fetch('http://localhost:8001/api/chat', {
@@ -51,179 +99,147 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
         body: JSON.stringify({ query: textToSend }),
       });
       const result = await response.json();
-      
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        type: result.type || 'text',
-        content: result.response,
-        data: result.data
-      }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        type: 'text',
-        content: 'Error connecting to intelligence engine. Ensure backend is running.' 
-      }]);
-    } finally {
+
+      // Clear stage timers
+      if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+      setProcessingStage('complete');
+
+      const fullText = result.response || '';
+
+      // Animate reveal, then finalize
+      animateTextReveal(fullText, () => {
+        setTimeout(() => {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              type: result.type || 'text',
+              content: fullText,
+              data: result.data,
+            },
+          ]);
+          setDisplayedResponse(null);
+          setIsTyping(false);
+          setProcessingStage('idle');
+        }, 300);
+      });
+    } catch {
+      if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+      setProcessingStage('idle');
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          type: 'text',
+          content: 'ERR: Connection to intelligence engine failed. Verify backend status.',
+        },
+      ]);
       setIsTyping(false);
     }
   };
 
   return (
-    <div className="glass-card flex flex-col h-[700px] border-primary/20 bg-primary/5 overflow-hidden shadow-2xl relative">
+    <div className="flex flex-col h-full bg-[#030303] border border-white/[0.04] rounded-md overflow-hidden relative terminal-scanlines">
       {/* Header */}
-      <div className="p-4 border-b border-white/5 bg-white/5 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center justify-between shrink-0 relative z-10">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/20 rounded-xl">
-            <Bot className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Strategic Intelligence</h3>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">Live Analysis</span>
-            </div>
-          </div>
+          <Terminal className="w-3.5 h-3.5 text-primary" />
+          <span className="text-[10px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
+            APEX v2.1
+          </span>
+          <span className="text-[9px] text-zinc-600 font-[family-name:var(--font-mono)]">// SESSION ACTIVE</span>
         </div>
-        <Sparkles className="w-4 h-4 text-primary/40" />
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        </div>
       </div>
 
+      {/* Processing Stage Indicator */}
+      <AnimatePresence>
+        {processingStage !== 'idle' && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="px-4 py-2 border-b border-white/[0.04] bg-white/[0.01] relative z-10"
+          >
+            <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] border border-white/[0.06] ${stageConfig[processingStage].className}`}>
+              <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+              {stageConfig[processingStage].label}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-8 scroll-smooth scrollbar-hide">
-        <AnimatePresence>
-          {messages.map((msg, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 15, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-            >
-              <div className={`p-2 rounded-xl h-fit shrink-0 ${msg.role === 'user' ? 'bg-primary/20' : 'bg-white/10'}`}>
-                {msg.role === 'user' ? <User className="w-4 h-4 text-primary" /> : <Bot className="w-4 h-4 text-primary" />}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scroll-smooth scrollbar-tactical relative z-10">
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {msg.role === 'assistant' && (
+              <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                <Bot className="w-3 h-3 text-primary" />
               </div>
-              
-              <div className={`max-w-[85%] space-y-4`}>
-                {msg.type === 'structured' && msg.data ? (
-                  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-700">
-                    {/* Summary Section */}
-                    <div className="bg-white/5 border border-white/10 p-5 rounded-2xl relative overflow-hidden group">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-primary/50" />
-                      <p className="text-sm font-medium leading-relaxed text-foreground/90 italic">"{msg.data.summary}"</p>
-                    </div>
+            )}
 
-                    {/* Actions Section */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between px-1">
-                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-2">
-                          <Target className="w-3 h-3" />
-                          Prioritized Actions
-                        </h4>
-                        <span className="text-[9px] font-black text-muted-foreground/40 italic">STRATEGIC PRIORITY</span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3">
-                        {msg.data.actions?.map((action: any, idx: number) => (
-                          <div key={idx} className="bg-white/5 border border-white/5 p-4 rounded-xl flex items-center gap-4 hover:border-primary/40 hover:bg-white/10 transition-all cursor-pointer group shadow-sm">
-                            <div className="bg-emerald-500/20 p-2 rounded-lg group-hover:bg-emerald-500/30 transition-colors">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-black text-foreground truncate">{action.name}</p>
-                              <div className="flex items-center gap-3 mt-1.5">
-                                <span className="text-[9px] px-1.5 py-0.5 bg-primary/10 text-primary font-black rounded">{action.priority}</span>
-                                <span className="text-[9px] text-muted-foreground flex items-center gap-1 uppercase">
-                                  <User className="w-2.5 h-2.5" /> {action.owner}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-[10px] font-bold text-muted-foreground">{action.due_date}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Risks & Advantages Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-rose-500 flex items-center gap-2 px-1">
-                          <AlertTriangle className="w-3 h-3" />
-                          Key Risks
-                        </h4>
-                        {msg.data.risks?.map((risk: any, idx: number) => (
-                          <div key={idx} className="bg-rose-500/5 border border-rose-500/10 p-3 rounded-xl">
-                            <p className="text-xs font-bold text-foreground mb-1">{risk.title}</p>
-                            <p className="text-[10px] text-muted-foreground leading-relaxed italic">{risk.mitigation}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-secondary flex items-center gap-2 px-1">
-                          <TrendingUp className="w-3 h-3" />
-                          Advantages
-                        </h4>
-                        <div className="space-y-2">
-                          {msg.data.advantages?.map((adv: string, idx: number) => (
-                            <div key={idx} className="bg-secondary/5 border border-secondary/10 px-3 py-2 rounded-lg flex items-center gap-2">
-                              <Zap className="w-2.5 h-2.5 text-secondary" />
-                              <span className="text-[10px] font-bold text-foreground/80">{adv}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={`p-4 rounded-2xl text-sm shadow-xl leading-relaxed whitespace-pre-wrap ${
-                    msg.role === 'user' 
-                      ? 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-black rounded-tr-none border-b-2 border-black/10' 
-                      : 'bg-white/5 border border-white/10 text-foreground/90 rounded-tl-none font-medium'
-                  }`}>
-                    {msg.content}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        
-        {isTyping && (
-          <div className="flex gap-4">
-            <div className="p-2 rounded-xl bg-white/10 h-fit">
-              <Bot className="w-4 h-4 text-primary animate-pulse" />
+            <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-first' : ''}`}>
+              {msg.role === 'user' ? (
+                <div className="px-3 py-2 rounded-md bg-primary/10 border border-primary/20 text-[11px] font-bold text-foreground font-[family-name:var(--font-mono)]">
+                  <span className="text-primary mr-2">&gt;</span>
+                  {msg.content}
+                </div>
+              ) : (
+                <div className="text-[11px] text-zinc-300 leading-relaxed whitespace-pre-wrap font-[family-name:var(--font-mono)]">
+                  {msg.content}
+                </div>
+              )}
             </div>
-            <div className="bg-white/5 border border-white/10 p-5 rounded-2xl rounded-tl-none shadow-inner">
-              <div className="flex gap-2">
-                <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce"></span>
-                <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce delay-150"></span>
-                <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce delay-300"></span>
+
+            {msg.role === 'user' && (
+              <div className="w-6 h-6 rounded bg-white/[0.04] flex items-center justify-center shrink-0 mt-0.5">
+                <User className="w-3 h-3 text-zinc-500" />
               </div>
+            )}
+          </div>
+        ))}
+
+        {/* Typing / Reveal State */}
+        {isTyping && (
+          <div className="flex gap-3">
+            <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+              <Bot className="w-3 h-3 text-primary" />
+            </div>
+            <div className="text-[11px] text-zinc-300 leading-relaxed whitespace-pre-wrap font-[family-name:var(--font-mono)] max-w-[85%]">
+              {displayedResponse !== null ? (
+                <>
+                  {displayedResponse}
+                  <span className="inline-block w-2 h-4 bg-primary ml-0.5 animate-blink-cursor align-middle" />
+                </>
+              ) : (
+                <span className="inline-block w-2 h-4 bg-primary animate-blink-cursor" />
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Input Section */}
-      <div className="p-6 bg-white/5 border-t border-white/5 relative">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1 bg-background border border-white/5 rounded-full text-[8px] font-black tracking-widest text-muted-foreground uppercase">
-          Neural Interface Active
-        </div>
-        <div className="relative">
-          <input 
-            type="text" 
+      {/* Input */}
+      <div className="px-4 py-3 border-t border-white/[0.04] bg-white/[0.01] relative z-10">
+        <div className="flex items-center gap-2">
+          <span className="text-primary text-[11px] font-[family-name:var(--font-mono)] font-bold shrink-0">&gt;_</span>
+          <input
+            type="text"
             placeholder="Query account intelligence..."
-            className="w-full bg-muted/30 border border-white/10 rounded-2xl pl-5 pr-14 py-4 focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm text-foreground placeholder:text-muted-foreground/30 transition-all font-bold shadow-inner"
+            className="flex-1 bg-transparent text-[11px] text-foreground placeholder:text-zinc-700 focus:outline-none font-[family-name:var(--font-mono)] font-medium"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           />
-          <button 
+          <button
             onClick={() => handleSend()}
-            disabled={isTyping}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 text-primary hover:bg-primary/20 rounded-xl transition-all disabled:opacity-30 flex items-center gap-2 group"
+            disabled={isTyping || !input.trim()}
+            className="p-1.5 text-primary hover:bg-primary/10 rounded transition-all disabled:opacity-20"
           >
-            <Send className="w-5 h-5 group-hover:translate-x-1 group-active:scale-90 transition-all" />
+            <Send className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

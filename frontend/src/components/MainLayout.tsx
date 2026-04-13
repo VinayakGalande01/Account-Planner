@@ -1,30 +1,94 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import Sidebar from './Sidebar';
-import { Database, ShieldCheck, Zap, Globe, Lock, Sliders, Cpu, Bell, User } from 'lucide-react';
+import LandingPage from './LandingPage';
+import { Database, Zap, Globe, Lock, Sliders, Cpu, Bell, User } from 'lucide-react';
 import PortfolioLedger from './PortfolioLedger';
 import PipelineView from './PipelineView';
 import ChatTerminal from './ChatTerminal';
 import KPIGrid from './KPIGrid';
+import { motion, AnimatePresence } from 'framer-motion';
+
+/* ── Global Loading Context ── */
+interface LoadingContextType {
+  isLoading: boolean;
+  setLoading: (val: boolean) => void;
+}
+const LoadingContext = createContext<LoadingContextType>({ isLoading: false, setLoading: () => {} });
+export const useGlobalLoading = () => useContext(LoadingContext);
+
+/* ── Topographic SVG for Strategy Page ── */
+function TopographicOverlay() {
+  const lines = Array.from({ length: 12 }, (_, i) => {
+    const cx = 200 + Math.sin(i * 1.3) * 120;
+    const cy = 150 + Math.cos(i * 0.9) * 80;
+    const rx = 60 + i * 18;
+    const ry = 40 + i * 12;
+    return { cx, cy, rx, ry, delay: i * 0.6 };
+  });
+
+  return (
+    <svg className="absolute inset-0 w-full h-full topo-overlay" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice">
+      {lines.map((l, i) => (
+        <ellipse
+          key={i}
+          cx={l.cx}
+          cy={l.cy}
+          rx={l.rx}
+          ry={l.ry}
+          fill="none"
+          stroke="#2563eb"
+          strokeWidth="0.3"
+          opacity="0.15"
+          className="topo-line"
+          style={{ animationDelay: `${l.delay}s` }}
+        />
+      ))}
+      {/* Cluster nodes */}
+      {[
+        { x: 120, y: 100 }, { x: 280, y: 80 }, { x: 200, y: 200 },
+        { x: 320, y: 180 }, { x: 80, y: 220 }, { x: 350, y: 260 },
+      ].map((n, i) => (
+        <g key={i}>
+          <circle cx={n.x} cy={n.y} r="2" fill="#2563eb" opacity="0.3" />
+          <circle cx={n.x} cy={n.y} r="6" fill="none" stroke="#2563eb" strokeWidth="0.3" opacity="0.15" className="animate-pulse" />
+        </g>
+      ))}
+      {/* Connection lines */}
+      <line x1="120" y1="100" x2="200" y2="200" stroke="#2563eb" strokeWidth="0.2" opacity="0.1" className="topo-line" />
+      <line x1="280" y1="80" x2="200" y2="200" stroke="#2563eb" strokeWidth="0.2" opacity="0.1" className="topo-line" style={{ animationDelay: '2s' }} />
+      <line x1="200" y1="200" x2="320" y2="180" stroke="#2563eb" strokeWidth="0.2" opacity="0.1" className="topo-line" style={{ animationDelay: '4s' }} />
+    </svg>
+  );
+}
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
+  const [consoleActive, setConsoleActive] = useState(false);
   const [activeTab, setActiveTab] = useState('Portfolio');
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [systemStatus, setSystemStatus] = useState<'operational' | 'offline' | 'connecting'>('connecting');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Health check
+  const checkHealth = useCallback(async () => {
+    try {
+      const res = await fetch('http://localhost:8001/api/health', { signal: AbortSignal.timeout(3000) });
+      setSystemStatus(res.ok ? 'operational' : 'offline');
+    } catch {
+      setSystemStatus('offline');
+    }
+  }, []);
 
   useEffect(() => {
-    fetch('http://localhost:8001/api/accounts')
-      .then(res => res.json())
-      .then(data => {
-        setAccounts(data || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
+    checkHealth();
+    const interval = setInterval(checkHealth, 15000);
+    return () => clearInterval(interval);
+  }, [checkHealth]);
+
+  const handleInitialize = () => {
+    setConsoleActive(true);
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -32,164 +96,210 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         return children;
       case 'Accounts':
         return (
-          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <h2 className="text-xl font-black text-foreground uppercase tracking-[0.2em] flex items-center gap-3">
-              <Database className="w-5 h-5 text-primary" />
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
+              <Database className="w-3.5 h-3.5 text-primary" />
               Accounts Ledger
             </h2>
-            <PortfolioLedger 
-              accounts={accounts} 
-              loading={loading} 
-              search="" 
-              onSearchChange={() => {}} 
-              onAccountClick={() => {}} 
+            <PortfolioLedger
+              accounts={[]}
+              loading={true}
+              search=""
+              onSearchChange={() => {}}
+              onAccountClick={() => {}}
             />
           </div>
         );
       case 'Pipeline':
         return (
-          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <h2 className="text-xl font-black text-foreground uppercase tracking-[0.2em] flex items-center gap-3">
-              <Zap className="w-5 h-5 text-primary" />
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
+              <Zap className="w-3.5 h-3.5 text-primary" />
               Pipeline Velocity
             </h2>
             <PipelineView />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-               <div className="glass-card p-8 border-primary/10">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Pipeline Distribution</h4>
-                  <div className="aspect-video bg-white/5 rounded-lg flex items-center justify-center italic text-[10px] text-muted-foreground/30">
-                     [Advanced Stage Analytics Active]
-                  </div>
-               </div>
-               <div className="glass-card p-8 border-primary/10">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Quartile Forecasting</h4>
-                  <div className="aspect-video bg-white/5 rounded-lg flex items-center justify-center italic text-[10px] text-muted-foreground/30">
-                     [Financial Projection Core Engaged]
-                  </div>
-               </div>
-            </div>
           </div>
         );
       case 'Intelligence':
         return (
-          <div className="h-[80vh] animate-in fade-in zoom-in-95 duration-500">
-             <ChatTerminal />
+          <div className="h-[calc(100vh-6rem)] animate-in fade-in zoom-in-95 duration-500">
+            <ChatTerminal />
           </div>
         );
       case 'Strategy':
         return (
-           <div className="max-w-4xl mx-auto py-20 text-center space-y-10 animate-in fade-in duration-1000">
+          <div className="max-w-4xl mx-auto py-20 text-center space-y-10 animate-in fade-in duration-1000 relative">
+            {/* Topographic Map Overlay */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <TopographicOverlay />
+            </div>
+
+            <div className="relative z-10">
               <div className="inline-flex p-4 bg-primary/10 rounded-full border border-primary/20 mb-4">
-                 <Globe className="w-12 h-12 text-primary animate-spin-slow" />
+                <Globe className="w-12 h-12 text-primary" />
               </div>
               <div className="space-y-4">
-                 <h2 className="text-4xl font-black text-foreground uppercase tracking-[0.4em]">Strategic Core</h2>
-                 <p className="text-muted-foreground font-bold max-w-lg mx-auto">
-                    The APEX Strategic Engine is currently synthesizing cross-territory data to generate your Q4 Market Expansion roadmap.
-                 </p>
+                <h2 className="text-3xl font-black text-foreground uppercase tracking-[0.3em] font-[family-name:var(--font-mono)]">Strategic Core</h2>
+                <p className="text-sm text-muted-foreground font-medium max-w-lg mx-auto leading-relaxed normal-case">
+                  The APEX Strategic Engine is synthesizing cross-territory data to generate your Q4 Market Expansion roadmap.
+                </p>
               </div>
               <div className="grid grid-cols-3 gap-6 max-w-2xl mx-auto pt-10">
-                 {[1, 2, 3].map(i => (
-                    <div key={i} className="h-1 bg-white/5 rounded-full overflow-hidden">
-                       <div className="h-full bg-primary/40 w-1/3 animate-loading-bar" />
-                    </div>
-                 ))}
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-[2px] bg-white/[0.04] rounded-full overflow-hidden">
+                    <div className="h-full bg-primary/40 w-1/3 animate-loading-bar" />
+                  </div>
+                ))}
               </div>
-              <p className="text-[10px] font-black text-primary/40 uppercase tracking-widest animate-pulse">Neural Pathfinding in progress...</p>
-           </div>
+              <p className="text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse font-[family-name:var(--font-mono)] mt-6">
+                Neural Pathfinding in progress...
+              </p>
+
+              {/* Cluster status indicators */}
+              <div className="flex justify-center gap-8 mt-12">
+                {['APAC Region', 'EMEA Cluster', 'NA Territory'].map((region, i) => (
+                  <div key={region} className="text-center space-y-2">
+                    <div className="w-3 h-3 rounded-full bg-primary/20 border border-primary/30 mx-auto animate-pulse" style={{ animationDelay: `${i * 0.5}s` }} />
+                    <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">{region}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         );
       case 'Settings':
         return (
-           <div className="max-w-5xl mx-auto space-y-12 animate-in fade-in slide-in-from-right-4 duration-700">
-              <h2 className="text-2xl font-black text-foreground uppercase tracking-[0.3em] flex items-center gap-4">
-                 <Sliders className="w-6 h-6 text-primary" />
-                 Control Center
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 <div className="glass-card p-10 border-white/5 space-y-6">
-                    <div className="flex items-center gap-4 text-primary">
-                       <Cpu className="w-5 h-5" />
-                       <h4 className="text-xs font-black uppercase tracking-widest">Model Configuration</h4>
-                    </div>
-                    <div className="space-y-4">
-                       <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
-                          <span className="text-[10px] font-bold text-muted-foreground">Ollama Endpoint</span>
-                          <span className="text-[10px] font-black text-emerald-500">ACTIVE: 8000</span>
-                       </div>
-                       <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5 opacity-50">
-                          <span className="text-[10px] font-bold text-muted-foreground">Claude-3 Integration</span>
-                          <span className="text-[10px] font-black text-muted-foreground">LOCKED</span>
-                       </div>
-                    </div>
-                 </div>
-                 <div className="glass-card p-10 border-white/5 space-y-6">
-                    <div className="flex items-center gap-4 text-primary">
-                       <Lock className="w-5 h-5" />
-                       <h4 className="text-xs font-black uppercase tracking-widest">Security Ledger</h4>
-                    </div>
-                    <div className="space-y-4">
-                       <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
-                          <span className="text-[10px] font-bold text-muted-foreground">Data Encryption</span>
-                          <span className="text-[10px] font-black text-blue-500 uppercase">AES-256</span>
-                       </div>
-                       <div className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
-                          <span className="text-[10px] font-bold text-muted-foreground">Access Level</span>
-                          <span className="text-[10px] font-black text-amber-500 uppercase italic">Admin Priority</span>
-                       </div>
-                    </div>
-                 </div>
+          <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
+            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-4 font-[family-name:var(--font-mono)]">
+              <Sliders className="w-4 h-4 text-primary" />
+              Control Center
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="glass-card p-8 space-y-6">
+                <div className="flex items-center gap-4 text-primary">
+                  <Cpu className="w-4 h-4" />
+                  <h4 className="text-[10px] font-black uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Model Configuration</h4>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04]">
+                    <span className="text-[10px] font-medium text-muted-foreground">Ollama Endpoint</span>
+                    <span className="text-[10px] font-black text-emerald-500 font-[family-name:var(--font-mono)]">ACTIVE: 8000</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04] opacity-40">
+                    <span className="text-[10px] font-medium text-muted-foreground">Claude-3 Integration</span>
+                    <span className="text-[10px] font-black text-zinc-600 font-[family-name:var(--font-mono)]">LOCKED</span>
+                  </div>
+                </div>
               </div>
-           </div>
+              <div className="glass-card p-8 space-y-6">
+                <div className="flex items-center gap-4 text-primary">
+                  <Lock className="w-4 h-4" />
+                  <h4 className="text-[10px] font-black uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Security Ledger</h4>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04]">
+                    <span className="text-[10px] font-medium text-muted-foreground">Data Encryption</span>
+                    <span className="text-[10px] font-black text-primary font-[family-name:var(--font-mono)]">AES-256</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04]">
+                    <span className="text-[10px] font-medium text-muted-foreground">Access Level</span>
+                    <span className="text-[10px] font-black text-amber-500 font-[family-name:var(--font-mono)]">ADMIN PRIORITY</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         );
       default:
         return children;
     }
   };
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Persistent Sidebar */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+  // ═══ Landing Mode ═══
+  if (!consoleActive) {
+    return <LandingPage onInitialize={handleInitialize} />;
+  }
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Top Bar */}
-        <header className="h-16 border-b border-white/5 bg-card/30 backdrop-blur-xl flex items-center justify-between px-8 shrink-0 z-50">
-          <div className="flex items-center gap-4 text-xs font-black uppercase tracking-widest text-muted-foreground">
-            <span 
-              onClick={() => setActiveTab('Portfolio')}
-              className="hover:text-primary cursor-pointer transition-colors"
-            >
-              Global Console
-            </span>
-            <span className="opacity-20">/</span>
-            <span className="text-foreground">{activeTab} Ledger</span>
-          </div>
-          
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/5 border border-emerald-500/10 rounded-full">
-               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-               <span className="text-[9px] font-black uppercase text-emerald-500 tracking-widest">System Active</span>
+  // ═══ Console Mode ═══
+  return (
+    <LoadingContext.Provider value={{ isLoading, setLoading: setIsLoading }}>
+      <div className="flex h-screen overflow-hidden bg-background">
+        {/* Global Loading Bar */}
+        <AnimatePresence>
+          {isLoading && (
+            <motion.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 0.7 }}
+              exit={{ scaleX: 1, opacity: 0 }}
+              transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1] }}
+              className="fixed top-0 left-0 right-0 h-[2px] bg-primary z-[9999] origin-left"
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Sidebar */}
+        <Sidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={() => setIsCollapsed(prev => !prev)}
+          systemStatus={systemStatus}
+        />
+
+        {/* Main Content */}
+        <motion.main
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="flex-1 flex flex-col overflow-hidden relative"
+        >
+          {/* Header */}
+          <header className="h-14 border-b border-white/[0.04] bg-[#050505]/80 backdrop-blur-xl flex items-center justify-between px-6 shrink-0 z-50">
+            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-600 font-[family-name:var(--font-mono)]">
+              <span
+                onClick={() => setActiveTab('Portfolio')}
+                className="hover:text-primary cursor-pointer transition-colors duration-150"
+              >
+                COMMAND
+              </span>
+              <span className="opacity-20">/</span>
+              <span className="text-foreground">{activeTab}</span>
             </div>
+
             <div className="flex items-center gap-4">
-              <button className="p-2 text-muted-foreground hover:text-foreground transition-colors relative">
+              {/* System status — refined: pulsating dot only when offline, subtle when active */}
+              {systemStatus === 'operational' ? (
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-[0.1em] font-[family-name:var(--font-mono)]">
+                    OK
+                  </span>
+                </div>
+              ) : (
+                <div className="relative flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <div className="absolute inset-0 w-2 h-2 rounded-full bg-red-500/40 animate-ping" />
+                </div>
+              )}
+
+              <button className="p-1.5 text-zinc-600 hover:text-zinc-400 transition-colors relative">
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-primary rounded-full border border-card"></span>
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-primary rounded-full" />
               </button>
-              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center group cursor-pointer hover:border-primary/50 transition-all">
-                <User className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              <div className="w-7 h-7 rounded-md bg-white/[0.03] border border-white/[0.06] flex items-center justify-center cursor-pointer hover:border-primary/30 transition-all">
+                <User className="w-3.5 h-3.5 text-zinc-500" />
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        {/* Content Scroll Area */}
-        <div className="flex-1 overflow-y-auto p-8 relative scroll-smooth scrollbar-hide">
-          <div className="max-w-[1500px] mx-auto uppercase">
-            {renderContent()}
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 relative scroll-smooth scrollbar-tactical">
+            <div className="max-w-[1500px] mx-auto">
+              {renderContent()}
+            </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </motion.main>
+      </div>
+    </LoadingContext.Provider>
   );
 }

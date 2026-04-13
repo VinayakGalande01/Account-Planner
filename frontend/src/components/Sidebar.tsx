@@ -1,69 +1,125 @@
 'use client';
 
 import React from 'react';
-import { 
-  Briefcase, Users, PieChart, Sparkles, 
-  Target, Settings, LayoutDashboard, Database, 
-  TrendingUp, ShieldCheck 
+import { motion } from 'framer-motion';
+import {
+  LayoutDashboard, Users, TrendingUp, Sparkles,
+  Target, Settings, ChevronLeft, ChevronRight,
+  ShieldCheck, Activity,
 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  systemStatus: 'operational' | 'offline' | 'connecting';
 }
 
-export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
-  const menuItems = [
-    { id: 'Portfolio', icon: LayoutDashboard },
-    { id: 'Accounts', icon: Users },
-    { id: 'Pipeline', icon: TrendingUp },
-    { id: 'Intelligence', icon: Sparkles },
-    { id: 'Strategy', icon: Target },
-    { id: 'Settings', icon: Settings },
-  ];
+const menuItems = [
+  { id: 'Portfolio', icon: LayoutDashboard },
+  { id: 'Accounts', icon: Users },
+  { id: 'Pipeline', icon: TrendingUp },
+  { id: 'Intelligence', icon: Sparkles },
+  { id: 'Strategy', icon: Target },
+  { id: 'Settings', icon: Settings },
+];
+
+export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleCollapse, systemStatus }: SidebarProps) {
+  const statusColor = systemStatus === 'operational' ? 'text-emerald-500' : systemStatus === 'connecting' ? 'text-amber-500' : 'text-red-500';
+  const statusLabel = systemStatus === 'operational' ? 'SYSTEMS NOMINAL' : systemStatus === 'connecting' ? 'CONNECTING...' : 'OFFLINE';
 
   return (
-    <aside className="w-64 border-r border-white/5 bg-card flex flex-col h-full shrink-0">
-      <div className="p-6 border-b border-white/5 flex items-center gap-3">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center font-black text-background text-sm shadow-[0_0_15px_rgba(234,179,8,0.4)]">
+    <motion.aside
+      animate={{ width: isCollapsed ? 64 : 240 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+      className="border-r border-white/[0.04] bg-[#050505] flex flex-col h-full shrink-0 overflow-hidden relative z-40"
+    >
+      {/* Logo */}
+      <div className="h-16 border-b border-white/[0.04] flex items-center gap-3 px-4 shrink-0">
+        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center font-black text-white text-[11px] shrink-0 shadow-[0_0_20px_rgba(37,99,235,0.3)]">
           AP
         </div>
-        <span className="font-black text-sm tracking-widest text-primary uppercase">Planner Agent</span>
+        {!isCollapsed && (
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="font-black text-[11px] tracking-[0.15em] text-primary uppercase whitespace-nowrap font-[family-name:var(--font-mono)]"
+          >
+            APEX PLANNER
+          </motion.span>
+        )}
       </div>
-      
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+
+      {/* Navigation */}
+      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto scrollbar-hide">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (
-            <button 
+            <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-[10px] font-black uppercase tracking-[0.15em] transition-all group ${
-                isActive 
-                  ? 'bg-primary/10 text-primary border border-primary/20 shadow-[inset_0_0_10px_rgba(234,179,8,0.05)]' 
-                  : 'text-muted-foreground hover:bg-white/5 hover:text-foreground border border-transparent'
+              data-tooltip={isCollapsed ? item.id : undefined}
+              className={`w-full flex items-center gap-3 rounded-md transition-all duration-150 group relative ${
+                isCollapsed ? 'px-0 py-2.5 justify-center' : 'px-3 py-2.5'
+              } ${
+                isActive
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-300'
               }`}
             >
-              <Icon className={`w-4 h-4 transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground/50 group-hover:text-foreground'}`} />
-              {item.id}
+              <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors duration-150 ${
+                isActive ? 'text-primary' : 'text-zinc-600 group-hover:text-zinc-400'
+              }`} />
+              {!isCollapsed && (
+                <span className="text-[10px] font-bold uppercase tracking-[0.12em] whitespace-nowrap">
+                  {item.id}
+                </span>
+              )}
+              {isActive && (
+                <motion.div
+                  layoutId="sidebar-active"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-5 bg-primary rounded-r-full"
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
             </button>
           );
         })}
       </nav>
 
-      <div className="p-6 border-t border-white/5">
-        <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 relative overflow-hidden group hover:border-primary/30 transition-all">
-          <div className="absolute -right-4 -bottom-4 w-12 h-12 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-all" />
-          <p className="text-[9px] font-black text-primary uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-            <ShieldCheck className="w-3 h-3" />
-            AI Status
-          </p>
-          <p className="text-[10px] text-muted-foreground leading-relaxed font-bold">
-            All systems nominal. Analyzing global portfolio...
-          </p>
-        </div>
+      {/* System Status */}
+      <div className="px-2 pb-2 shrink-0">
+        {!isCollapsed ? (
+          <div className="p-3 bg-white/[0.02] rounded-md border border-white/[0.04] space-y-2">
+            <div className="flex items-center gap-2">
+              <Activity className={`w-3 h-3 ${statusColor}`} />
+              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${statusColor} font-[family-name:var(--font-mono)]`}>
+                {statusLabel}
+              </span>
+            </div>
+            <p className="text-[9px] text-zinc-600 leading-relaxed font-medium">
+              Backend: :8001 · LLM: :8000
+            </p>
+          </div>
+        ) : (
+          <div className="flex justify-center py-2" data-tooltip="System Status">
+            <div className={`w-2 h-2 rounded-full ${
+              systemStatus === 'operational' ? 'bg-emerald-500' : systemStatus === 'connecting' ? 'bg-amber-500' : 'bg-red-500'
+            } animate-pulse`} />
+          </div>
+        )}
       </div>
-    </aside>
+
+      {/* Collapse Toggle */}
+      <button
+        onClick={onToggleCollapse}
+        className="h-10 border-t border-white/[0.04] flex items-center justify-center text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.03] transition-all shrink-0"
+      >
+        {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+      </button>
+    </motion.aside>
   );
 }
