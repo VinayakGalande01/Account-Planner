@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Cpu, BarChart3, Shield, Database, Zap, Globe } from 'lucide-react';
-import InteractiveGrid from './InteractiveGrid';
+import WebGLGrid from './WebGLGrid';
 
 const PILLARS = [
   {
@@ -71,15 +71,42 @@ function ScanButton({ onClick }: { onClick: () => void }) {
 
 export default function LandingPage({ onInitialize }: { onInitialize: () => void }) {
   const [mounted, setMounted] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
+  const [cipherText, setCipherText] = useState('');
+  
+  const FINAL_TEXT = '> SYSTEM READY. AWAITING OPERATOR AUTHENTICATION...';
 
   useEffect(() => {
     setMounted(true);
+    let iter = 0;
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()';
+    const interval = setInterval(() => {
+      iter += 1;
+      setCipherText(
+        FINAL_TEXT.split('')
+          .map((char, index) => {
+            if (index < iter / 2) return char;
+            if (char === ' ') return ' ';
+            return chars[Math.floor(Math.random() * chars.length)];
+          })
+          .join('')
+      );
+      if (iter / 2 >= FINAL_TEXT.length) clearInterval(interval);
+    }, 30);
+    return () => clearInterval(interval);
   }, []);
+
+  const handleStartTransition = () => {
+    setTransitioning(true);
+    setTimeout(() => {
+      onInitialize();
+    }, 1200);
+  };
 
   return (
     <div className="relative min-h-screen bg-[#020202] text-foreground overflow-x-hidden">
       {/* Interactive Background Grid */}
-      <InteractiveGrid />
+      <WebGLGrid transitionActive={transitioning} />
 
       {/* Cobalt light leak — top */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/[0.04] rounded-full blur-[120px] pointer-events-none z-0" />
@@ -160,7 +187,7 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
             transition={{ delay: 0.8, duration: 0.5 }}
             className="pt-4"
           >
-            <ScanButton onClick={onInitialize} />
+            <ScanButton onClick={handleStartTransition} />
           </motion.div>
 
           {/* Terminal hint */}
@@ -168,9 +195,9 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.2 }}
-            className="text-[10px] text-zinc-700 font-[family-name:var(--font-mono)] uppercase tracking-[0.15em]"
+            className="text-[10px] text-zinc-700 font-[family-name:var(--font-mono)] uppercase tracking-[0.15em] min-h-[20px]"
           >
-            {'>'} System ready. Awaiting operator authentication...
+            {cipherText}
           </motion.p>
         </motion.div>
 
@@ -242,14 +269,8 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: '-50px' }}
                   transition={{ duration: 0.5, delay: idx * 0.12 }}
-                  className="group relative p-8 bg-transparent hover:bg-white/[0.02] transition-all duration-300 rounded-md cursor-default"
+                  className="corner-brackets group relative p-8 bg-transparent hover:bg-white/[0.02] transition-all duration-300 cursor-default"
                 >
-                  {/* Corner accents */}
-                  <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-white/[0.08] group-hover:border-primary/30 transition-colors" />
-                  <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-white/[0.08] group-hover:border-primary/30 transition-colors" />
-                  <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-white/[0.08] group-hover:border-primary/30 transition-colors" />
-                  <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-white/[0.08] group-hover:border-primary/30 transition-colors" />
-
                   <div className="space-y-5">
                     <div className="flex items-center justify-between">
                       <Icon className="w-5 h-5 text-primary/60 group-hover:text-primary transition-colors" />
@@ -323,7 +344,7 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
           <p className="text-sm text-zinc-500 max-w-lg mx-auto">
             Your intelligence engine is standing by. Initialize the console to begin strategic operations.
           </p>
-          <ScanButton onClick={onInitialize} />
+          <ScanButton onClick={handleStartTransition} />
         </motion.div>
       </section>
 

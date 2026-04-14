@@ -223,7 +223,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   // ═══ Console Mode ═══
   return (
     <LoadingContext.Provider value={{ isLoading, setLoading: setIsLoading }}>
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="flex h-screen overflow-hidden bg-background relative">
         {/* Global Loading Bar */}
         <AnimatePresence>
           {isLoading && (
@@ -232,7 +232,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               animate={{ scaleX: 0.7 }}
               exit={{ scaleX: 1, opacity: 0 }}
               transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1] }}
-              className="fixed top-0 left-0 right-0 h-[2px] bg-primary z-[9999] origin-left"
+              className="fixed top-0 left-0 right-0 h-[2px] bg-primary z-[9999] origin-left pointer-events-none"
             />
           )}
         </AnimatePresence>
@@ -267,18 +267,25 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             </div>
 
             <div className="flex items-center gap-4">
-              {/* System status — refined: pulsating dot only when offline, subtle when active */}
+              {/* System status — SVG Waveform */}
               {systemStatus === 'operational' ? (
                 <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <div className="flex items-center space-x-[2px] h-3">
+                    <div className="w-[2px] h-full bg-primary pulse-waveform" style={{ animationDelay: '0ms' }} />
+                    <div className="w-[2px] h-full bg-primary pulse-waveform" style={{ animationDelay: '200ms' }} />
+                    <div className="w-[2px] h-full bg-primary pulse-waveform" style={{ animationDelay: '400ms' }} />
+                  </div>
                   <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-[0.1em] font-[family-name:var(--font-mono)]">
-                    OK
+                    ONLINE
                   </span>
                 </div>
               ) : (
                 <div className="relative flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                   <div className="absolute inset-0 w-2 h-2 rounded-full bg-red-500/40 animate-ping" />
+                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-[0.1em] font-[family-name:var(--font-mono)]">
+                    OFFLINE
+                  </span>
                 </div>
               )}
 
@@ -299,6 +306,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </motion.main>
+        {/* Tactical Scanline Overlay — placed at end with pointer-events-none to prevent click interference */}
+        <div className="absolute inset-0 scanlines z-[9999] pointer-events-none" />
       </div>
     </LoadingContext.Provider>
   );

@@ -4,6 +4,11 @@ from pydantic import BaseModel
 import os
 import sys
 from typing import List, Optional
+import httpx
+import json
+import asyncio
+import pandas as pd
+from fastapi.responses import StreamingResponse
 
 # Ensure the current directory (backend) is in the python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -23,9 +28,6 @@ app.add_middleware(
 
 DATA_PATH = r"C:\Users\VINAYAK\Downloads\SF_AccountingAgent_DummyData.xlsx"
 engine = DataEngine(DATA_PATH)
-
-import httpx
-import json
 
 # Configuration for Native Local LLM (Ollama style)
 LLM_URL = "http://127.0.0.1:8000/api/generate" # Adjust if your manual test used a different path
@@ -193,29 +195,45 @@ async def chat(request: ChatRequest):
     # 3. Final Prompt Assembly
     final_query = f"QUERY: {request.query}\n\nDATA:\n{data_context}"
     
-    try:
-        async with httpx.AsyncClient() as client:
-            print(f"Sending request to {LLM_URL}...")
-            resp = await client.post(
-                LLM_URL,
-                json={
-                    "model": MODEL_NAME,
-                    "prompt": f"System: {APEX_SYSTEM_PROMPT}\n\nUser: {final_query}",
-                    "stream": False
-                },
-                timeout=1800.0
-            )
-            
-            if resp.status_code != 200:
-                return {"type": "text", "response": f"Intelligence server error ({resp.status_code})."}
-                
-            data = resp.json()
-            raw_response = data.get("response", "").strip()
-            
-            return {"type": "text", "response": raw_response}
-            
-    except Exception as e:
-        return {"type": "text", "response": f"Connection Failure. (Error: {str(e)})"}
+    async def generate_stream():
+        # Inject the metadata requirement instantly before processing
+        yield "sys_meta_log|[SYS_LOG] Initializing Intelligence Node...\n\n"
+        await asyncio.sleep(0.5)
+        if account_id:
+            yield f"sys_meta_log|[SYS_LOG] Context loaded for Account ID: {account_id}\n\n"
+        else:
+            yield "sys_meta_log|[SYS_LOG] Global portfolio context active.\n\n"
+        await asyncio.sleep(0.5)
+        yield "sys_meta_log|[SYS_LOG] Awaiting neural inference...\n\n"
+
+        try:
+            async with httpx.AsyncClient() as client:
+                print(f"Sending request to {LLM_URL}...")
+                async with client.stream(
+                    "POST",
+                    LLM_URL,
+                    json={
+                        "model": MODEL_NAME,
+                        "prompt": f"System: {APEX_SYSTEM_PROMPT}\n\nUser: {final_query}",
+                        "stream": True
+                    },
+                    timeout=1800.0
+                ) as response:
+                    # Stream chunks back securely
+                    async for chunk in response.aiter_lines():
+                        if chunk:
+                            try:
+                                data = json.loads(chunk)
+                                if "response" in data:
+                                    # Output raw text tokens to the streaming response
+                                    yield data["response"]
+                            except json.JSONDecodeError:
+                                pass
+        except Exception as e:
+            print(f"Error calling LLM: {str(e)}")
+            yield f"\n[SYSTEM ERROR] Connection to {MODEL_NAME} failed. Check inference engine."
+
+    return StreamingResponse(generate_stream(), media_type="text/event-stream")
 
 
 # ─── New Tactical Endpoints ───────────────────────────────────

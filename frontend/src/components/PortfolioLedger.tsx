@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, MoreHorizontal, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, ChevronDown, ChevronUp, MoreHorizontal, Flag, Terminal, Edit, ChevronsUpDown } from 'lucide-react';
 
 interface PortfolioLedgerProps {
   accounts: any[];
@@ -95,7 +95,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
   }, [accounts]);
 
   return (
-    <div className="bg-[#080808] border border-white/[0.04] rounded-md overflow-hidden">
+    <div className="corner-brackets bg-[#080808] rounded-md overflow-hidden">
       {/* Header Bar */}
       <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between bg-white/[0.01]">
         <div className="flex items-center gap-3">
@@ -129,8 +129,8 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
+      {/* Table Content */}
+      <div className="overflow-x-auto scrollbar-tactical" style={{ perspective: '1000px' }}>
         <table className="w-full text-left text-[11px] border-collapse">
           <thead>
             <tr className="border-b border-white/[0.04] bg-white/[0.01]">
@@ -200,32 +200,39 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
             ) : (
               processedAccounts.map((acc, idx) => (
                 <motion.tr
+                  layout
                   key={acc.Account_ID}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25, delay: idx * 0.03, ease: 'easeOut' }}
+                  whileHover={{ 
+                    height: '44px',
+                    z: 5,
+                    boxShadow: '0 0 20px rgba(37,99,235,0.4), inset 0 0 20px rgba(37,99,235,0.05)',
+                    backgroundColor: 'rgba(37,99,235,0.05)'
+                  }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
                   onClick={() => onAccountClick(acc)}
-                  className="border-b border-white/[0.02] hover:bg-primary/[0.02] hover:shadow-[inset_0_0_20px_rgba(37,99,235,0.03)] transition-all duration-150 cursor-pointer group"
-                  style={{ height: '36px' }}
+                  className="border-b border-white/[0.02] cursor-pointer group relative"
+                  style={{ height: '36px', transformStyle: 'preserve-3d' }}
                 >
-                  <td className="px-4 py-0">
+                  <td className="px-4 py-0 relative z-10">
                     <div className="flex flex-col justify-center">
                       <span className="font-bold text-foreground group-hover:text-primary transition-colors duration-150 text-[11px] leading-tight">{acc.Account_Name}</span>
                       <span className="text-[8px] text-zinc-700 font-[family-name:var(--font-mono)] uppercase tracking-[0.05em]">{acc.Account_ID}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-0 text-center">
+                  <td className="px-3 py-0 text-center relative z-10">
                     <span className="text-[9px] text-zinc-500 font-medium">{acc.Industry || '—'}</span>
                   </td>
-                  <td className="px-3 py-0 text-center">
+                  <td className="px-3 py-0 text-center relative z-10">
                     <span className="text-[9px] text-zinc-500 font-[family-name:var(--font-mono)] uppercase tracking-wider">{acc.Territory || '—'}</span>
                   </td>
-                  <td className="px-3 py-0 text-center">
+                  <td className="px-3 py-0 text-center relative z-10">
                     <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-black uppercase border ${getTierStyle(acc.Account_Tier)}`}>
                       {acc.Account_Tier}
                     </span>
                   </td>
-                  <td className="px-3 py-0 text-center">
+                  <td className="px-3 py-0 text-center relative z-10">
                     <div className="flex flex-col items-center gap-0.5">
                       <span className="text-[11px] font-black data-cell">{acc.health_score ?? '—'}</span>
                       <div className="w-10 h-[3px] bg-white/[0.04] rounded-full overflow-hidden">
@@ -236,14 +243,30 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-0 text-right">
-                    <span className="text-[11px] font-bold data-cell text-foreground">{formatCurrency(acc.total_pipeline_value)}</span>
+                  <td className="px-3 py-0 text-right relative z-10">
+                    <span className="text-[11px] font-bold data-cell tabular-nums text-foreground">{formatCurrency(acc.total_pipeline_value)}</span>
                   </td>
-                  <td className="px-3 py-0 text-center">
+                  <td className="px-3 py-0 text-center relative z-10">
                     <span className="text-[9px] text-zinc-600 font-[family-name:var(--font-mono)]">{getRelativeTime(acc.last_activity_date)}</span>
                   </td>
-                  <td className="px-3 py-0 text-center">
-                    <MoreHorizontal className="w-3.5 h-3.5 text-zinc-700 group-hover:text-zinc-400 transition-colors" />
+                  <td className="px-3 py-0 text-right relative z-10">
+                    <div className="relative h-full flex items-center justify-end pr-2">
+                       {/* Default icon */}
+                       <MoreHorizontal className="w-3.5 h-3.5 text-zinc-700 group-hover:opacity-0 transition-opacity absolute right-4" />
+                       
+                       {/* Micro-actions overlay on hover */}
+                       <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2 transition-opacity absolute right-4">
+                         <div className="p-1 hover:bg-white/[0.05] rounded text-zinc-400 hover:text-white transition-colors" data-tooltip="Edit">
+                           <Edit className="w-3 h-3" />
+                         </div>
+                         <div className="p-1 hover:bg-white/[0.05] rounded text-emerald-500 hover:text-white transition-colors" data-tooltip="Signal">
+                           <Terminal className="w-3 h-3" />
+                         </div>
+                         <div className="p-1 hover:bg-red-500/10 rounded text-red-500 transition-colors" data-tooltip="Flag Risk">
+                           <Flag className="w-3 h-3" />
+                         </div>
+                       </div>
+                    </div>
                   </td>
                 </motion.tr>
               ))

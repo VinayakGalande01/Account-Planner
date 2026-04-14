@@ -1,85 +1,75 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Bot, User, Terminal, ChevronRight } from 'lucide-react';
+import { Send, Terminal, Bot, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+type MessageType = 'text' | 'data' | 'system';
 
 interface Message {
   role: 'user' | 'assistant';
-  content?: string;
-  type?: 'text' | 'structured';
+  content: string;
+  type: MessageType;
   data?: any;
 }
 
-type ProcessingStage = 'idle' | 'analyzing' | 'fetching' | 'inferring' | 'complete';
+const initialMessages: Message[] = [
+  {
+    role: 'assistant',
+    type: 'text',
+    content: 'APEX v2.1 initialized. Portfolio loaded.\nAwaiting directive.',
+  },
+];
 
-const stageConfig: Record<ProcessingStage, { label: string; className: string }> = {
+const stageConfig: Record<string, { label: string; className: string }> = {
   idle: { label: '', className: '' },
-  analyzing: { label: 'SYSTEM: ANALYZING', className: 'text-blue-400 glow-cobalt' },
-  fetching: { label: 'DATA: FETCHING', className: 'text-violet-400 glow-violet' },
-  inferring: { label: 'MODEL: INFERRING', className: 'text-amber-400 glow-amber' },
-  complete: { label: 'COMPLETE', className: 'text-emerald-400 glow-emerald' },
+  running: { label: 'PROCESSING NEURAL INFERENCE', className: 'text-amber-500 border-amber-500/20 bg-amber-500/10' },
+  complete: { label: 'INFERENCE COMPLETE', className: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/10' },
 };
 
-export default function ChatTerminal({ externalCommand }: { externalCommand?: string }) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      type: 'text',
-      content: 'APEX v2.1 initialized. Portfolio loaded. Awaiting directive.',
-    },
-  ]);
+function RenderMessageLines({ content }: { content: string }) {
+  const lines = content.split('\n');
+  return (
+    <>
+      {lines.map((line, idx) => {
+        if (line.startsWith('sys_meta_log|')) {
+          const metaMsg = line.replace('sys_meta_log|', '');
+          return (
+            <div key={idx} className="text-[9px] text-zinc-600 font-bold tracking-widest my-1 uppercase">
+              {metaMsg}
+            </div>
+          );
+        }
+        return (
+          <div key={idx} className={idx === lines.length - 1 ? "new-stream-line min-h-[16px]" : "min-h-[16px]"}>
+            {line}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+export default function ChatTerminal({ externalCommand }: { externalCommand?: string | null }) {
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [processingStage, setProcessingStage] = useState<ProcessingStage>('idle');
   const [displayedResponse, setDisplayedResponse] = useState<string | null>(null);
+  const [processingStage, setProcessingStage] = useState<'idle' | 'running' | 'complete'>('idle');
+
   const scrollRef = useRef<HTMLDivElement>(null);
-  const stageTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo(0, scrollRef.current.scrollHeight);
+    }
+  }, [messages, displayedResponse, processingStage, isTyping]);
 
   useEffect(() => {
     if (externalCommand) {
       handleSend(externalCommand);
     }
   }, [externalCommand]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, isTyping, displayedResponse]);
-
-  // Staggered text reveal effect
-  const animateTextReveal = useCallback((fullText: string, onComplete: () => void) => {
-    const maxAnimChars = 200;
-    const charsToAnimate = Math.min(fullText.length, maxAnimChars);
-    let current = 0;
-
-    setDisplayedResponse('');
-
-    const timer = setInterval(() => {
-      current += 1;
-      if (current >= charsToAnimate) {
-        setDisplayedResponse(fullText);
-        clearInterval(timer);
-        onComplete();
-      } else {
-        setDisplayedResponse(fullText.substring(0, current));
-      }
-    }, 12);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  // Rotate through processing stages
-  const startProcessingStages = useCallback(() => {
-    setProcessingStage('analyzing');
-    stageTimerRef.current = setTimeout(() => {
-      setProcessingStage('fetching');
-      stageTimerRef.current = setTimeout(() => {
-        setProcessingStage('inferring');
-      }, 1500);
-    }, 1200);
-  }, []);
 
   const handleSend = async (overrideInput?: string) => {
     const textToSend = overrideInput || input;
@@ -89,8 +79,8 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
     setMessages((prev) => [...prev, userMsg]);
     if (!overrideInput) setInput('');
     setIsTyping(true);
-    setDisplayedResponse(null);
-    startProcessingStages();
+    setDisplayedResponse('');
+    setProcessingStage('running');
 
     try {
       const response = await fetch('http://localhost:8001/api/chat', {
@@ -98,33 +88,38 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: textToSend }),
       });
-      const result = await response.json();
 
-      // Clear stage timers
-      if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+      if (!response.body) throw new Error('No stream body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let accumulateStr = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        accumulateStr += chunk;
+        setDisplayedResponse(accumulateStr);
+      }
+
       setProcessingStage('complete');
+      
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            type: 'text',
+            content: accumulateStr.trim(),
+          },
+        ]);
+        setDisplayedResponse(null);
+        setIsTyping(false);
+        setProcessingStage('idle');
+      }, 500);
 
-      const fullText = result.response || '';
-
-      // Animate reveal, then finalize
-      animateTextReveal(fullText, () => {
-        setTimeout(() => {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: 'assistant',
-              type: result.type || 'text',
-              content: fullText,
-              data: result.data,
-            },
-          ]);
-          setDisplayedResponse(null);
-          setIsTyping(false);
-          setProcessingStage('idle');
-        }, 300);
-      });
-    } catch {
-      if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+    } catch (err) {
       setProcessingStage('idle');
       setMessages((prev) => [
         ...prev,
@@ -135,11 +130,12 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
         },
       ]);
       setIsTyping(false);
+      setDisplayedResponse(null);
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#030303] border border-white/[0.04] rounded-md overflow-hidden relative terminal-scanlines">
+    <div className="corner-brackets flex flex-col h-full bg-[#030303] rounded-md overflow-hidden relative">
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center justify-between shrink-0 relative z-10">
         <div className="flex items-center gap-3">
@@ -150,7 +146,10 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
           <span className="text-[9px] text-zinc-600 font-[family-name:var(--font-mono)]">// SESSION ACTIVE</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="flex items-center space-x-[2px] h-2">
+            <div className="w-[1px] h-full bg-emerald-500 pulse-waveform" style={{ animationDelay: '0ms' }} />
+            <div className="w-[1px] h-full bg-emerald-500 pulse-waveform" style={{ animationDelay: '150ms' }} />
+          </div>
         </div>
       </div>
 
@@ -188,8 +187,8 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
                   {msg.content}
                 </div>
               ) : (
-                <div className="text-[11px] text-zinc-300 leading-relaxed whitespace-pre-wrap font-[family-name:var(--font-mono)]">
-                  {msg.content}
+                <div className="text-[11px] text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)]">
+                  <RenderMessageLines content={msg.content} />
                 </div>
               )}
             </div>
@@ -208,10 +207,10 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
             <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
               <Bot className="w-3 h-3 text-primary" />
             </div>
-            <div className="text-[11px] text-zinc-300 leading-relaxed whitespace-pre-wrap font-[family-name:var(--font-mono)] max-w-[85%]">
+            <div className="text-[11px] text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)] max-w-[85%]">
               {displayedResponse !== null ? (
                 <>
-                  {displayedResponse}
+                  <RenderMessageLines content={displayedResponse} />
                   <span className="inline-block w-2 h-4 bg-primary ml-0.5 animate-blink-cursor align-middle" />
                 </>
               ) : (

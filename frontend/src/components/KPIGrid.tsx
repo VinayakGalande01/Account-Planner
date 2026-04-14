@@ -31,7 +31,7 @@ export default function KPIGrid() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: idx * 0.08, ease: 'easeOut' }}
-            className="bg-[#080808] border border-white/[0.04] p-5 rounded-md hover:scale-[1.01] hover:shadow-[inset_0_0_20px_rgba(37,99,235,0.03)] transition-all duration-200 cursor-default group"
+            className="corner-brackets bg-[#080808] p-5 hover:scale-[1.01] hover:shadow-[inset_0_0_20px_rgba(37,99,235,0.03)] transition-all duration-200 cursor-default group"
           >
             <div className="flex justify-between items-start mb-3">
               <p className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.12em] font-[family-name:var(--font-mono)]">

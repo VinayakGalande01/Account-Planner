@@ -129,7 +129,7 @@ export default function PipelineView() {
   const actual = [1.8, 2.2, 2.5, 2.9, 3.2, 3.4, 3.9];
 
   return (
-    <div className="bg-[#080808] border border-white/[0.04] rounded-md overflow-hidden">
+    <div className="corner-brackets bg-[#080808] rounded-md overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between bg-white/[0.01]">
         <div className="flex items-center gap-2">
