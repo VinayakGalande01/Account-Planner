@@ -3,8 +3,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Terminal, Bot, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useData } from '../context/DataContext';
 
 type MessageType = 'text' | 'data' | 'system';
+
 
 interface Message {
   role: 'user' | 'assistant';
@@ -50,7 +52,9 @@ function RenderMessageLines({ content }: { content: string }) {
   );
 }
 
-export default function ChatTerminal({ externalCommand }: { externalCommand?: string | null }) {
+export default function ChatTerminal() {
+  const { aiCommand, setAiCommand } = useData();
+
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -66,10 +70,12 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
   }, [messages, displayedResponse, processingStage, isTyping]);
 
   useEffect(() => {
-    if (externalCommand) {
-      handleSend(externalCommand);
+    if (aiCommand) {
+      handleSend(aiCommand);
+      setAiCommand(undefined); // Clear after triggering
     }
-  }, [externalCommand]);
+  }, [aiCommand, setAiCommand]);
+
 
   const handleSend = async (overrideInput?: string) => {
     const textToSend = overrideInput || input;
@@ -83,7 +89,7 @@ export default function ChatTerminal({ externalCommand }: { externalCommand?: st
     setProcessingStage('running');
 
     try {
-      const response = await fetch('http://localhost:8001/api/chat', {
+      const response = await fetch('http://localhost:8002/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: textToSend }),

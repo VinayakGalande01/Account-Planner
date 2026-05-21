@@ -139,10 +139,10 @@ class DataEngine:
         weighted_value = (df['Amount_USD'] * df['Probability_Pct'] / 100).sum()
         
         return {
-            "total_value": total_value,
-            "weighted_value": weighted_value,
-            "deal_count": len(df),
-            "stage_summary": df.groupby('Stage')['Amount_USD'].sum().to_dict()
+            "total_value": float(total_value),
+            "weighted_value": float(weighted_value),
+            "deal_count": int(len(df)),
+            "stage_summary": {k: float(v) for k, v in df.groupby('Stage')['Amount_USD'].sum().to_dict().items()}
         }
 
     def get_enriched_accounts_list(self):
@@ -191,15 +191,65 @@ class DataEngine:
             # Health score
             try:
                 health = self.calculate_health_score(account_id)
-                record['health_score'] = health.get('overall_score', 0) if isinstance(health, dict) and 'error' not in health else 0
+                record['health_score'] = float(health.get('overall_score', 0)) if isinstance(health, dict) and 'error' not in health else 0.0
             except:
-                record['health_score'] = 0
+                record['health_score'] = 0.0
 
             result.append(record)
 
         return result
 
+    def get_account_details_json(self, account_id: str):
+        """Returns structured JSON details for a specific account (Opps, Contacts, Cases)."""
+        result = {
+            "opportunities": [],
+            "contacts": [],
+            "cases": [],
+            "activities": []
+        }
+        
+        # 1. Opportunities
+        opps = self.data.get('opportunity')
+        if opps is not None:
+            acc_opps = opps[opps['Account_ID'] == account_id]
+            for _, r in acc_opps.iterrows():
+                result["opportunities"].append({
+                    "name": str(r.get('Opp_Name', 'Unnamed Deal')),
+                    "stage": str(r.get('Stage', 'Prospecting')),
+                    "value": float(r.get('Amount_USD', 0)),
+                    "probability": int(r.get('Probability_Pct', 0)),
+                    "close_date": str(r.get('Close_Date', ''))[:10]
+                })
+
+        # 2. Contacts
+        contacts = self.data.get('contact')
+        if contacts is not None:
+            acc_contacts = contacts[contacts['Account_ID'] == account_id]
+            for _, r in acc_contacts.iterrows():
+                result["contacts"].append({
+                    "first_name": str(r.get('First_Name', '')),
+                    "last_name": str(r.get('Last_Name', '')),
+                    "role": str(r.get('Role', 'Contact')),
+                    "engagement": str(r.get('Engagement_Level', 'Medium')),
+                    "email": str(r.get('Email', ''))
+                })
+
+        # 3. Cases
+        cases = self.data.get('case')
+        if cases is not None:
+            acc_cases = cases[cases['Account_ID'] == account_id]
+            for _, r in acc_cases.iterrows():
+                result["cases"].append({
+                    "subject": str(r.get('Subject', 'No Subject')),
+                    "status": str(r.get('Status', 'Open')),
+                    "severity": str(r.get('Severity', 'Low')),
+                    "csat": float(r.get('CSAT_Score', 0)) if pd.notna(r.get('CSAT_Score')) else 0
+                })
+
+        return result
+
     def get_formatted_account_data(self, account_id: str):
+
         """Formats all 5 sheets into the requested APEX schema for LLM context."""
         output = []
         

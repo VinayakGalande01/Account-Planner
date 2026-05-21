@@ -54,6 +54,16 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
   const [sortKey, setSortKey] = useState<SortKey>('Account_Name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [tierFilter, setTierFilter] = useState<string>('all');
+  const [logPhase, setLogPhase] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!loading) return;
+    const interval = setInterval(() => {
+      setLogPhase(p => (p + 1) % 4);
+    }, 800);
+    return () => clearInterval(interval);
+  }, [loading]);
+
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -98,13 +108,11 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
     <div className="corner-brackets bg-[#080808] rounded-md overflow-hidden">
       {/* Header Bar */}
       <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between bg-white/[0.01]">
-        <div className="flex items-center gap-3">
-          <h3 className="text-xs font-black uppercase tracking-[0.4em] text-foreground font-[family-name:var(--font-mono)]">
-            Portfolio Ledger
+        <div className="flex items-center gap-4">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-foreground flex items-center gap-2 font-[family-name:var(--font-mono)]">
+            <span className="text-primary">&gt;</span> Dashboard Ledger
+            <span className="text-zinc-800 ml-2 font-normal lowercase tracking-normal">{accounts.length} records</span>
           </h3>
-          <span className="text-[9px] font-bold text-zinc-600 font-[family-name:var(--font-mono)]">
-            {processedAccounts.length} records
-          </span>
         </div>
         <div className="flex items-center gap-2">
           {/* Search */}
@@ -184,9 +192,23 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                 <tr>
                   <td colSpan={8} className="px-4 py-3 bg-white/[0.01]">
                     <div className="font-[family-name:var(--font-mono)] text-[9px] space-y-1">
-                      <div className="text-emerald-500"><span className="text-zinc-600">&gt;</span> Fetching Territory Data... <span className="text-emerald-500 font-black">[OK]</span></div>
-                      <div className="text-amber-500"><span className="text-zinc-600">&gt;</span> Calculating Health Metrics... <span className="text-amber-500 font-black animate-pulse">[RUNNING]</span></div>
-                      <div className="text-zinc-600"><span className="text-zinc-700">&gt;</span> Building Pipeline Index... <span className="text-zinc-600">[ QUEUED ]</span></div>
+                      <div className={logPhase >= 1 ? "text-emerald-500" : "text-emerald-500/40"}>
+                        <span className="text-zinc-600">&gt;</span> Fetching Territory Data... 
+                        <span className="ml-2 font-black">[{logPhase >= 1 ? "OK" : "PENDING"}]</span>
+                      </div>
+                      <div className={logPhase >= 2 ? "text-amber-400" : "text-amber-500/40"}>
+                        <span className="text-zinc-600">&gt;</span> Calculating Health Metrics... 
+                        <span className={`ml-2 font-black ${logPhase === 2 ? 'animate-pulse' : ''}`}>[{logPhase >= 2 ? (logPhase > 2 ? 'OK' : 'RUNNING') : 'WAITING'}]</span>
+                      </div>
+                      <div className={logPhase >= 3 ? "text-blue-400" : "text-zinc-600"}>
+                        <span className="text-zinc-700">&gt;</span> Building Pipeline Index... 
+                        <span className={`ml-2 font-black ${logPhase === 3 ? 'animate-pulse' : ''}`}>[{logPhase === 3 ? 'RUNNING' : (logPhase > 3 ? 'OK' : 'QUEUED')}]</span>
+                      </div>
+                      {logPhase === 3 && (
+                        <div className="text-[7px] text-zinc-800 pl-4 animate-pulse">
+                          0x{Math.random().toString(16).slice(2, 10).toUpperCase()} - SYNCING NODES...
+                        </div>
+                      )}
                     </div>
                   </td>
                 </tr>

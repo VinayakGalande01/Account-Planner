@@ -95,7 +95,7 @@ export default function PipelineView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:8001/api/pipeline/summary')
+    fetch('http://localhost:8002/api/pipeline/summary')
       .then(res => res.json())
       .then(data => {
         setPipelineData(data.stage_summary || {});

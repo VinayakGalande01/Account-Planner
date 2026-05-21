@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import MainLayout from '../components/MainLayout';
+import { DataProvider } from '../context/DataContext';
+
 
 const inter = Inter({
   subsets: ['latin'],
@@ -29,9 +31,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${inter.variable} ${jetbrainsMono.variable}`} style={{ colorScheme: 'dark' }}>
       <body className="bg-background text-foreground antialiased selection:bg-primary/30 min-h-screen font-[family-name:var(--font-inter)]">
-        <MainLayout>
-          {children}
-        </MainLayout>
+        <DataProvider>
+          <MainLayout>
+            {children}
+          </MainLayout>
+        </DataProvider>
       </body>
     </html>
   );

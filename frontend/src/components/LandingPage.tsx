@@ -11,7 +11,7 @@ const PILLARS = [
     title: 'Synthetic Intelligence',
     subtitle: 'OLLAMA ENGINE',
     description: 'Deep-link analysis with local LLM inference. Real-time account health scoring across 5 weighted dimensions.',
-    metric: 'phi3:mini',
+    metric: 'llama3.2:latest',
     metricLabel: 'Active Model',
   },
   {
@@ -73,7 +73,7 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
   const [mounted, setMounted] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const [cipherText, setCipherText] = useState('');
-  
+
   const FINAL_TEXT = '> SYSTEM READY. AWAITING OPERATOR AUTHENTICATION...';
 
   useEffect(() => {

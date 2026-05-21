@@ -15,6 +15,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data_engine import DataEngine
 import openai
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(override=True)
 
 app = FastAPI(title="Account Planner Agent API")
 
@@ -29,9 +33,15 @@ app.add_middleware(
 DATA_PATH = r"C:\Users\VINAYAK\Downloads\SF_AccountingAgent_DummyData.xlsx"
 engine = DataEngine(DATA_PATH)
 
-# Configuration for Native Local LLM (Ollama style)
-LLM_URL = "http://127.0.0.1:8000/api/generate" # Adjust if your manual test used a different path
-MODEL_NAME = "phi3:mini" 
+# Configuration for LLM (Remote or Local via .env)
+LLM_URL = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2:latest")
+
+print("\n=============================================")
+print("  🚀 APEX INTELLIGENCE SYSTEM STARTING UP")
+print(f"  🔗 LLM URL    : {LLM_URL}")
+print(f"  🤖 LLM Model  : {MODEL_NAME}")
+print("=============================================\n")
 
 class ChatRequest(BaseModel):
     query: str
@@ -265,6 +275,15 @@ async def get_pipeline_summary():
     except Exception as e:
         return {"total_value": 0, "weighted_value": 0, "deal_count": 0, "stage_summary": {}}
 
+@app.get("/api/accounts/{account_id}/details")
+async def get_account_details(account_id: str):
+    """Returns real JSON details for a specific account."""
+    try:
+        details = engine.get_account_details_json(account_id)
+        return details
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ─── Existing Endpoints ───────────────────────────────────────
 
@@ -280,4 +299,4 @@ async def get_accounts():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8002)

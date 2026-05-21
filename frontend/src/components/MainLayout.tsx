@@ -7,8 +7,11 @@ import { Database, Zap, Globe, Lock, Sliders, Cpu, Bell, User } from 'lucide-rea
 import PortfolioLedger from './PortfolioLedger';
 import PipelineView from './PipelineView';
 import ChatTerminal from './ChatTerminal';
-import KPIGrid from './KPIGrid';
+import AccountDetail from './AccountDetail';
+import { useData } from '../context/DataContext';
+
 import { motion, AnimatePresence } from 'framer-motion';
+
 
 /* ── Global Loading Context ── */
 interface LoadingContextType {
@@ -64,16 +67,25 @@ function TopographicOverlay() {
 }
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
+  const { 
+    accounts, 
+    loading, 
+    search, 
+    activeTab, 
+    setActiveTab, 
+    selectedAccount, 
+    setSelectedAccount 
+  } = useData();
   const [consoleActive, setConsoleActive] = useState(false);
-  const [activeTab, setActiveTab] = useState('Portfolio');
   const [isCollapsed, setIsCollapsed] = useState(false);
+
   const [systemStatus, setSystemStatus] = useState<'operational' | 'offline' | 'connecting'>('connecting');
   const [isLoading, setIsLoading] = useState(false);
 
   // Health check
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch('http://localhost:8001/api/health', { signal: AbortSignal.timeout(3000) });
+      const res = await fetch('http://localhost:8002/api/health', { signal: AbortSignal.timeout(3000) });
       setSystemStatus(res.ok ? 'operational' : 'offline');
     } catch {
       setSystemStatus('offline');
@@ -92,22 +104,31 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'Portfolio':
+      case 'Dashboard':
         return children;
       case 'Accounts':
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
-              <Database className="w-3.5 h-3.5 text-primary" />
-              Accounts Ledger
-            </h2>
-            <PortfolioLedger
-              accounts={[]}
-              loading={true}
-              search=""
-              onSearchChange={() => {}}
-              onAccountClick={() => {}}
-            />
+            {selectedAccount ? (
+              <AccountDetail
+                account={selectedAccount}
+                onBack={() => setSelectedAccount(null)}
+              />
+            ) : (
+              <>
+                <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
+                  <Database className="w-3.5 h-3.5 text-primary" />
+                  Accounts Ledger
+                </h2>
+                <PortfolioLedger
+                  accounts={accounts}
+                  loading={loading}
+                  search={search}
+                  onSearchChange={() => {}}
+                  onAccountClick={(acc) => setSelectedAccount(acc)}
+                />
+              </>
+            )}
           </div>
         );
       case 'Pipeline':
@@ -257,7 +278,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           <header className="h-14 border-b border-white/[0.04] bg-[#050505]/80 backdrop-blur-xl flex items-center justify-between px-6 shrink-0 z-50">
             <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-600 font-[family-name:var(--font-mono)]">
               <span
-                onClick={() => setActiveTab('Portfolio')}
+                onClick={() => setActiveTab('Dashboard')}
                 className="hover:text-primary cursor-pointer transition-colors duration-150"
               >
                 COMMAND

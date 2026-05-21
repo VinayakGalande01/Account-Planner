@@ -8,38 +8,17 @@ import KPIGrid from '../components/KPIGrid';
 import PipelineView from '../components/PipelineView';
 import PortfolioLedger from '../components/PortfolioLedger';
 
-export default function Dashboard() {
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [command, setCommand] = useState<string | undefined>(undefined);
-  const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
+import { useData } from '../context/DataContext';
 
-  useEffect(() => {
-    // Use enriched endpoint for full data
-    fetch('http://localhost:8001/api/accounts/enriched')
-      .then(res => res.json())
-      .then(data => {
-        setAccounts(Array.isArray(data) ? data : []);
-        setLoading(false);
-      })
-      .catch(() => {
-        // Fallback to basic endpoint
-        fetch('http://localhost:8001/api/accounts')
-          .then(res => res.json())
-          .then(data => {
-            setAccounts(data || []);
-            setLoading(false);
-          })
-          .catch(() => setLoading(false));
-      });
-  }, []);
-
-  const handleAccountClick = (acc: any) => {
-    setSelectedAccount(acc);
-    setCommand(`Give me a detailed strategic health check on ${acc.Account_Name}`);
-    setTimeout(() => setCommand(undefined), 500);
-  };
+export default function DashboardPage() {
+  const { 
+    accounts, 
+    loading, 
+    search, 
+    setSearch, 
+    selectedAccount, 
+    setSelectedAccount 
+  } = useData();
 
   return (
     <div className="space-y-8">
@@ -59,11 +38,6 @@ export default function Dashboard() {
                 onBack={() => setSelectedAccount(null)}
               />
             </div>
-            <div className="xl:col-span-4 lg:sticky lg:top-6 h-fit">
-              <div className="h-[700px]">
-                <ChatTerminal externalCommand={command} />
-              </div>
-            </div>
           </motion.div>
         ) : (
           <motion.div
@@ -76,22 +50,16 @@ export default function Dashboard() {
           >
             <KPIGrid />
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-8 space-y-6">
+            <div className="grid grid-cols-1 gap-8">
+              <div className="w-full space-y-8">
                 <PipelineView />
                 <PortfolioLedger
                   accounts={accounts}
                   loading={loading}
                   search={search}
                   onSearchChange={setSearch}
-                  onAccountClick={handleAccountClick}
+                  onAccountClick={(acc) => setSelectedAccount(acc)}
                 />
-              </div>
-
-              <div className="lg:col-span-4 lg:sticky lg:top-6 h-fit">
-                <div className="h-[700px]">
-                  <ChatTerminal externalCommand={command} />
-                </div>
               </div>
             </div>
           </motion.div>

@@ -1,16 +1,46 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Users, DollarSign,
   TrendingUp, Building2,
-  Download, Globe, Database, BarChart3
+  Download, Globe, Database, BarChart3, Sparkles,
+  Info, AlertCircle
 } from 'lucide-react';
+import { useData } from '../context/DataContext';
 
 interface AccountDetailProps {
   account: any;
   onBack: () => void;
+}
+
+// Reusable Tactical Tooltip Component
+function TacticalTooltip({ content }: { content: string }) {
+  const [visible, setVisible] = useState(false);
+  
+  return (
+    <div className="relative inline-flex items-center ml-2 group" 
+         onMouseEnter={() => setVisible(true)} 
+         onMouseLeave={() => setVisible(false)}>
+      <Info className="w-3 h-3 text-zinc-600 hover:text-primary transition-colors cursor-help" />
+      <AnimatePresence>
+        {visible && (
+          <motion.div 
+            initial={{ opacity: 0, y: 5, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 5, scale: 0.95 }}
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-900 border border-primary/20 rounded shadow-2xl z-[100] pointer-events-none"
+          >
+            <div className="text-[10px] font-medium text-zinc-300 leading-normal font-[family-name:var(--font-inter)]">
+              {content}
+            </div>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-zinc-900 border-r border-b border-primary/20 rotate-45 -mt-1" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 function formatCurrency(val: number | undefined): string {
@@ -65,8 +95,32 @@ function MicroTrend() {
 }
 
 export default function AccountDetail({ account, onBack }: AccountDetailProps) {
+  const { setActiveTab, setAiCommand } = useData();
+  const [details, setDetails] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`http://localhost:8002/api/accounts/${account.Account_ID}/details`)
+      .then(res => res.json())
+      .then(data => {
+        setDetails(data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [account.Account_ID]);
+
+  const handleLaunchIntel = () => {
+    setAiCommand(`Give me a detailed strategic health check on ${account.Account_Name}. Focus on current pipeline and engagement risks.`);
+    setActiveTab('Intelligence');
+  };
+
   const healthScore = account.health_score ?? 84;
   const healthColor = healthScore >= 80 ? '#10b981' : healthScore >= 60 ? '#f59e0b' : healthScore >= 40 ? '#f97316' : '#ef4444';
+
+  const opportunities = details?.opportunities || [];
+  const contacts = details?.contacts || [];
+  const cases = details?.cases || [];
 
   return (
     <motion.div
@@ -104,6 +158,12 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
           </div>
         </div>
         <div className="flex gap-2">
+          <button 
+            onClick={handleLaunchIntel}
+            className="px-3 py-1.5 bg-primary/10 text-primary text-[10px] font-bold rounded-md uppercase border border-primary/20 hover:bg-primary/20 transition-all flex items-center gap-2 font-[family-name:var(--font-mono)]"
+          >
+            <Sparkles className="w-3 h-3" /> Launch Intel
+          </button>
           <button className="px-3 py-1.5 bg-white/[0.03] text-zinc-500 text-[10px] font-bold rounded-md uppercase border border-white/[0.04] hover:bg-white/[0.06] transition-all flex items-center gap-2 font-[family-name:var(--font-mono)]">
             <Download className="w-3 h-3" /> Export
           </button>
@@ -117,10 +177,13 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Health Index */}
-        <div className="bg-[#080808] border border-white/[0.04] p-5 rounded-md space-y-5">
-          <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
-            Relational Health Index
-          </p>
+        <div className="bg-[#080808] border border-white/[0.04] p-5 rounded-md space-y-5 relative overflow-hidden">
+          <div className="flex items-center">
+            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
+              Relational Health Index
+            </p>
+            <TacticalTooltip content="A 0-100 score synthesized from revenue, relationship depth, engagement, and support history." />
+          </div>
           <div className="flex items-center justify-between">
             <div className="relative w-20 h-20 flex items-center justify-center">
               <svg className="w-full h-full transform -rotate-90">
@@ -155,12 +218,23 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
           </div>
 
           <div className="pt-4 border-t border-white/[0.04]">
-            <p className="text-[9px] font-black text-red-500 uppercase tracking-[0.15em] mb-3 font-[family-name:var(--font-mono)]">Active Risks</p>
+            <div className="flex items-center mb-3">
+              <p className="text-[9px] font-black text-red-500 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Active Risks</p>
+              <TacticalTooltip content="Critical flags detected by the APEX engine, such as stalled deals or support issues." />
+            </div>
             <div className="space-y-2">
-              <div className="p-3 bg-red-500/[0.04] border border-red-500/10 rounded-md">
-                <p className="text-[10px] font-bold text-foreground">Competitor Contract Expiry (Dec 2026)</p>
-                <p className="text-[9px] text-zinc-500 mt-1 leading-relaxed">Immediate outreach required to lock renewal terms.</p>
-              </div>
+              {cases.filter((c:any) => c.severity === 'Critical' || c.severity === 'High').length > 0 ? (
+                cases.filter((c:any) => c.severity === 'Critical' || c.severity === 'High').map((c:any, i:number) => (
+                  <div key={i} className="p-3 bg-red-500/[0.04] border border-red-500/10 rounded-md">
+                    <p className="text-[10px] font-bold text-foreground">{c.subject}</p>
+                    <p className="text-[9px] text-zinc-500 mt-1 leading-relaxed">Status: {c.status} | Severity: {c.severity}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 bg-white/[0.02] border border-white/[0.04] rounded-md border-dashed">
+                  <p className="text-[9px] text-zinc-600 italic">No critical risks detected in current cycle.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -168,12 +242,15 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
         {/* Revenue & Trend */}
         <div className="lg:col-span-2 bg-[#080808] border border-white/[0.04] p-5 rounded-md space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
-              Revenue Forecast & Velocity
-            </p>
+            <div className="flex items-center">
+              <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
+                Revenue Forecast & Velocity
+              </p>
+              <TacticalTooltip content="Projected earnings and the rate of deal movement compared to previous periods." />
+            </div>
             <div className="flex gap-4">
               <div className="text-right">
-                <p className="text-sm font-black text-foreground data-cell">{formatCurrency(account.total_pipeline_value || 4500000)}</p>
+                <p className="text-sm font-black text-foreground data-cell">{formatCurrency(account.total_pipeline_value)}</p>
                 <p className="text-[8px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">ACV Portfolio</p>
               </div>
               <div className="text-right">
@@ -191,62 +268,89 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* Opportunity Table */}
-          <div className="md:col-span-2 bg-[#080808] border border-white/[0.04] rounded-md overflow-hidden">
-            <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01]">
+          <div className="md:col-span-2 bg-[#080808] border border-white/[0.04] rounded-md overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center shrink-0">
               <h4 className="text-[9px] font-black uppercase text-foreground tracking-[0.15em] font-[family-name:var(--font-mono)]">
                 Active Opportunity Pipeline
               </h4>
+              <TacticalTooltip content="Real-time tracking of all open deals, grouped by their tactical progression stage." />
             </div>
-            <table className="w-full text-left text-[10px]">
-              <thead>
-                <tr className="border-b border-white/[0.04] bg-white/[0.01]">
-                  <th className="px-4 py-2 font-bold text-zinc-600 uppercase tracking-[0.06em] font-[family-name:var(--font-mono)]">Deal Name</th>
-                  <th className="px-4 py-2 font-bold text-zinc-600 uppercase tracking-[0.06em] text-center font-[family-name:var(--font-mono)]">Stage</th>
-                  <th className="px-4 py-2 font-bold text-zinc-600 uppercase tracking-[0.06em] text-right font-[family-name:var(--font-mono)]">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { name: 'Global Cloud Migration', stage: 'Contracting', value: '$2.5M' },
-                  { name: 'Cybersecurity Suite Upgrade', stage: 'Negotiation', value: '$1.2M' },
-                  { name: 'Data Lake Pilot', stage: 'Discovery', value: '$450K' },
-                ].map((deal, i) => (
-                  <tr key={i} className="border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors" style={{ height: '36px' }}>
-                    <td className="px-4 py-0 font-bold text-foreground">{deal.name}</td>
-                    <td className="px-4 py-0 text-center">
-                      <span className="px-1.5 py-0.5 bg-white/[0.03] border border-white/[0.06] rounded text-[8px] uppercase font-bold text-zinc-500 font-[family-name:var(--font-mono)]">
-                        {deal.stage}
-                      </span>
-                    </td>
-                    <td className="px-4 py-0 text-right font-black text-primary data-cell">{deal.value}</td>
+            <div className="flex-1 overflow-y-auto max-h-[250px] scrollbar-hide">
+              <table className="w-full text-left text-[10px]">
+                <thead className="sticky top-0 bg-[#080808] z-20">
+                  <tr className="border-b border-white/[0.04] bg-white/[0.01]">
+                    <th className="px-4 py-2 font-bold text-zinc-600 uppercase tracking-[0.06em] font-[family-name:var(--font-mono)]">Deal Name</th>
+                    <th className="px-4 py-2 font-bold text-zinc-600 uppercase tracking-[0.06em] text-center font-[family-name:var(--font-mono)]">Stage</th>
+                    <th className="px-4 py-2 font-bold text-zinc-600 uppercase tracking-[0.06em] text-right font-[family-name:var(--font-mono)]">Value</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <tr key={i} className="border-b border-white/[0.02] animate-pulse">
+                        <td className="px-4 py-3"><div className="h-2 bg-white/[0.05] rounded w-3/4" /></td>
+                        <td className="px-4 py-3"><div className="h-2 bg-white/[0.05] rounded w-1/2 mx-auto" /></td>
+                        <td className="px-4 py-3"><div className="h-2 bg-white/[0.05] rounded w-1/2 ml-auto" /></td>
+                      </tr>
+                    ))
+                  ) : opportunities.length > 0 ? (
+                    opportunities.map((deal: any, i: number) => (
+                    <tr key={i} className="border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors" style={{ height: '36px' }}>
+                      <td className="px-4 py-0 font-bold text-foreground truncate max-w-[200px]">{deal.name}</td>
+                      <td className="px-4 py-0 text-center">
+                        <span className="px-1.5 py-0.5 bg-white/[0.03] border border-white/[0.06] rounded text-[8px] uppercase font-bold text-zinc-500 font-[family-name:var(--font-mono)]">
+                          {deal.stage}
+                        </span>
+                      </td>
+                      <td className="px-4 py-0 text-right font-black text-primary data-cell">{formatCurrency(deal.value)}</td>
+                    </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-8 text-center text-zinc-600 italic">No open opportunities found</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Contact Matrix */}
-          <div className="bg-[#080808] border border-white/[0.04] rounded-md overflow-hidden">
-            <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center justify-between">
-              <h4 className="text-[9px] font-black uppercase text-foreground tracking-[0.15em] font-[family-name:var(--font-mono)]">Key Contacts</h4>
+          <div className="bg-[#080808] border border-white/[0.04] rounded-md overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center justify-between shrink-0">
+              <div className="flex items-center">
+                <h4 className="text-[9px] font-black uppercase text-foreground tracking-[0.15em] font-[family-name:var(--font-mono)]">Key Contacts</h4>
+                <TacticalTooltip content="Verified stakeholders and decision-makers within the organization." />
+              </div>
               <Users className="w-3 h-3 text-zinc-600" />
             </div>
-            <div className="p-3 space-y-3">
-              {[
-                { initials: 'JS', name: 'John Smith', role: 'Chief Technology Officer' },
-                { initials: 'AP', name: 'Alice Park', role: 'VP Engineering' },
-              ].map((contact, i) => (
+            <div className="p-3 space-y-3 flex-1 overflow-y-auto max-h-[250px] scrollbar-hide">
+              {loading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 animate-pulse">
+                    <div className="w-7 h-7 rounded bg-white/[0.05]" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-2 bg-white/[0.05] rounded w-1/2" />
+                      <div className="h-2 bg-white/[0.05] rounded w-1/3" />
+                    </div>
+                  </div>
+                ))
+              ) : contacts.length > 0 ? (
+                contacts.map((contact: any, i: number) => (
                 <div key={i} className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded bg-white/[0.03] border border-white/[0.06] flex items-center justify-center font-black text-[9px] text-zinc-500 font-[family-name:var(--font-mono)]">
-                    {contact.initials}
+                    {contact.first_name[0]}{contact.last_name[0]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold truncate text-foreground">{contact.name}</p>
+                    <p className="text-[10px] font-bold truncate text-foreground">{contact.first_name} {contact.last_name}</p>
                     <p className="text-[8px] text-zinc-600 truncate font-medium">{contact.role}</p>
                   </div>
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Highly Engaged" />
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${contact.engagement === 'High' ? 'bg-emerald-500' : contact.engagement === 'Medium' ? 'bg-amber-500' : 'bg-zinc-600'}`} title={contact.engagement} />
                 </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-[9px] text-zinc-600 italic text-center py-4">No contacts on record</p>
+              )}
               <button className="w-full py-2 bg-white/[0.02] hover:bg-white/[0.04] text-[9px] font-bold uppercase rounded-md border border-white/[0.04] transition-all text-zinc-600 font-[family-name:var(--font-mono)] tracking-[0.1em]">
                 View Directory
               </button>

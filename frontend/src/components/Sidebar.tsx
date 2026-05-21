@@ -17,7 +17,7 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { id: 'Portfolio', icon: LayoutDashboard },
+  { id: 'Dashboard', icon: LayoutDashboard },
   { id: 'Accounts', icon: Users },
   { id: 'Pipeline', icon: TrendingUp },
   { id: 'Intelligence', icon: Sparkles },
@@ -101,7 +101,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
               </span>
             </div>
             <p className="text-[9px] text-zinc-600 leading-relaxed font-medium">
-              Backend: :8001 · LLM: :8000
+              Backend: :8002 · LLM: :8000
             </p>
           </div>
         ) : (
