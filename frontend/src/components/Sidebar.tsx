@@ -37,7 +37,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
     >
       {/* Logo */}
       <div className="h-16 border-b border-white/[0.04] flex items-center gap-3 px-4 shrink-0">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center font-black text-white text-[11px] shrink-0 shadow-[0_0_20px_rgba(37,99,235,0.3)]">
+        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center font-black text-white text-[12px] shrink-0 shadow-[0_0_20px_rgba(37,99,235,0.3)]">
           AP
         </div>
         {!isCollapsed && (
@@ -45,7 +45,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="font-black text-[11px] tracking-[0.15em] text-primary uppercase whitespace-nowrap font-[family-name:var(--font-mono)]"
+            className="font-black text-[12px] tracking-[0.15em] text-primary uppercase whitespace-nowrap font-[family-name:var(--font-mono)]"
           >
             APEX PLANNER
           </motion.span>
@@ -74,7 +74,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
                 isActive ? 'text-primary' : 'text-zinc-600 group-hover:text-zinc-400'
               }`} />
               {!isCollapsed && (
-                <span className="text-[10px] font-bold uppercase tracking-[0.12em] whitespace-nowrap">
+                <span className="text-[13px] font-bold uppercase tracking-[0.12em] whitespace-nowrap">
                   {item.id}
                 </span>
               )}
@@ -96,11 +96,11 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
           <div className="p-3 bg-white/[0.02] rounded-md border border-white/[0.04] space-y-2">
             <div className="flex items-center gap-2">
               <Activity className={`w-3 h-3 ${statusColor}`} />
-              <span className={`text-[9px] font-bold uppercase tracking-[0.15em] ${statusColor} font-[family-name:var(--font-mono)]`}>
+              <span className={`text-[12px] font-bold uppercase tracking-[0.15em] ${statusColor} font-[family-name:var(--font-mono)]`}>
                 {statusLabel}
               </span>
             </div>
-            <p className="text-[9px] text-zinc-600 leading-relaxed font-medium">
+            <p className="text-[12px] text-zinc-600 leading-relaxed font-medium">
               Backend: :8002 · LLM: :8000
             </p>
           </div>

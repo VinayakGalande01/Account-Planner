@@ -37,7 +37,7 @@ function RenderMessageLines({ content }: { content: string }) {
         if (line.startsWith('sys_meta_log|')) {
           const metaMsg = line.replace('sys_meta_log|', '');
           return (
-            <div key={idx} className="text-[9px] text-zinc-600 font-bold tracking-widest my-1 uppercase">
+            <div key={idx} className="text-[12px] text-zinc-600 font-bold tracking-widest my-1 uppercase">
               {metaMsg}
             </div>
           );
@@ -146,10 +146,10 @@ export default function ChatTerminal() {
       <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center justify-between shrink-0 relative z-10">
         <div className="flex items-center gap-3">
           <Terminal className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[10px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
+          <span className="text-[13px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
             APEX v2.1
           </span>
-          <span className="text-[9px] text-zinc-600 font-[family-name:var(--font-mono)]">// SESSION ACTIVE</span>
+          <span className="text-[12px] text-zinc-600 font-[family-name:var(--font-mono)]">// SESSION ACTIVE</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center space-x-[2px] h-2">
@@ -168,7 +168,7 @@ export default function ChatTerminal() {
             exit={{ height: 0, opacity: 0 }}
             className="px-4 py-2 border-b border-white/[0.04] bg-white/[0.01] relative z-10"
           >
-            <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] border border-white/[0.06] ${stageConfig[processingStage].className}`}>
+            <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded text-[12px] font-black uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] border border-white/[0.06] ${stageConfig[processingStage].className}`}>
               <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
               {stageConfig[processingStage].label}
             </span>
@@ -188,12 +188,12 @@ export default function ChatTerminal() {
 
             <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-first' : ''}`}>
               {msg.role === 'user' ? (
-                <div className="px-3 py-2 rounded-md bg-primary/10 border border-primary/20 text-[11px] font-bold text-foreground font-[family-name:var(--font-mono)]">
+                <div className="px-3 py-2 rounded-md bg-primary/10 border border-primary/20 text-sm font-bold text-foreground font-[family-name:var(--font-mono)]">
                   <span className="text-primary mr-2">&gt;</span>
                   {msg.content}
                 </div>
               ) : (
-                <div className="text-[11px] text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)]">
+                <div className="text-sm text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)]">
                   <RenderMessageLines content={msg.content} />
                 </div>
               )}
@@ -213,7 +213,7 @@ export default function ChatTerminal() {
             <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
               <Bot className="w-3 h-3 text-primary" />
             </div>
-            <div className="text-[11px] text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)] max-w-[85%]">
+            <div className="text-sm text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)] max-w-[85%]">
               {displayedResponse !== null ? (
                 <>
                   <RenderMessageLines content={displayedResponse} />
@@ -228,13 +228,13 @@ export default function ChatTerminal() {
       </div>
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-white/[0.04] bg-white/[0.01] relative z-10">
-        <div className="flex items-center gap-2">
-          <span className="text-primary text-[11px] font-[family-name:var(--font-mono)] font-bold shrink-0">&gt;_</span>
+      <div className="px-4 pb-4 pt-2 bg-transparent relative z-10 shrink-0">
+        <div className="chatbox-glow-ring p-3 flex items-center gap-2">
+          <span className="text-primary text-sm font-[family-name:var(--font-mono)] font-bold shrink-0">&gt;_</span>
           <input
             type="text"
             placeholder="Query account intelligence..."
-            className="flex-1 bg-transparent text-[11px] text-foreground placeholder:text-zinc-700 focus:outline-none font-[family-name:var(--font-mono)] font-medium"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-zinc-700 focus:outline-none font-[family-name:var(--font-mono)] font-medium"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
@@ -242,7 +242,7 @@ export default function ChatTerminal() {
           <button
             onClick={() => handleSend()}
             disabled={isTyping || !input.trim()}
-            className="p-1.5 text-primary hover:bg-primary/10 rounded transition-all disabled:opacity-20"
+            className="p-1.5 text-primary hover:bg-primary/10 rounded transition-all disabled:opacity-20 cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
           </button>

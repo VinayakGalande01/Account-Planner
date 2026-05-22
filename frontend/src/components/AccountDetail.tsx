@@ -32,7 +32,7 @@ function TacticalTooltip({ content }: { content: string }) {
             exit={{ opacity: 0, y: 5, scale: 0.95 }}
             className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-900 border border-primary/20 rounded shadow-2xl z-[100] pointer-events-none"
           >
-            <div className="text-[10px] font-medium text-zinc-300 leading-normal font-[family-name:var(--font-inter)]">
+            <div className="text-[13px] font-medium text-zinc-300 leading-normal font-[family-name:var(--font-inter)]">
               {content}
             </div>
             <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-zinc-900 border-r border-b border-primary/20 rotate-45 -mt-1" />
@@ -143,15 +143,15 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
               <h1 className="text-lg font-black text-foreground tracking-tight uppercase font-[family-name:var(--font-mono)]">
                 {account.Account_Name}
               </h1>
-              <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${getTierStyle(account.Account_Tier)}`}>
+              <span className={`px-2 py-0.5 rounded text-[11px] font-black uppercase border ${getTierStyle(account.Account_Tier)}`}>
                 {account.Account_Tier}
               </span>
             </div>
             <div className="flex items-center gap-4 mt-1">
-              <span className="text-[9px] font-medium text-zinc-600 uppercase tracking-[0.1em] flex items-center gap-1.5 font-[family-name:var(--font-mono)]">
+              <span className="text-[12px] font-medium text-zinc-600 uppercase tracking-[0.1em] flex items-center gap-1.5 font-[family-name:var(--font-mono)]">
                 <Globe className="w-3 h-3" /> {account.Territory || 'GLOBAL'}
               </span>
-              <span className="text-[9px] font-medium text-zinc-600 uppercase tracking-[0.1em] flex items-center gap-1.5 font-[family-name:var(--font-mono)]">
+              <span className="text-[12px] font-medium text-zinc-600 uppercase tracking-[0.1em] flex items-center gap-1.5 font-[family-name:var(--font-mono)]">
                 <Database className="w-3 h-3" /> {account.Account_ID}
               </span>
             </div>
@@ -160,14 +160,14 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
         <div className="flex gap-2">
           <button 
             onClick={handleLaunchIntel}
-            className="px-3 py-1.5 bg-primary/10 text-primary text-[10px] font-bold rounded-md uppercase border border-primary/20 hover:bg-primary/20 transition-all flex items-center gap-2 font-[family-name:var(--font-mono)]"
+            className="px-3 py-1.5 bg-primary/10 text-primary text-[13px] font-bold rounded-md uppercase border border-primary/20 hover:bg-primary/20 transition-all flex items-center gap-2 font-[family-name:var(--font-mono)]"
           >
             <Sparkles className="w-3 h-3" /> Launch Intel
           </button>
-          <button className="px-3 py-1.5 bg-white/[0.03] text-zinc-500 text-[10px] font-bold rounded-md uppercase border border-white/[0.04] hover:bg-white/[0.06] transition-all flex items-center gap-2 font-[family-name:var(--font-mono)]">
+          <button className="px-3 py-1.5 bg-white/[0.03] text-zinc-500 text-[13px] font-bold rounded-md uppercase border border-white/[0.04] hover:bg-white/[0.06] transition-all flex items-center gap-2 font-[family-name:var(--font-mono)]">
             <Download className="w-3 h-3" /> Export
           </button>
-          <button className="px-3 py-1.5 bg-primary text-white text-[10px] font-bold rounded-md uppercase shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all flex items-center gap-2 font-[family-name:var(--font-mono)]">
+          <button className="px-3 py-1.5 bg-primary text-white text-[13px] font-bold rounded-md uppercase shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all flex items-center gap-2 font-[family-name:var(--font-mono)]">
             <TrendingUp className="w-3 h-3" /> Report
           </button>
         </div>
@@ -179,7 +179,7 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
         {/* Health Index */}
         <div className="bg-[#080808] border border-white/[0.04] p-5 rounded-md space-y-5 relative overflow-hidden">
           <div className="flex items-center">
-            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
+            <p className="text-[12px] font-black text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
               Relational Health Index
             </p>
             <TacticalTooltip content="A 0-100 score synthesized from revenue, relationship depth, engagement, and support history." />
@@ -204,35 +204,35 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-sm bg-emerald-500" />
-                <span className="text-[9px] font-medium text-zinc-400 font-[family-name:var(--font-mono)]">Sentiment: Positive</span>
+                <span className="text-[12px] font-medium text-zinc-400 font-[family-name:var(--font-mono)]">Sentiment: Positive</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-sm bg-amber-500" />
-                <span className="text-[9px] font-medium text-zinc-400 font-[family-name:var(--font-mono)]">Engagement: High</span>
+                <span className="text-[12px] font-medium text-zinc-400 font-[family-name:var(--font-mono)]">Engagement: High</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-sm bg-primary" />
-                <span className="text-[9px] font-medium text-zinc-400 font-[family-name:var(--font-mono)]">Next Event: QBR (12d)</span>
+                <span className="text-[12px] font-medium text-zinc-400 font-[family-name:var(--font-mono)]">Next Event: QBR (12d)</span>
               </div>
             </div>
           </div>
 
           <div className="pt-4 border-t border-white/[0.04]">
             <div className="flex items-center mb-3">
-              <p className="text-[9px] font-black text-red-500 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Active Risks</p>
+              <p className="text-[12px] font-black text-red-500 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Active Risks</p>
               <TacticalTooltip content="Critical flags detected by the APEX engine, such as stalled deals or support issues." />
             </div>
             <div className="space-y-2">
               {cases.filter((c:any) => c.severity === 'Critical' || c.severity === 'High').length > 0 ? (
                 cases.filter((c:any) => c.severity === 'Critical' || c.severity === 'High').map((c:any, i:number) => (
                   <div key={i} className="p-3 bg-red-500/[0.04] border border-red-500/10 rounded-md">
-                    <p className="text-[10px] font-bold text-foreground">{c.subject}</p>
-                    <p className="text-[9px] text-zinc-500 mt-1 leading-relaxed">Status: {c.status} | Severity: {c.severity}</p>
+                    <p className="text-[13px] font-bold text-foreground">{c.subject}</p>
+                    <p className="text-[12px] text-zinc-500 mt-1 leading-relaxed">Status: {c.status} | Severity: {c.severity}</p>
                   </div>
                 ))
               ) : (
                 <div className="p-3 bg-white/[0.02] border border-white/[0.04] rounded-md border-dashed">
-                  <p className="text-[9px] text-zinc-600 italic">No critical risks detected in current cycle.</p>
+                  <p className="text-[12px] text-zinc-600 italic">No critical risks detected in current cycle.</p>
                 </div>
               )}
             </div>
@@ -243,7 +243,7 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
         <div className="lg:col-span-2 bg-[#080808] border border-white/[0.04] p-5 rounded-md space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
+              <p className="text-[12px] font-black text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
                 Revenue Forecast & Velocity
               </p>
               <TacticalTooltip content="Projected earnings and the rate of deal movement compared to previous periods." />
@@ -251,11 +251,11 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
             <div className="flex gap-4">
               <div className="text-right">
                 <p className="text-sm font-black text-foreground data-cell">{formatCurrency(account.total_pipeline_value)}</p>
-                <p className="text-[8px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">ACV Portfolio</p>
+                <p className="text-[11px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">ACV Portfolio</p>
               </div>
               <div className="text-right">
                 <p className="text-sm font-black text-emerald-500 data-cell">+14%</p>
-                <p className="text-[8px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">Growth Rate</p>
+                <p className="text-[11px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">Growth Rate</p>
               </div>
             </div>
           </div>
@@ -270,13 +270,13 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
           {/* Opportunity Table */}
           <div className="md:col-span-2 bg-[#080808] border border-white/[0.04] rounded-md overflow-hidden flex flex-col">
             <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center shrink-0">
-              <h4 className="text-[9px] font-black uppercase text-foreground tracking-[0.15em] font-[family-name:var(--font-mono)]">
+              <h4 className="text-[12px] font-black uppercase text-foreground tracking-[0.15em] font-[family-name:var(--font-mono)]">
                 Active Opportunity Pipeline
               </h4>
               <TacticalTooltip content="Real-time tracking of all open deals, grouped by their tactical progression stage." />
             </div>
             <div className="flex-1 overflow-y-auto max-h-[250px] scrollbar-hide">
-              <table className="w-full text-left text-[10px]">
+              <table className="w-full text-left text-[13px]">
                 <thead className="sticky top-0 bg-[#080808] z-20">
                   <tr className="border-b border-white/[0.04] bg-white/[0.01]">
                     <th className="px-4 py-2 font-bold text-zinc-600 uppercase tracking-[0.06em] font-[family-name:var(--font-mono)]">Deal Name</th>
@@ -295,10 +295,10 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
                     ))
                   ) : opportunities.length > 0 ? (
                     opportunities.map((deal: any, i: number) => (
-                    <tr key={i} className="border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors" style={{ height: '36px' }}>
+                    <tr key={i} className="border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors" style={{ height: '40px' }}>
                       <td className="px-4 py-0 font-bold text-foreground truncate max-w-[200px]">{deal.name}</td>
                       <td className="px-4 py-0 text-center">
-                        <span className="px-1.5 py-0.5 bg-white/[0.03] border border-white/[0.06] rounded text-[8px] uppercase font-bold text-zinc-500 font-[family-name:var(--font-mono)]">
+                        <span className="px-1.5 py-0.5 bg-white/[0.03] border border-white/[0.06] rounded text-[11px] uppercase font-bold text-zinc-500 font-[family-name:var(--font-mono)]">
                           {deal.stage}
                         </span>
                       </td>
@@ -319,7 +319,7 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
           <div className="bg-[#080808] border border-white/[0.04] rounded-md overflow-hidden flex flex-col">
             <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center justify-between shrink-0">
               <div className="flex items-center">
-                <h4 className="text-[9px] font-black uppercase text-foreground tracking-[0.15em] font-[family-name:var(--font-mono)]">Key Contacts</h4>
+                <h4 className="text-[12px] font-black uppercase text-foreground tracking-[0.15em] font-[family-name:var(--font-mono)]">Key Contacts</h4>
                 <TacticalTooltip content="Verified stakeholders and decision-makers within the organization." />
               </div>
               <Users className="w-3 h-3 text-zinc-600" />
@@ -338,20 +338,20 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
               ) : contacts.length > 0 ? (
                 contacts.map((contact: any, i: number) => (
                 <div key={i} className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded bg-white/[0.03] border border-white/[0.06] flex items-center justify-center font-black text-[9px] text-zinc-500 font-[family-name:var(--font-mono)]">
+                  <div className="w-7 h-7 rounded bg-white/[0.03] border border-white/[0.06] flex items-center justify-center font-black text-[12px] text-zinc-500 font-[family-name:var(--font-mono)]">
                     {contact.first_name[0]}{contact.last_name[0]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold truncate text-foreground">{contact.first_name} {contact.last_name}</p>
-                    <p className="text-[8px] text-zinc-600 truncate font-medium">{contact.role}</p>
+                    <p className="text-[13px] font-bold truncate text-foreground">{contact.first_name} {contact.last_name}</p>
+                    <p className="text-[11px] text-zinc-600 truncate font-medium">{contact.role}</p>
                   </div>
                   <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${contact.engagement === 'High' ? 'bg-emerald-500' : contact.engagement === 'Medium' ? 'bg-amber-500' : 'bg-zinc-600'}`} title={contact.engagement} />
                 </div>
                 ))
               ) : (
-                <p className="text-[9px] text-zinc-600 italic text-center py-4">No contacts on record</p>
+                <p className="text-[12px] text-zinc-600 italic text-center py-4">No contacts on record</p>
               )}
-              <button className="w-full py-2 bg-white/[0.02] hover:bg-white/[0.04] text-[9px] font-bold uppercase rounded-md border border-white/[0.04] transition-all text-zinc-600 font-[family-name:var(--font-mono)] tracking-[0.1em]">
+              <button className="w-full py-2 bg-white/[0.02] hover:bg-white/[0.04] text-[12px] font-bold uppercase rounded-md border border-white/[0.04] transition-all text-zinc-600 font-[family-name:var(--font-mono)] tracking-[0.1em]">
                 View Directory
               </button>
             </div>

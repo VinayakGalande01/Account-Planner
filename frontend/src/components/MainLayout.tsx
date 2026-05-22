@@ -118,7 +118,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               />
             ) : (
               <>
-                <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
+                <h2 className="text-sm font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
                   <Database className="w-3.5 h-3.5 text-primary" />
                   Accounts Ledger
                 </h2>
@@ -136,7 +136,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       case 'Pipeline':
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
+            <h2 className="text-sm font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
               <Zap className="w-3.5 h-3.5 text-primary" />
               Pipeline Velocity
             </h2>
@@ -174,7 +174,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse font-[family-name:var(--font-mono)] mt-6">
+              <p className="text-[13px] font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse font-[family-name:var(--font-mono)] mt-6">
                 Neural Pathfinding in progress...
               </p>
 
@@ -183,7 +183,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 {['APAC Region', 'EMEA Cluster', 'NA Territory'].map((region, i) => (
                   <div key={region} className="text-center space-y-2">
                     <div className="w-3 h-3 rounded-full bg-primary/20 border border-primary/30 mx-auto animate-pulse" style={{ animationDelay: `${i * 0.5}s` }} />
-                    <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">{region}</span>
+                    <span className="text-[11px] font-bold text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">{region}</span>
                   </div>
                 ))}
               </div>
@@ -193,7 +193,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       case 'Settings':
         return (
           <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
-            <h2 className="text-xs font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-4 font-[family-name:var(--font-mono)]">
+            <h2 className="text-sm font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-4 font-[family-name:var(--font-mono)]">
               <Sliders className="w-4 h-4 text-primary" />
               Control Center
             </h2>
@@ -201,32 +201,32 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <div className="glass-card p-8 space-y-6">
                 <div className="flex items-center gap-4 text-primary">
                   <Cpu className="w-4 h-4" />
-                  <h4 className="text-[10px] font-black uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Model Configuration</h4>
+                  <h4 className="text-[13px] font-black uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Model Configuration</h4>
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04]">
-                    <span className="text-[10px] font-medium text-muted-foreground">Ollama Endpoint</span>
-                    <span className="text-[10px] font-black text-emerald-500 font-[family-name:var(--font-mono)]">ACTIVE: 8000</span>
+                    <span className="text-[13px] font-medium text-muted-foreground">Ollama Endpoint</span>
+                    <span className="text-[13px] font-black text-emerald-500 font-[family-name:var(--font-mono)]">ACTIVE: 8000</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04] opacity-40">
-                    <span className="text-[10px] font-medium text-muted-foreground">Claude-3 Integration</span>
-                    <span className="text-[10px] font-black text-zinc-600 font-[family-name:var(--font-mono)]">LOCKED</span>
+                    <span className="text-[13px] font-medium text-muted-foreground">Claude-3 Integration</span>
+                    <span className="text-[13px] font-black text-zinc-600 font-[family-name:var(--font-mono)]">LOCKED</span>
                   </div>
                 </div>
               </div>
               <div className="glass-card p-8 space-y-6">
                 <div className="flex items-center gap-4 text-primary">
                   <Lock className="w-4 h-4" />
-                  <h4 className="text-[10px] font-black uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Security Ledger</h4>
+                  <h4 className="text-[13px] font-black uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Security Ledger</h4>
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04]">
-                    <span className="text-[10px] font-medium text-muted-foreground">Data Encryption</span>
-                    <span className="text-[10px] font-black text-primary font-[family-name:var(--font-mono)]">AES-256</span>
+                    <span className="text-[13px] font-medium text-muted-foreground">Data Encryption</span>
+                    <span className="text-[13px] font-black text-primary font-[family-name:var(--font-mono)]">AES-256</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04]">
-                    <span className="text-[10px] font-medium text-muted-foreground">Access Level</span>
-                    <span className="text-[10px] font-black text-amber-500 font-[family-name:var(--font-mono)]">ADMIN PRIORITY</span>
+                    <span className="text-[13px] font-medium text-muted-foreground">Access Level</span>
+                    <span className="text-[13px] font-black text-amber-500 font-[family-name:var(--font-mono)]">ADMIN PRIORITY</span>
                   </div>
                 </div>
               </div>
@@ -278,7 +278,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         >
           {/* Header */}
           <header className="h-14 border-b border-white/[0.04] bg-[#050505]/80 backdrop-blur-xl flex items-center justify-between px-6 shrink-0 z-50">
-            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-600 font-[family-name:var(--font-mono)]">
+            <div className="flex items-center gap-3 text-[13px] font-bold uppercase tracking-[0.15em] text-zinc-600 font-[family-name:var(--font-mono)]">
               <span
                 onClick={() => setActiveTab('Dashboard')}
                 className="hover:text-primary cursor-pointer transition-colors duration-150"
@@ -298,7 +298,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                     <div className="w-[2px] h-full bg-primary pulse-waveform" style={{ animationDelay: '200ms' }} />
                     <div className="w-[2px] h-full bg-primary pulse-waveform" style={{ animationDelay: '400ms' }} />
                   </div>
-                  <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-[0.1em] font-[family-name:var(--font-mono)]">
+                  <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-[0.1em] font-[family-name:var(--font-mono)]">
                     ONLINE
                   </span>
                 </div>
@@ -306,7 +306,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <div className="relative flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                   <div className="absolute inset-0 w-2 h-2 rounded-full bg-red-500/40 animate-ping" />
-                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-[0.1em] font-[family-name:var(--font-mono)]">
+                  <span className="text-[12px] font-bold text-red-500 uppercase tracking-[0.1em] font-[family-name:var(--font-mono)]">
                     OFFLINE
                   </span>
                 </div>

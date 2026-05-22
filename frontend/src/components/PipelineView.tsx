@@ -87,7 +87,7 @@ function SegmentedBar({ label, value, maxValue, color, simMultiplier }: { label:
 
   return (
     <div className="flex items-center gap-3 group">
-      <span className="text-[9px] font-bold text-zinc-600 w-28 text-right shrink-0 font-[family-name:var(--font-mono)] uppercase tracking-[0.05em] group-hover:text-zinc-400 transition-colors truncate">
+      <span className="text-[12px] font-bold text-zinc-600 w-28 text-right shrink-0 font-[family-name:var(--font-mono)] uppercase tracking-[0.05em] group-hover:text-zinc-400 transition-colors truncate">
         {label}
       </span>
       <div className="flex-1 h-[6px] bg-white/[0.03] rounded-sm overflow-hidden relative">
@@ -102,10 +102,10 @@ function SegmentedBar({ label, value, maxValue, color, simMultiplier }: { label:
           style={{ width: `${Math.min(actualPct, 100)}%`, backgroundColor: color }}
         />
       </div>
-      <span className="text-[10px] font-bold text-zinc-400 w-16 text-right shrink-0 data-cell font-[family-name:var(--font-mono)]">
+      <span className="text-[13px] font-bold text-zinc-400 w-16 text-right shrink-0 data-cell font-[family-name:var(--font-mono)]">
         {formatCurrency(value)}
       </span>
-      <span className={`text-[9px] font-bold w-14 text-right shrink-0 font-[family-name:var(--font-mono)] ${simValue >= value ? 'text-secondary' : 'text-red-500/70'}`}>
+      <span className={`text-[12px] font-bold w-14 text-right shrink-0 font-[family-name:var(--font-mono)] ${simValue >= value ? 'text-secondary' : 'text-red-500/70'}`}>
         {simValue !== value && `→ ${formatCurrency(simValue)}`}
       </span>
     </div>
@@ -187,18 +187,18 @@ export default function PipelineView() {
         <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between bg-white/[0.01]">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-3.5 h-3.5 text-primary" />
-            <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
+            <h3 className="text-[13px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
               Pipeline Velocity Index
             </h3>
           </div>
           <div className="flex items-center gap-6">
             <div className="text-right">
               <p className="text-sm font-black text-foreground data-cell">{formatCurrency(totalPipeline)}</p>
-              <p className="text-[8px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">Open Pipeline</p>
+              <p className="text-[11px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">Open Pipeline</p>
             </div>
             <div className="text-right">
               <p className="text-sm font-black text-emerald-500 data-cell">{formatCurrency(closedWon)}</p>
-              <p className="text-[8px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">Closed Won</p>
+              <p className="text-[11px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">Closed Won</p>
             </div>
           </div>
         </div>
@@ -207,10 +207,10 @@ export default function PipelineView() {
           {/* Forecasted vs Actual vs Simulated Step-Line */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)]">
+              <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)]">
                 Velocity: Real-Time Performance & Simulation
               </span>
-              <div className="flex items-center gap-4 text-[9px] font-[family-name:var(--font-mono)]">
+              <div className="flex items-center gap-4 text-[12px] font-[family-name:var(--font-mono)]">
                 <span className="flex items-center gap-1.5">
                   <span className="w-4 h-[1px] border-t border-dashed border-blue-500 inline-block" />
                   <span className="text-zinc-600">Forecast</span>
@@ -232,11 +232,11 @@ export default function PipelineView() {
 
           {/* Segmented Stage Bars */}
           <div>
-            <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] mb-3 block">
+            <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] mb-3 block">
               Stage Distribution (Actual vs Simulation Shift)
             </span>
             {loading ? (
-              <div className="py-8 text-center text-[10px] text-zinc-700 font-[family-name:var(--font-mono)] uppercase tracking-widest">
+              <div className="py-8 text-center text-[13px] text-zinc-700 font-[family-name:var(--font-mono)] uppercase tracking-widest">
                 Loading pipeline data...
               </div>
             ) : (
@@ -262,7 +262,7 @@ export default function PipelineView() {
         <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sliders className="w-3.5 h-3.5 text-secondary animate-pulse" />
-            <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-secondary font-[family-name:var(--font-mono)]">
+            <h3 className="text-[13px] font-black uppercase tracking-[0.15em] text-secondary font-[family-name:var(--font-mono)]">
               What-If Forecasting Levers
             </h3>
           </div>
@@ -273,7 +273,7 @@ export default function PipelineView() {
                 setDealSizeExpansion(1.0);
                 setCycleAcceleration(0);
               }}
-              className="text-[8px] font-black text-zinc-500 hover:text-white uppercase tracking-widest font-[family-name:var(--font-mono)]"
+              className="text-[11px] font-black text-zinc-500 hover:text-white uppercase tracking-widest font-[family-name:var(--font-mono)]"
             >
               Reset Levers
             </button>
@@ -284,7 +284,7 @@ export default function PipelineView() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {/* Lever 1: Win Rate Boost */}
             <div className="space-y-2">
-              <div className="flex justify-between items-center text-[9.5px] font-[family-name:var(--font-mono)] uppercase">
+              <div className="flex justify-between items-center text-[12px] font-[family-name:var(--font-mono)] uppercase">
                 <span className="text-zinc-500 font-bold">Win Rate Conversion Delta</span>
                 <span className={`font-black ${winRateBoost > 0 ? 'text-secondary' : winRateBoost < 0 ? 'text-red-500' : 'text-zinc-400'}`}>
                   {winRateBoost >= 0 ? `+${winRateBoost}%` : `${winRateBoost}%`}
@@ -298,14 +298,14 @@ export default function PipelineView() {
                 onChange={(e) => setWinRateBoost(parseInt(e.target.value))}
                 className="w-full accent-secondary bg-white/[0.04] h-[3px] rounded-lg cursor-pointer"
               />
-              <p className="text-[8.5px] text-zinc-600 leading-normal font-medium">
+              <p className="text-[11.5px] text-zinc-600 leading-normal font-medium">
                 Adjusts the baseline close rate probability for all active open opportunities.
               </p>
             </div>
 
             {/* Lever 2: Deal Size Expansion */}
             <div className="space-y-2">
-              <div className="flex justify-between items-center text-[9.5px] font-[family-name:var(--font-mono)] uppercase">
+              <div className="flex justify-between items-center text-[12px] font-[family-name:var(--font-mono)] uppercase">
                 <span className="text-zinc-500 font-bold">Deal Size Expansion Multiplier</span>
                 <span className={`font-black ${dealSizeExpansion > 1.0 ? 'text-secondary' : dealSizeExpansion < 1.0 ? 'text-red-500' : 'text-zinc-400'}`}>
                   {dealSizeExpansion.toFixed(2)}x
@@ -319,14 +319,14 @@ export default function PipelineView() {
                 onChange={(e) => setDealSizeExpansion(parseInt(e.target.value) / 100)}
                 className="w-full accent-secondary bg-white/[0.04] h-[3px] rounded-lg cursor-pointer"
               />
-              <p className="text-[8.5px] text-zinc-600 leading-normal font-medium">
+              <p className="text-[11.5px] text-zinc-600 leading-normal font-medium">
                 Simulates scaling the contract sizes or cross-selling across the active pipeline.
               </p>
             </div>
 
             {/* Lever 3: Cycle Acceleration */}
             <div className="space-y-2">
-              <div className="flex justify-between items-center text-[9.5px] font-[family-name:var(--font-mono)] uppercase">
+              <div className="flex justify-between items-center text-[12px] font-[family-name:var(--font-mono)] uppercase">
                 <span className="text-zinc-500 font-bold">Cycle Velocity Acceleration</span>
                 <span className={`font-black ${cycleAcceleration > 0 ? 'text-secondary' : 'text-zinc-400'}`}>
                   +{cycleAcceleration}%
@@ -340,7 +340,7 @@ export default function PipelineView() {
                 onChange={(e) => setCycleAcceleration(parseInt(e.target.value))}
                 className="w-full accent-secondary bg-white/[0.04] h-[3px] rounded-lg cursor-pointer"
               />
-              <p className="text-[8.5px] text-zinc-600 leading-normal font-medium">
+              <p className="text-[11.5px] text-zinc-600 leading-normal font-medium">
                 Simulates shortening early deal lifecycle stages to pull revenue forward.
               </p>
             </div>
@@ -350,20 +350,20 @@ export default function PipelineView() {
           <div className="pt-4 border-t border-white/[0.04] flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
             <div className="flex gap-6 shrink-0">
               <div>
-                <span className="text-[8px] text-zinc-500 font-black uppercase font-[family-name:var(--font-mono)] tracking-wider">
+                <span className="text-[11px] text-zinc-500 font-black uppercase font-[family-name:var(--font-mono)] tracking-wider">
                   Simulated Closed Won
                 </span>
                 <p className="text-base font-black text-secondary data-cell leading-tight mt-0.5">
                   {formatCurrency(simClosedWon)}
                   {simClosedWon !== closedWon && (
-                    <span className={`text-[10px] font-bold ml-1.5 ${simClosedWon >= closedWon ? 'text-emerald-500' : 'text-red-500'}`}>
+                    <span className={`text-[13px] font-bold ml-1.5 ${simClosedWon >= closedWon ? 'text-emerald-500' : 'text-red-500'}`}>
                       ({simClosedWon >= closedWon ? '+' : ''}{(((simClosedWon - closedWon) / (closedWon || 1)) * 100).toFixed(1)}%)
                     </span>
                   )}
                 </p>
               </div>
               <div>
-                <span className="text-[8px] text-zinc-500 font-black uppercase font-[family-name:var(--font-mono)] tracking-wider">
+                <span className="text-[11px] text-zinc-500 font-black uppercase font-[family-name:var(--font-mono)] tracking-wider">
                   Simulated Open Pipe
                 </span>
                 <p className="text-base font-black text-zinc-400 data-cell leading-tight mt-0.5">
@@ -374,8 +374,8 @@ export default function PipelineView() {
 
             <div className="flex-1 max-w-xl bg-white/[0.01] border border-white/[0.03] rounded p-3 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-[2px] h-full bg-secondary" />
-              <p className="text-[10px] text-zinc-400 font-medium leading-relaxed font-[family-name:var(--font-mono)]">
-                <span className="font-black text-secondary uppercase tracking-widest block text-[8px] mb-0.5">AI Simulation Projection</span>
+              <p className="text-[13px] text-zinc-400 font-medium leading-relaxed font-[family-name:var(--font-mono)]">
+                <span className="font-black text-secondary uppercase tracking-widest block text-[11px] mb-0.5">AI Simulation Projection</span>
                 {getSimulationCommentary()}
               </p>
             </div>

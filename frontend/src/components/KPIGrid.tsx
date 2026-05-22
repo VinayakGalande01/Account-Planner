@@ -34,7 +34,7 @@ export default function KPIGrid() {
             className="corner-brackets bg-[#080808] p-5 hover:scale-[1.01] hover:shadow-[inset_0_0_20px_rgba(37,99,235,0.03)] transition-all duration-200 cursor-default group"
           >
             <div className="flex justify-between items-start mb-3">
-              <p className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.12em] font-[family-name:var(--font-mono)]">
+              <p className="text-[12px] font-black uppercase text-zinc-600 tracking-[0.12em] font-[family-name:var(--font-mono)]">
                 {kpi.label}
               </p>
               <div className="p-1 bg-white/[0.03] rounded">
@@ -43,7 +43,7 @@ export default function KPIGrid() {
             </div>
             <div className="flex items-end justify-between">
               <p className="text-2xl font-black text-foreground data-cell">{kpi.value}</p>
-              <div className={`flex items-center gap-1 text-[10px] font-bold ${
+              <div className={`flex items-center gap-1 text-[13px] font-bold ${
                 kpi.changeType === 'up' ? 'text-emerald-500/70 drop-shadow-[0_0_4px_rgba(16,185,129,0.15)]' :
                 kpi.changeType === 'down' ? 'text-red-500/70 drop-shadow-[0_0_4px_rgba(239,68,68,0.15)]' :
                 'text-secondary/60'

@@ -109,7 +109,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
       {/* Header Bar */}
       <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between bg-white/[0.01]">
         <div className="flex items-center gap-4">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-foreground flex items-center gap-2 font-[family-name:var(--font-mono)]">
+          <h3 className="text-[13px] font-black uppercase tracking-[0.25em] text-foreground flex items-center gap-2 font-[family-name:var(--font-mono)]">
             <span className="text-primary">&gt;</span> Dashboard Ledger
             <span className="text-zinc-800 ml-2 font-normal lowercase tracking-normal">{accounts.length} records</span>
           </h3>
@@ -122,14 +122,14 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Filter..."
-              className="bg-white/[0.02] border border-white/[0.04] rounded-md pl-7 pr-3 py-1.5 text-[10px] focus:outline-none focus:border-primary/30 text-foreground placeholder:text-zinc-700 w-36 font-[family-name:var(--font-mono)]"
+              className="bg-white/[0.02] border border-white/[0.04] rounded-md pl-7 pr-3 py-1.5 text-[13px] focus:outline-none focus:border-primary/30 text-foreground placeholder:text-zinc-700 w-36 font-[family-name:var(--font-mono)]"
             />
           </div>
           {/* Tier Filter */}
           <select
             value={tierFilter}
             onChange={(e) => setTierFilter(e.target.value)}
-            className="bg-white/[0.02] border border-white/[0.04] rounded-md px-2 py-1.5 text-[10px] text-zinc-400 focus:outline-none focus:border-primary/30 font-[family-name:var(--font-mono)] uppercase appearance-none cursor-pointer"
+            className="bg-white/[0.02] border border-white/[0.04] rounded-md px-2 py-1.5 text-[13px] text-zinc-400 focus:outline-none focus:border-primary/30 font-[family-name:var(--font-mono)] uppercase appearance-none cursor-pointer"
           >
             <option value="all">All Tiers</option>
             {tiers.map(t => <option key={t} value={t}>{t}</option>)}
@@ -139,7 +139,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
 
       {/* Table Content */}
       <div className="overflow-x-auto scrollbar-tactical" style={{ perspective: '1000px' }}>
-        <table className="w-full text-left text-[11px] border-collapse">
+        <table className="w-full text-left text-[13px] border-collapse">
           <thead>
             <tr className="border-b border-white/[0.04] bg-white/[0.01]">
               <th
@@ -177,7 +177,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
               <>
                 {/* Ghost skeleton rows */}
                 {Array.from({ length: 6 }).map((_, rowIdx) => (
-                  <tr key={rowIdx} className="border-b border-white/[0.02] ghost-row" style={{ height: '36px', animationDelay: `${rowIdx * 0.2}s` }}>
+                  <tr key={rowIdx} className="border-b border-white/[0.02] ghost-row" style={{ height: '40px', animationDelay: `${rowIdx * 0.2}s` }}>
                     <td className="px-4 py-2"><div className="ghost-cell w-32" style={{ animationDelay: `${rowIdx * 0.15}s` }} /></td>
                     <td className="px-3 py-2"><div className="ghost-cell w-16 mx-auto" style={{ animationDelay: `${rowIdx * 0.15 + 0.05}s` }} /></td>
                     <td className="px-3 py-2"><div className="ghost-cell w-12 mx-auto" style={{ animationDelay: `${rowIdx * 0.15 + 0.1}s` }} /></td>
@@ -191,7 +191,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                 {/* Terminal log overlay */}
                 <tr>
                   <td colSpan={8} className="px-4 py-3 bg-white/[0.01]">
-                    <div className="font-[family-name:var(--font-mono)] text-[9px] space-y-1">
+                    <div className="font-[family-name:var(--font-mono)] text-[12px] space-y-1">
                       <div className={logPhase >= 1 ? "text-emerald-500" : "text-emerald-500/40"}>
                         <span className="text-zinc-600">&gt;</span> Fetching Territory Data... 
                         <span className="ml-2 font-black">[{logPhase >= 1 ? "OK" : "PENDING"}]</span>
@@ -205,7 +205,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                         <span className={`ml-2 font-black ${logPhase === 3 ? 'animate-pulse' : ''}`}>[{logPhase === 3 ? 'RUNNING' : (logPhase > 3 ? 'OK' : 'QUEUED')}]</span>
                       </div>
                       {logPhase === 3 && (
-                        <div className="text-[7px] text-zinc-800 pl-4 animate-pulse">
+                        <div className="text-[10px] text-zinc-800 pl-4 animate-pulse">
                           0x{Math.random().toString(16).slice(2, 10).toUpperCase()} - SYNCING NODES...
                         </div>
                       )}
@@ -215,7 +215,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
               </>
             ) : processedAccounts.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-16 text-zinc-700 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.2em]">
+                <td colSpan={8} className="text-center py-16 text-zinc-700 font-[family-name:var(--font-mono)] text-[13px] uppercase tracking-[0.2em]">
                   No records match filter criteria
                 </td>
               </tr>
@@ -227,7 +227,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   whileHover={{ 
-                    height: '44px',
+                    height: '48px',
                     z: 5,
                     boxShadow: '0 0 20px rgba(37,99,235,0.4), inset 0 0 20px rgba(37,99,235,0.05)',
                     backgroundColor: 'rgba(37,99,235,0.05)'
@@ -235,28 +235,28 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   onClick={() => onAccountClick(acc)}
                   className="border-b border-white/[0.02] cursor-pointer group relative"
-                  style={{ height: '36px', transformStyle: 'preserve-3d' }}
+                  style={{ height: '40px', transformStyle: 'preserve-3d' }}
                 >
                   <td className="px-4 py-0 relative z-10">
                     <div className="flex flex-col justify-center">
-                      <span className="font-bold text-foreground group-hover:text-primary transition-colors duration-150 text-[11px] leading-tight">{acc.Account_Name}</span>
-                      <span className="text-[8px] text-zinc-700 font-[family-name:var(--font-mono)] uppercase tracking-[0.05em]">{acc.Account_ID}</span>
+                      <span className="font-bold text-foreground group-hover:text-primary transition-colors duration-150 text-[14px] leading-tight">{acc.Account_Name}</span>
+                      <span className="text-[11px] text-zinc-700 font-[family-name:var(--font-mono)] uppercase tracking-[0.05em]">{acc.Account_ID}</span>
                     </div>
                   </td>
                   <td className="px-3 py-0 text-center relative z-10">
-                    <span className="text-[9px] text-zinc-500 font-medium">{acc.Industry || '—'}</span>
+                    <span className="text-[12px] text-zinc-500 font-medium">{acc.Industry || '—'}</span>
                   </td>
                   <td className="px-3 py-0 text-center relative z-10">
-                    <span className="text-[9px] text-zinc-500 font-[family-name:var(--font-mono)] uppercase tracking-wider">{acc.Territory || '—'}</span>
+                    <span className="text-[12px] text-zinc-500 font-[family-name:var(--font-mono)] uppercase tracking-wider">{acc.Territory || '—'}</span>
                   </td>
                   <td className="px-3 py-0 text-center relative z-10">
-                    <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-black uppercase border ${getTierStyle(acc.Account_Tier)}`}>
+                    <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-black uppercase border ${getTierStyle(acc.Account_Tier)}`}>
                       {acc.Account_Tier}
                     </span>
                   </td>
                   <td className="px-3 py-0 text-center relative z-10">
                     <div className="flex flex-col items-center gap-0.5">
-                      <span className="text-[11px] font-black data-cell">{acc.health_score ?? '—'}</span>
+                      <span className="text-[14px] font-black data-cell">{acc.health_score ?? '—'}</span>
                       <div className="w-10 h-[3px] bg-white/[0.04] rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${getHealthColor(acc.health_score ?? 0)}`}
@@ -266,10 +266,10 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                     </div>
                   </td>
                   <td className="px-3 py-0 text-right relative z-10">
-                    <span className="text-[11px] font-bold data-cell tabular-nums text-foreground">{formatCurrency(acc.total_pipeline_value)}</span>
+                    <span className="text-[14px] font-bold data-cell tabular-nums text-foreground">{formatCurrency(acc.total_pipeline_value)}</span>
                   </td>
                   <td className="px-3 py-0 text-center relative z-10">
-                    <span className="text-[9px] text-zinc-600 font-[family-name:var(--font-mono)]">{getRelativeTime(acc.last_activity_date)}</span>
+                    <span className="text-[12px] text-zinc-600 font-[family-name:var(--font-mono)]">{getRelativeTime(acc.last_activity_date)}</span>
                   </td>
                   <td className="px-3 py-0 text-right relative z-10">
                     <div className="relative h-full flex items-center justify-end pr-2">
