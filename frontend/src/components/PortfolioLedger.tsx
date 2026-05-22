@@ -110,7 +110,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
       <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between bg-white/[0.01]">
         <div className="flex items-center gap-4">
           <h3 className="text-[13px] font-black uppercase tracking-[0.25em] text-foreground flex items-center gap-2 font-[family-name:var(--font-mono)]">
-            <span className="text-primary">&gt;</span> Dashboard Ledger
+            <span className="text-primary">&gt;</span> Account Directory
             <span className="text-zinc-800 ml-2 font-normal lowercase tracking-normal">{accounts.length} records</span>
           </h3>
         </div>

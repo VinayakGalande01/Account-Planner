@@ -17,17 +17,17 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { id: 'Dashboard', icon: LayoutDashboard },
-  { id: 'Accounts', icon: Users },
-  { id: 'Pipeline', icon: TrendingUp },
-  { id: 'Intelligence', icon: Sparkles },
-  { id: 'Strategy', icon: Target },
-  { id: 'Settings', icon: Settings },
+  { id: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'Accounts', label: 'Accounts', icon: Users },
+  { id: 'Pipeline', label: 'Pipeline', icon: TrendingUp },
+  { id: 'Intelligence', label: 'AI Assistant', icon: Sparkles },
+  { id: 'Strategy', label: 'Strategy', icon: Target },
+  { id: 'Settings', label: 'Settings', icon: Settings },
 ];
 
 export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleCollapse, systemStatus }: SidebarProps) {
   const statusColor = systemStatus === 'operational' ? 'text-emerald-500' : systemStatus === 'connecting' ? 'text-amber-500' : 'text-red-500';
-  const statusLabel = systemStatus === 'operational' ? 'SYSTEMS NOMINAL' : systemStatus === 'connecting' ? 'CONNECTING...' : 'OFFLINE';
+  const statusLabel = systemStatus === 'operational' ? 'SYSTEM ONLINE' : systemStatus === 'connecting' ? 'CONNECTING...' : 'OFFLINE';
 
   return (
     <motion.aside
@@ -61,7 +61,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              data-tooltip={isCollapsed ? item.id : undefined}
+              data-tooltip={isCollapsed ? item.label : undefined}
               className={`w-full flex items-center gap-3 rounded-md transition-all duration-150 group relative ${
                 isCollapsed ? 'px-0 py-2.5 justify-center' : 'px-3 py-2.5'
               } ${
@@ -75,7 +75,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
               }`} />
               {!isCollapsed && (
                 <span className="text-[13px] font-bold uppercase tracking-[0.12em] whitespace-nowrap">
-                  {item.id}
+                  {item.label}
                 </span>
               )}
               {isActive && (

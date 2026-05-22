@@ -19,14 +19,14 @@ const initialMessages: Message[] = [
   {
     role: 'assistant',
     type: 'text',
-    content: 'APEX v2.1 initialized. Portfolio loaded.\nAwaiting directive.',
+    content: 'APEX is ready. Client list loaded.\nHow can I help you today?',
   },
 ];
 
 const stageConfig: Record<string, { label: string; className: string }> = {
   idle: { label: '', className: '' },
-  running: { label: 'PROCESSING NEURAL INFERENCE', className: 'text-amber-500 border-amber-500/20 bg-amber-500/10' },
-  complete: { label: 'INFERENCE COMPLETE', className: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/10' },
+  running: { label: 'THINKING...', className: 'text-amber-500 border-amber-500/20 bg-amber-500/10' },
+  complete: { label: 'FINISHED!', className: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/10' },
 };
 
 function RenderMessageLines({ content }: { content: string }) {
@@ -132,7 +132,7 @@ export default function ChatTerminal() {
         {
           role: 'assistant',
           type: 'text',
-          content: 'ERR: Connection to intelligence engine failed. Verify backend status.',
+          content: 'Error: Could not connect to the AI. Please verify server status.',
         },
       ]);
       setIsTyping(false);
@@ -149,7 +149,7 @@ export default function ChatTerminal() {
           <span className="text-[13px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
             APEX v2.1
           </span>
-          <span className="text-[12px] text-zinc-600 font-[family-name:var(--font-mono)]">// SESSION ACTIVE</span>
+          <span className="text-[12px] text-zinc-600 font-[family-name:var(--font-mono)]">// CONNECTED</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center space-x-[2px] h-2">
@@ -233,7 +233,7 @@ export default function ChatTerminal() {
           <span className="text-primary text-sm font-[family-name:var(--font-mono)] font-bold shrink-0">&gt;_</span>
           <input
             type="text"
-            placeholder="Query account intelligence..."
+            placeholder="Ask a question about your accounts..."
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-zinc-700 focus:outline-none font-[family-name:var(--font-mono)] font-medium"
             value={input}
             onChange={(e) => setInput(e.target.value)}

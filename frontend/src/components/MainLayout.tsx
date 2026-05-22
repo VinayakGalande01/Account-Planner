@@ -120,7 +120,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <>
                 <h2 className="text-sm font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
                   <Database className="w-3.5 h-3.5 text-primary" />
-                  Accounts Ledger
+                  Account Directory
                 </h2>
                 <PortfolioLedger
                   accounts={accounts}
@@ -138,7 +138,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <h2 className="text-sm font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-3 font-[family-name:var(--font-mono)]">
               <Zap className="w-3.5 h-3.5 text-primary" />
-              Pipeline Velocity
+              Sales Speed
             </h2>
             <PipelineView />
           </div>
@@ -162,9 +162,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <Globe className="w-12 h-12 text-primary" />
               </div>
               <div className="space-y-4">
-                <h2 className="text-3xl font-black text-foreground uppercase tracking-[0.3em] font-[family-name:var(--font-mono)]">Strategic Core</h2>
+                <h2 className="text-3xl font-black text-foreground uppercase tracking-[0.3em] font-[family-name:var(--font-mono)]">Strategic Planning</h2>
                 <p className="text-sm text-muted-foreground font-medium max-w-lg mx-auto leading-relaxed normal-case">
-                  The APEX Strategic Engine is synthesizing cross-territory data to generate your Q4 Market Expansion roadmap.
+                  The AI is compiling global data to build your Q4 market strategy plan.
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-6 max-w-2xl mx-auto pt-10">
@@ -175,7 +175,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 ))}
               </div>
               <p className="text-[13px] font-black text-primary/40 uppercase tracking-[0.3em] animate-pulse font-[family-name:var(--font-mono)] mt-6">
-                Neural Pathfinding in progress...
+                Calculating best strategy path...
               </p>
 
               {/* Cluster status indicators */}
@@ -195,7 +195,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
             <h2 className="text-sm font-black text-foreground uppercase tracking-[0.4em] flex items-center gap-4 font-[family-name:var(--font-mono)]">
               <Sliders className="w-4 h-4 text-primary" />
-              Control Center
+              System Settings
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="glass-card p-8 space-y-6">
@@ -205,7 +205,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04]">
-                    <span className="text-[13px] font-medium text-muted-foreground">Ollama Endpoint</span>
+                    <span className="text-[13px] font-medium text-muted-foreground">AI Server Endpoint</span>
                     <span className="text-[13px] font-black text-emerald-500 font-[family-name:var(--font-mono)]">ACTIVE: 8000</span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04] opacity-40">
@@ -217,7 +217,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <div className="glass-card p-8 space-y-6">
                 <div className="flex items-center gap-4 text-primary">
                   <Lock className="w-4 h-4" />
-                  <h4 className="text-[13px] font-black uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Security Ledger</h4>
+                  <h4 className="text-[13px] font-black uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">Security Settings</h4>
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center p-3 bg-white/[0.02] rounded-md border border-white/[0.04]">

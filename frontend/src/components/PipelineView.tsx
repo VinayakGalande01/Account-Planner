@@ -169,14 +169,14 @@ export default function PipelineView() {
   // Generate dynamic commentary based on changes
   const getSimulationCommentary = () => {
     if (winRateBoost === 0 && dealSizeExpansion === 1 && cycleAcceleration === 0) {
-      return "What-if model idle. Adjust the strategic levers below to simulate alternative pipeline conversions and velocity scenarios.";
+      return "Simulator is idle. Adjust the sliders below to see different sales scenarios.";
     }
     const diff = simClosedWon - closedWon;
     const diffPct = ((diff / (closedWon || 1)) * 100).toFixed(1);
     if (diff > 0) {
-      return `Simulating these metrics predicts a potential won revenue increase of +${formatCurrency(diff)} (+${diffPct}%), accelerating Q4 deal flow. Multi-threading is recommended to support this cycle speed.`;
+      return `These settings predict a won sales increase of +${formatCurrency(diff)} (+${diffPct}%), speeding up your Q4 sales.`;
     } else {
-      return `Simulating contracted deal sizes and lower close rates results in a pipeline shortfall of ${formatCurrency(Math.abs(diff))} (-${Math.abs(Number(diffPct))}%). Immediate lead generation is advised.`;
+      return `These settings predict a sales drop of -${formatCurrency(Math.abs(diff))} (-${Math.abs(Number(diffPct))}%). We suggest finding more leads to fill the gap.`;
     }
   };
 
@@ -188,7 +188,7 @@ export default function PipelineView() {
           <div className="flex items-center gap-2">
             <BarChart3 className="w-3.5 h-3.5 text-primary" />
             <h3 className="text-[13px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
-              Pipeline Velocity Index
+              Sales Progress & Speed
             </h3>
           </div>
           <div className="flex items-center gap-6">
@@ -208,7 +208,7 @@ export default function PipelineView() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)]">
-                Velocity: Real-Time Performance & Simulation
+                Sales Speed: Actual vs. Simulation
               </span>
               <div className="flex items-center gap-4 text-[12px] font-[family-name:var(--font-mono)]">
                 <span className="flex items-center gap-1.5">
@@ -217,7 +217,7 @@ export default function PipelineView() {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="w-4 h-[1.2px] bg-secondary inline-block" />
-                  <span className="text-zinc-600">What-If Simulation</span>
+                  <span className="text-zinc-600">Simulation</span>
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="w-4 h-[1px] bg-foreground inline-block" />
@@ -233,7 +233,7 @@ export default function PipelineView() {
           {/* Segmented Stage Bars */}
           <div>
             <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] mb-3 block">
-              Stage Distribution (Actual vs Simulation Shift)
+              Sales Stages (Current vs. Simulated)
             </span>
             {loading ? (
               <div className="py-8 text-center text-[13px] text-zinc-700 font-[family-name:var(--font-mono)] uppercase tracking-widest">
@@ -263,7 +263,7 @@ export default function PipelineView() {
           <div className="flex items-center gap-2">
             <Sliders className="w-3.5 h-3.5 text-secondary animate-pulse" />
             <h3 className="text-[13px] font-black uppercase tracking-[0.15em] text-secondary font-[family-name:var(--font-mono)]">
-              What-If Forecasting Levers
+              Sales Simulation Sliders
             </h3>
           </div>
           {(winRateBoost !== 0 || dealSizeExpansion !== 1.0 || cycleAcceleration !== 0) && (
@@ -285,7 +285,7 @@ export default function PipelineView() {
             {/* Lever 1: Win Rate Boost */}
             <div className="space-y-2">
               <div className="flex justify-between items-center text-[12px] font-[family-name:var(--font-mono)] uppercase">
-                <span className="text-zinc-500 font-bold">Win Rate Conversion Delta</span>
+                <span className="text-zinc-500 font-bold">Win Rate Boost</span>
                 <span className={`font-black ${winRateBoost > 0 ? 'text-secondary' : winRateBoost < 0 ? 'text-red-500' : 'text-zinc-400'}`}>
                   {winRateBoost >= 0 ? `+${winRateBoost}%` : `${winRateBoost}%`}
                 </span>
@@ -299,14 +299,14 @@ export default function PipelineView() {
                 className="w-full accent-secondary bg-white/[0.04] h-[3px] rounded-lg cursor-pointer"
               />
               <p className="text-[11.5px] text-zinc-600 leading-normal font-medium">
-                Adjusts the baseline close rate probability for all active open opportunities.
+                Changes how likely we are to win open opportunities.
               </p>
             </div>
 
             {/* Lever 2: Deal Size Expansion */}
             <div className="space-y-2">
               <div className="flex justify-between items-center text-[12px] font-[family-name:var(--font-mono)] uppercase">
-                <span className="text-zinc-500 font-bold">Deal Size Expansion Multiplier</span>
+                <span className="text-zinc-500 font-bold">Deal Size Multiplier</span>
                 <span className={`font-black ${dealSizeExpansion > 1.0 ? 'text-secondary' : dealSizeExpansion < 1.0 ? 'text-red-500' : 'text-zinc-400'}`}>
                   {dealSizeExpansion.toFixed(2)}x
                 </span>
@@ -320,14 +320,14 @@ export default function PipelineView() {
                 className="w-full accent-secondary bg-white/[0.04] h-[3px] rounded-lg cursor-pointer"
               />
               <p className="text-[11.5px] text-zinc-600 leading-normal font-medium">
-                Simulates scaling the contract sizes or cross-selling across the active pipeline.
+                Simulates selling larger contracts or cross-selling to active clients.
               </p>
             </div>
 
             {/* Lever 3: Cycle Acceleration */}
             <div className="space-y-2">
               <div className="flex justify-between items-center text-[12px] font-[family-name:var(--font-mono)] uppercase">
-                <span className="text-zinc-500 font-bold">Cycle Velocity Acceleration</span>
+                <span className="text-zinc-500 font-bold">Sales Cycle Speedup</span>
                 <span className={`font-black ${cycleAcceleration > 0 ? 'text-secondary' : 'text-zinc-400'}`}>
                   +{cycleAcceleration}%
                 </span>
@@ -341,7 +341,7 @@ export default function PipelineView() {
                 className="w-full accent-secondary bg-white/[0.04] h-[3px] rounded-lg cursor-pointer"
               />
               <p className="text-[11.5px] text-zinc-600 leading-normal font-medium">
-                Simulates shortening early deal lifecycle stages to pull revenue forward.
+                Simulates moving early deals faster through the sales cycle.
               </p>
             </div>
           </div>
@@ -375,7 +375,7 @@ export default function PipelineView() {
             <div className="flex-1 max-w-xl bg-white/[0.01] border border-white/[0.03] rounded p-3 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-[2px] h-full bg-secondary" />
               <p className="text-[13px] text-zinc-400 font-medium leading-relaxed font-[family-name:var(--font-mono)]">
-                <span className="font-black text-secondary uppercase tracking-widest block text-[11px] mb-0.5">AI Simulation Projection</span>
+                <span className="font-black text-secondary uppercase tracking-widest block text-[11px] mb-0.5">AI Prediction</span>
                 {getSimulationCommentary()}
               </p>
             </div>

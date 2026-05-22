@@ -8,25 +8,25 @@ import WebGLGrid from './WebGLGrid';
 const PILLARS = [
   {
     icon: Cpu,
-    title: 'Synthetic Intelligence',
-    subtitle: 'OLLAMA ENGINE',
-    description: 'Deep-link analysis with local LLM inference. Real-time account health scoring across 5 weighted dimensions.',
+    title: 'AI Insights',
+    subtitle: 'AI ENGINE',
+    description: 'AI scans your data to score the health of each client account in real time based on key details.',
     metric: 'llama3.2:latest',
     metricLabel: 'Active Model',
   },
   {
     icon: BarChart3,
-    title: 'Pipeline Velocity',
-    subtitle: 'REVENUE CORE',
-    description: 'Step-line stage analytics with cool-to-hot gradient mapping. Quartile-based forecasting against actuals.',
+    title: 'Sales Speed',
+    subtitle: 'SALES ENGINE',
+    description: 'Track sales progress visually, see bottlenecks, and predict revenue targets.',
     metric: '9 Stages',
     metricLabel: 'Tracked',
   },
   {
     icon: Shield,
-    title: 'Command & Control',
-    subtitle: 'DATA MATRIX',
-    description: 'Dense-data ledgers at 36px row density. Zero-friction strategic health checks triggered by selection.',
+    title: 'Data Organizer',
+    subtitle: 'SPREADSHEETS',
+    description: 'Clean spreadsheets showing everything clearly. Check account health with one click.',
     metric: '5 Tables',
     metricLabel: 'Synced',
   },
@@ -62,7 +62,7 @@ function ScanButton({ onClick }: { onClick: () => void }) {
       <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white/30" />
 
       <span className="relative z-10 flex items-center gap-3">
-        INITIALIZE APEX CONSOLE
+        OPEN DASHBOARD
         <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
       </span>
     </button>
@@ -74,7 +74,7 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
   const [transitioning, setTransitioning] = useState(false);
   const [cipherText, setCipherText] = useState('');
 
-  const FINAL_TEXT = '> SYSTEM READY. AWAITING OPERATOR AUTHENTICATION...';
+  const FINAL_TEXT = '> SYSTEM READY. CLICK OPEN DASHBOARD TO START.';
 
   useEffect(() => {
     setMounted(true);
@@ -130,7 +130,7 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
         </div>
         <div className="flex items-center gap-6">
           <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)] hidden sm:block">
-            v2.1 // TACTICAL SUITE
+            v2.1 // ACCOUNT PLANNER
           </span>
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -158,26 +158,23 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
           >
             <Zap className="w-3 h-3 text-primary" />
             <span className="text-[9px] font-black text-primary uppercase tracking-[0.2em] font-[family-name:var(--font-mono)]">
-              Enterprise Intelligence Platform
+              Smart Account Manager
             </span>
           </motion.div>
 
           {/* Headline */}
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-foreground uppercase tracking-[0.25em] leading-[1.1] font-[family-name:var(--font-mono)]">
-            Revenue{' '}
+            Grow Your Sales{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-blue-400 to-primary">
-              Orchestration
+              & Manage
             </span>
             <br />
-            At Scale
+            Accounts
           </h1>
 
           {/* Sub-headline */}
           <p className="text-sm sm:text-base text-zinc-500 max-w-2xl mx-auto leading-relaxed font-medium">
-            The elite intelligence console for enterprise account mastery.{' '}
-            <span className="text-zinc-400">Synthesize.</span>{' '}
-            <span className="text-zinc-400">Forecast.</span>{' '}
-            <span className="text-zinc-400">Execute.</span>
+            The smart dashboard to manage customer relationships, track sales, and take action.
           </p>
 
           {/* CTA */}
@@ -252,10 +249,10 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
             className="text-center mb-20"
           >
             <span className="text-[9px] font-black text-primary uppercase tracking-[0.3em] font-[family-name:var(--font-mono)]">
-              System Architecture
+              System Features
             </span>
             <h2 className="text-3xl sm:text-4xl font-black text-foreground uppercase tracking-[0.2em] mt-4 font-[family-name:var(--font-mono)]">
-              Three Pillars
+              Core Features
             </h2>
           </motion.div>
 
@@ -303,7 +300,7 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
       <section className="relative z-10 py-20 border-t border-white/[0.03]">
         <div className="text-center mb-12">
           <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.3em] font-[family-name:var(--font-mono)]">
-            Connected Cores
+            Supported Integrations
           </span>
         </div>
 
@@ -339,10 +336,10 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
           className="text-center max-w-3xl mx-auto space-y-8"
         >
           <h3 className="text-2xl sm:text-3xl font-black text-foreground uppercase tracking-[0.2em] font-[family-name:var(--font-mono)]">
-            Ready for Deployment
+            Ready to Start?
           </h3>
           <p className="text-sm text-zinc-500 max-w-lg mx-auto">
-            Your intelligence engine is standing by. Initialize the console to begin strategic operations.
+            Your client database is ready. Open the dashboard to explore.
           </p>
           <ScanButton onClick={handleStartTransition} />
         </motion.div>
@@ -352,7 +349,7 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
       <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
       <div className="py-8 text-center">
         <span className="text-[8px] text-zinc-800 uppercase tracking-[0.3em] font-[family-name:var(--font-mono)]">
-          APEX Account Planner v2.1 // Tactical Suite // {new Date().getFullYear()}
+          APEX Account Planner v2.1 // Account Planner // {new Date().getFullYear()}
         </span>
       </div>
     </div>

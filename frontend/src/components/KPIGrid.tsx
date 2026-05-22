@@ -15,9 +15,9 @@ interface KPIData {
 
 const staticKPIs: KPIData[] = [
   { label: 'Global Health', value: '84%', change: '+2.4%', changeType: 'up', icon: Zap, iconColor: 'text-emerald-500' },
-  { label: 'Pipe Value', value: '$12.4M', change: '+12%', changeType: 'up', icon: PieChart, iconColor: 'text-primary' },
-  { label: 'Churn Risk', value: '04', change: '$210K', changeType: 'down', icon: ShieldAlert, iconColor: 'text-red-500' },
-  { label: 'AI Utilization', value: '92%', change: 'ACTIVE', changeType: 'neutral', icon: Activity, iconColor: 'text-secondary' },
+  { label: 'Pipeline Value', value: '$12.4M', change: '+12%', changeType: 'up', icon: PieChart, iconColor: 'text-primary' },
+  { label: 'Risk of Client Loss', value: '04', change: '$210K', changeType: 'down', icon: ShieldAlert, iconColor: 'text-red-500' },
+  { label: 'AI Usage', value: '92%', change: 'ACTIVE', changeType: 'neutral', icon: Activity, iconColor: 'text-secondary' },
 ];
 
 export default function KPIGrid() {
