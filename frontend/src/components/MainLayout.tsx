@@ -3,11 +3,12 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import Sidebar from './Sidebar';
 import LandingPage from './LandingPage';
-import { Database, Zap, Globe, Lock, Sliders, Cpu, Bell, User } from 'lucide-react';
+import { Database, Zap, Globe, Lock, Sliders, Cpu, Bell, User, Sparkles } from 'lucide-react';
 import PortfolioLedger from './PortfolioLedger';
 import PipelineView from './PipelineView';
 import ChatTerminal from './ChatTerminal';
 import AccountDetail from './AccountDetail';
+import ProactiveInsights from './ProactiveInsights';
 import { useData } from '../context/DataContext';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -78,6 +79,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   } = useData();
   const [consoleActive, setConsoleActive] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
 
   const [systemStatus, setSystemStatus] = useState<'operational' | 'offline' | 'connecting'>('connecting');
   const [isLoading, setIsLoading] = useState(false);
@@ -310,6 +312,16 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 </div>
               )}
 
+              <button
+                onClick={() => setInsightsOpen(prev => !prev)}
+                className={`p-1.5 rounded transition-all duration-150 relative ${
+                  insightsOpen ? 'text-primary bg-primary/10 border border-primary/20' : 'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.03]'
+                }`}
+                data-tooltip="Proactive Intel"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-secondary rounded-full animate-pulse" />
+              </button>
               <button className="p-1.5 text-zinc-600 hover:text-zinc-400 transition-colors relative">
                 <Bell className="w-4 h-4" />
                 <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-primary rounded-full" />
@@ -327,6 +339,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </motion.main>
+        
+        {/* Proactive Intel Sidebar Drawer */}
+        <ProactiveInsights isOpen={insightsOpen} onClose={() => setInsightsOpen(false)} />
+
         {/* Tactical Scanline Overlay — placed at end with pointer-events-none to prevent click interference */}
         <div className="absolute inset-0 scanlines z-[9999] pointer-events-none" />
       </div>
