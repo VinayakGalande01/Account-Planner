@@ -249,7 +249,6 @@ class DataEngine:
         return result
 
     def get_formatted_account_data(self, account_id: str):
-
         """Formats all 5 sheets into the requested APEX schema for LLM context."""
         output = []
         
@@ -259,7 +258,7 @@ class DataEngine:
             row = acc[acc['Account_ID'] == account_id]
             if not row.empty:
                 output.append("[Account]")
-                output.append(" | ".join(row.iloc[0].astype(str).tolist()))
+                output.append(" | ".join([str(val) for val in row.iloc[0].tolist()]))
                 output.append("")
 
         # 2. Opportunities
@@ -269,7 +268,7 @@ class DataEngine:
             if not rows.empty:
                 output.append("[Opportunities]")
                 for _, r in rows.iterrows():
-                    output.append(" | ".join(r.astype(str).tolist()))
+                    output.append(" | ".join([str(val) for val in r.tolist()]))
                 output.append("")
 
         # 3. Contacts
@@ -279,7 +278,7 @@ class DataEngine:
             if not rows.empty:
                 output.append("[Contacts]")
                 for _, r in rows.iterrows():
-                    output.append(" | ".join(r.astype(str).tolist()))
+                    output.append(" | ".join([str(val) for val in r.tolist()]))
                 output.append("")
 
         # 4. Activities
@@ -289,7 +288,7 @@ class DataEngine:
             if not rows.empty:
                 output.append("[Activities]")
                 for _, r in rows.iterrows():
-                    output.append(" | ".join(r.astype(str).tolist()))
+                    output.append(" | ".join([str(val) for val in r.tolist()]))
                 output.append("")
 
         # 5. Cases
@@ -299,7 +298,7 @@ class DataEngine:
             if not rows.empty:
                 output.append("[Cases]")
                 for _, r in rows.iterrows():
-                    output.append(" | ".join(r.astype(str).tolist()))
+                    output.append(" | ".join([str(val) for val in r.tolist()]))
                 output.append("")
                 
         return "\n".join(output)

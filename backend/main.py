@@ -30,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DATA_PATH = r"C:\Users\VINAYAK\Downloads\SF_AccountingAgent_DummyData.xlsx"
+DATA_PATH = "/Users/theabhijitjagtap/Projects/Account_Planner/SF_AccountingAgent_DummyData.xlsx"
 engine = DataEngine(DATA_PATH)
 
 # Configuration for LLM (Remote or Local via .env)
