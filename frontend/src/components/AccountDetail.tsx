@@ -101,7 +101,7 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`http://localhost:8002/api/accounts/${account.Account_ID}/details`)
+    fetch(`http://127.0.0.1:8002/api/accounts/${account.Account_ID}/details`)
       .then(res => res.json())
       .then(data => {
         setDetails(data);

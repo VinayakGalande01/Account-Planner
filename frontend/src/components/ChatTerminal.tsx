@@ -1,18 +1,22 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Terminal, Bot, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useData } from '../context/DataContext';
+import { parseResponseContract } from '../utils/contractParser';
+import { ContractRenderer, FinalizedContractRenderer } from './apex-widgets';
+import type { ResponseContract } from '../types/responseContract';
 
 type MessageType = 'text' | 'data' | 'system';
-
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   type: MessageType;
   data?: any;
+  /** Normalized structured response contract (post-stream application state) */
+  contract?: ResponseContract;
 }
 
 const initialMessages: Message[] = [
@@ -29,6 +33,10 @@ const stageConfig: Record<string, { label: string; className: string }> = {
   complete: { label: 'FINISHED!', className: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/10' },
 };
 
+/**
+ * Fallback renderer for unstructured text content.
+ * Used for: welcome messages, error messages, and responses without __SECTION_*__ tags.
+ */
 function RenderMessageLines({ content }: { content: string }) {
   const lines = content.split('\n');
   return (
@@ -89,7 +97,7 @@ export default function ChatTerminal() {
     setProcessingStage('running');
 
     try {
-      const response = await fetch('http://localhost:8002/api/chat', {
+      const response = await fetch('http://127.0.0.1:8002/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: textToSend }),
@@ -112,12 +120,17 @@ export default function ChatTerminal() {
       setProcessingStage('complete');
       
       setTimeout(() => {
+        // Normalize streamed content into structured ResponseContract
+        // __SECTION_*__ is strictly a transport format — we normalize to application state here
+        const contract = parseResponseContract(accumulateStr);
+
         setMessages((prev) => [
           ...prev,
           {
             role: 'assistant',
             type: 'text',
             content: accumulateStr.trim(),
+            contract: contract.isStructured ? contract : undefined,
           },
         ]);
         setDisplayedResponse(null);
@@ -138,6 +151,48 @@ export default function ChatTerminal() {
       setIsTyping(false);
       setDisplayedResponse(null);
     }
+  };
+
+  /**
+   * Renders a stored assistant message.
+   * Uses FinalizedContractRenderer for structured responses,
+   * falls back to RenderMessageLines for unstructured text.
+   */
+  const renderAssistantMessage = (msg: Message) => {
+    if (msg.contract) {
+      return <FinalizedContractRenderer contract={msg.contract} />;
+    }
+    return (
+      <div className="text-sm text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)]">
+        <RenderMessageLines content={msg.content} />
+      </div>
+    );
+  };
+
+  /**
+   * Renders the actively-streaming response.
+   * Uses ContractRenderer for structured streams (with choreography),
+   * falls back to RenderMessageLines for unstructured streams.
+   */
+  const renderStreamingResponse = () => {
+    if (displayedResponse === null) {
+      return <span className="inline-block w-2 h-4 bg-primary animate-blink-cursor" />;
+    }
+
+    // Check if the stream contains structured __SECTION_*__ tags
+    const hasStructuredContent = displayedResponse.includes('__SECTION_');
+
+    if (hasStructuredContent) {
+      return <ContractRenderer content={displayedResponse} isStreaming={true} />;
+    }
+
+    // Fallback: render as raw text with cursor
+    return (
+      <>
+        <RenderMessageLines content={displayedResponse} />
+        <span className="inline-block w-2 h-4 bg-primary ml-0.5 animate-blink-cursor align-middle" />
+      </>
+    );
   };
 
   return (
@@ -193,9 +248,7 @@ export default function ChatTerminal() {
                   {msg.content}
                 </div>
               ) : (
-                <div className="text-sm text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)]">
-                  <RenderMessageLines content={msg.content} />
-                </div>
+                renderAssistantMessage(msg)
               )}
             </div>
 
@@ -214,14 +267,7 @@ export default function ChatTerminal() {
               <Bot className="w-3 h-3 text-primary" />
             </div>
             <div className="text-sm text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)] max-w-[85%]">
-              {displayedResponse !== null ? (
-                <>
-                  <RenderMessageLines content={displayedResponse} />
-                  <span className="inline-block w-2 h-4 bg-primary ml-0.5 animate-blink-cursor align-middle" />
-                </>
-              ) : (
-                <span className="inline-block w-2 h-4 bg-primary animate-blink-cursor" />
-              )}
+              {renderStreamingResponse()}
             </div>
           </div>
         )}

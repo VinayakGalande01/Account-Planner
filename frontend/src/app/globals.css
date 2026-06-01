@@ -447,3 +447,270 @@
     background-position: 300% 0%;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   APEX OPERATIONAL WIDGET SYSTEM
+   Contract-driven cockpit components for structured responses
+   ═══════════════════════════════════════════════════════════ */
+
+/* Container for structured response */
+.apex-contract-response {
+  width: 100%;
+}
+
+/* Individual section block */
+.apex-section-block {
+  width: 100%;
+}
+
+/* ── Headline Widget ──────────────────────────────────────── */
+
+.apex-widget-headline {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.apex-headline-accent {
+  width: 3px;
+  min-height: 20px;
+  align-self: stretch;
+  background: linear-gradient(180deg, #2563eb 0%, #06b6d4 100%);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Summary Widget ───────────────────────────────────────── */
+
+.apex-widget-summary {
+  padding: 4px 0 4px 15px;
+  border-left: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* ── Table Widget ─────────────────────────────────────────── */
+
+.apex-widget-table {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.apex-data-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.apex-data-grid thead th {
+  background: rgba(37, 99, 235, 0.06);
+  color: #71717a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.apex-data-grid tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  transition: background-color 0.15s ease;
+}
+
+.apex-data-grid tbody tr:hover {
+  background-color: rgba(37, 99, 235, 0.04);
+}
+
+.apex-data-grid tbody td {
+  padding: 7px 12px;
+  color: #d4d4d8;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.apex-data-grid tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.01);
+}
+
+.apex-table-footer {
+  padding: 6px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  text-align: right;
+}
+
+.apex-table-skeleton {
+  padding: 8px;
+}
+
+/* ── Signals Widget ───────────────────────────────────────── */
+
+.apex-widget-signals {
+  padding: 6px 0;
+}
+
+/* ── Actions Widget ───────────────────────────────────────── */
+
+.apex-widget-actions {
+  padding: 6px 0;
+}
+
+.apex-action-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+/* ── Section Label ────────────────────────────────────────── */
+
+.apex-section-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #3f3f46;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+}
+
+/* ── Governance Widgets (Collapsible Secondary Sections) ─── */
+
+.apex-widget-governance {
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.apex-governance-amber {
+  border-color: rgba(245, 158, 11, 0.12);
+  background: rgba(245, 158, 11, 0.02);
+}
+
+.apex-governance-default {
+  border-color: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.apex-governance-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  cursor: pointer;
+  border: none;
+  color: inherit;
+  transition: background-color 0.15s ease;
+}
+
+.apex-governance-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.apex-governance-content {
+  padding: 8px 10px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.apex-chevron {
+  color: #3f3f46;
+  font-size: 12px;
+  transition: transform 0.2s ease;
+  line-height: 1;
+}
+
+.apex-chevron-open {
+  transform: rotate(180deg);
+}
+
+/* ── APEX Widget Animations ───────────────────────────────── */
+
+/* Section entrance animation */
+.animate-slide-up {
+  animation: apex-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+@keyframes apex-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Table row staggered entrance */
+.animate-fade-row {
+  animation: apex-fade-row 0.25s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes apex-fade-row {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Streaming cursor blink */
+.animate-blink-cursor {
+  animation: apex-blink 0.8s step-end infinite;
+}
+
+@keyframes apex-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Ghost skeleton shimmer (table placeholder) */
+.ghost-cell {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  background-size: 200% 100%;
+  animation: apex-ghost-shimmer 1.5s ease-in-out infinite;
+  border-radius: 3px;
+}
+
+.ghost-row {
+  opacity: 0.5;
+  animation: apex-ghost-pulse 2s ease-in-out infinite;
+}
+
+@keyframes apex-ghost-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes apex-ghost-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+

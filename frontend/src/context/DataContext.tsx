@@ -30,12 +30,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8002/api/accounts/enriched');
+      const res = await fetch('http://127.0.0.1:8002/api/accounts/enriched');
       const data = await res.json();
       setAccounts(Array.isArray(data) ? data : []);
     } catch {
       try {
-        const res = await fetch('http://localhost:8002/api/accounts');
+        const res = await fetch('http://127.0.0.1:8002/api/accounts');
         const data = await res.json();
         setAccounts(data || []);
       } catch {

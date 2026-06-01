@@ -1,0 +1,91 @@
+/**
+ * APEX Response Contract Types
+ *
+ * These types define the normalized internal state for structured APEX responses.
+ * The __SECTION_*__ tag system is strictly a STREAMING TRANSPORT FORMAT.
+ * After stream completion, all responses are normalized into these types.
+ *
+ * Design Rule: Backend owns ranking, severity, priority, truncation, importance ordering.
+ *              Frontend owns rendering, layout, interaction, hydration, progressive disclosure.
+ */
+
+// ── Structured Data Models ──────────────────────────────────
+
+export interface TableData {
+  /** Column names in display order */
+  columns: string[];
+  /** Rows as key-value objects (column name → cell value) */
+  rows: Record<string, string | number | boolean | null>[];
+}
+
+export interface ConfidenceData {
+  /** Grounding score (e.g., "100%") */
+  score: string;
+  /** Human-readable grounding status */
+  status: string;
+  /** Data sources used for this response */
+  sources: string[];
+}
+
+// ── Response Contract (Normalized Application State) ────────
+
+export interface ResponseContract {
+  /** Classified query intent (e.g., GLOBAL_LIST_QUERY) */
+  queryType: string;
+  /** Primary operational headline */
+  headline: string;
+  /** 2-4 line context summary */
+  summary: string;
+  /** Structured table data for deterministic rendering (supports sort/filter/export) */
+  tableData: TableData | null;
+  /** Fallback markdown table (from LLM responses when structured data unavailable) */
+  tableMarkdown: string | null;
+  /** Key trend signals (backend-ranked) */
+  signals: string[];
+  /** Prioritized next-best-actions (backend-ranked) */
+  actions: string[];
+  /** CRM hygiene warnings (secondary governance, collapsed by default) */
+  crmWarnings: string[];
+  /** Grounding & integrity metadata (secondary governance, collapsed by default) */
+  confidence: ConfidenceData | null;
+  /** Raw text content for fallback rendering */
+  rawContent: string;
+  /** Whether the response contains structured __SECTION_*__ tags */
+  isStructured: boolean;
+}
+
+// ── Section Transport Protocol ──────────────────────────────
+
+/** Section names as they appear in the streaming transport format */
+export type SectionName =
+  | 'INTENT'
+  | 'HEADLINE'
+  | 'SUMMARY'
+  | 'TABLE_DATA'
+  | 'TABLE'
+  | 'SIGNALS'
+  | 'ACTIONS'
+  | 'CRM_HYGIENE'
+  | 'CONFIDENCE'
+  | 'END';
+
+/**
+ * Priority ordering for section rendering (Level 1 = highest).
+ * Frontend renders sections in this order regardless of stream arrival order.
+ */
+export const SECTION_RENDER_ORDER: SectionName[] = [
+  'HEADLINE',     // Level 1: Primary attention anchor
+  'SUMMARY',      // Level 2: Context framing
+  'TABLE_DATA',   // Level 3: Tactical data (structured JSON — preferred)
+  'TABLE',        // Level 3: Tactical data (markdown fallback)
+  'SIGNALS',      // Level 4: Key intelligence
+  'ACTIONS',      // Level 5: Operational directives
+  'CRM_HYGIENE',  // Level 6: Secondary governance (collapsible)
+  'CONFIDENCE',   // Level 6: Secondary governance (collapsible)
+];
+
+/** Sections that render as collapsible secondary governance (not primary intelligence) */
+export const SECONDARY_SECTIONS: SectionName[] = [
+  'CRM_HYGIENE',
+  'CONFIDENCE',
+];

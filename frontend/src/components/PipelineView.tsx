@@ -122,7 +122,7 @@ export default function PipelineView() {
   const [cycleAcceleration, setCycleAcceleration] = useState(0); // in percent (0% to 50%)
 
   useEffect(() => {
-    fetch('http://localhost:8002/api/pipeline/summary')
+    fetch('http://127.0.0.1:8002/api/pipeline/summary')
       .then(res => res.json())
       .then(data => {
         setPipelineData(data.stage_summary || {});
