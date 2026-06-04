@@ -138,8 +138,8 @@ export function ContractRenderer({ content, isStreaming }: ContractRendererProps
 
     // ── Table sections (special choreography) ──────────────
     if (section === 'TABLE_DATA' || section === 'TABLE') {
-      // Skip TABLE if TABLE_DATA was already processed
-      if (section === 'TABLE' && completedSections.has('TABLE_DATA')) continue;
+      // Process both TABLE_DATA and TABLE in a single pass under the TABLE_DATA slot, skip TABLE iteration entirely.
+      if (section === 'TABLE') continue;
 
       if (tableReady) {
         // Atomic table hydration

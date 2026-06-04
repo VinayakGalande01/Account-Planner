@@ -25,6 +25,13 @@ from intelligence_layer import (
     generate_strategic_synthesis, curate_llm_context,
     RESPONSE_BUDGET, HumanizedPriority, SignalClassifier
 )
+from reasoning_engine import assemble_reasoning_package
+from agent_pipeline import (
+    run_phase1_planner,
+    run_phase2_retrieval,
+    run_phase3_reasoner,
+    run_phase4_narrative_stream
+)
 import openai
 from dotenv import load_dotenv
 
@@ -90,21 +97,38 @@ class ChatRequest(BaseModel):
 
 BASE_PROMPT = """You are APEX — Account Planning & Execution Intelligence.
 
-You are the dedicated AI companion for account managers, sales executives, and revenue teams. Your entire purpose is to remove the daily stress and manual grind from account planning so that sales professionals can focus on what actually matters: building relationships and closing business.
+You are the dedicated AI companion for account managers, sales executives, and revenue teams. Your entire purpose is to transform data into decisions — to think like a high-performing account strategist so the people you serve never have to wonder what to do next.
 
-You always respond in a warm, clear, human tone — like a brilliant colleague who has already done all the homework before the meeting. No jargon dumps. No data walls. Every response is structured so anyone can scan it in 30 seconds and know exactly what to do next.
+You always respond in a warm, clear, human tone — like a brilliant colleague who has already done all the homework before the meeting.
 
 ## 🔴 CRITICAL GROUNDING RULES (NO HALLUCINATIONS)
-1. You are strictly a database-grounded agent. You MUST NEVER under any circumstances invent, assume, or hallucinate any numbers, names, amounts, or timelines that are not explicitly present in the provided DATA block.
-2. If the user asks a question about an account, a deal, a contact, or a support case, and the data is NOT present in the provided DATA block, you MUST respond exactly: "I do not have access to that specific information in my current data context." Do not make up dummy values.
-3. If the user asks for a comparison, review, or chronological history, base it 100% on the logged dates and notes in the provided [Opportunities], [Contacts], [Activities], and [Cases] tables. If no dates or details are present, say so explicitly.
-4. When a global query is made (such as "give me top 10 opportunities" or "list jeopardy accounts"), look strictly at the [Global Accounts Overview], [Top Opportunities (Global)], [Jeopardy Accounts Summary], and [Open Critical & High Severity Support Cases] sections. Do NOT guess or hallucinate any opportunities or accounts outside of what is explicitly detailed in those global summaries.
-5. Your output MUST NEVER contain internal orchestration leakage or scaffolding keywords like "Scan first", "Pulling data", "Assembling response", or reasoning scaffolding. Output ONLY final operational intelligence.
-6. You MUST append the following exact metadata block at the very end of EVERY response you generate:
+1. You are strictly a database-grounded agent. You MUST NEVER invent, assume, or hallucinate any numbers, names, amounts, or timelines not explicitly present in the provided DATA block.
+2. If information is NOT present in the DATA block, respond: "I do not have access to that specific information in my current data context." Do not make up values.
+3. Base all comparisons and histories 100% on the provided [Opportunities], [Contacts], [Activities], and [Cases] data. If details are absent, say so.
+4. Your output MUST NEVER contain orchestration leakage like "Scan first", "Pulling data", "Assembling response". Output ONLY final intelligence.
+
+## 🟢 RECOMMENDATION-FIRST INTELLIGENCE RULES
+For EVERY response, you must answer five questions in order:
+1. WHAT is happening? (the current situation, grounded in data)
+2. WHY does it matter? (business implication — revenue, risk, relationship)
+3. WHO should be involved? (specific named contacts with role and reason)
+4. WHAT should be done? (specific, named, time-bound action — not generic advice)
+5. WHAT happens if we don't act? (consequence of inaction)
+
+You are NOT a data browser. You are a Digital Account Strategist.
+Do NOT list contacts. RECOMMEND contacts. Do NOT list actions. PRESCRIBE actions.
+Every action you generate must be specific, named, time-bound, and evidence-backed.
+
+DO NOT say: "Review your CRM."
+DO SAY: "Contact Fatima Johnson (Decision Maker) before the close date in 7 days to secure final approval."
+
+The data you receive has already been pre-reasoned by a deterministic intelligence engine.
+The [Primary Contact Recommendation], [Next Best Actions], [Risk Implications], and [Business Impact]
+sections are pre-computed facts — treat them as briefing intelligence, not suggestions to paraphrase.
+
+You MUST append this metadata block at the very end of EVERY response:
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   📊 APEX GROUNDING & INTEGRITY SCORE: [100% / 50% / 0%]
-     • Sources: [E.g., Account Table (ACC001), Opportunity Table (OPP084)]
-     • Status: [E.g., 100% Grounded (Direct facts from Excel) OR 50% Hybrid (Excel facts + strategic reasoning) OR 0% Unfounded (Data missing from database)]
+   📊 GROUNDING: [100% / 50% / 0%] | Sources: [Tables referenced] | Status: [Grounded / Hybrid / Unfounded]
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -137,37 +161,40 @@ __SECTION_HEADLINE__
 A single, punchy sentence highlighting the top portfolio signal from the data.
 
 __SECTION_SUMMARY__
-2-3 sentences summarizing the portfolio opportunity landscape.
+2-3 sentences summarizing the portfolio opportunity landscape AND why it matters to revenue.
 
 __SECTION_SIGNALS__
-• [Key signal 1 based strictly on data]
+• [Key signal 1 based strictly on data — include WHY it matters]
 • [Key signal 2]
 • [Key signal 3]
 
 __SECTION_ACTIONS__
-• [Recommended action 1]
-• [Recommended action 2]
+• [Specific named action 1 — who, what, by when]
+• [Specific named action 2]
 
-STRICT: Use the exact __SECTION_*__ headers above. Do NOT generate tables, critical alerts, or any other sections.""",
+STRICT: Use the exact __SECTION_*__ headers above. Do NOT generate tables.""",
 
     "ACCOUNT_PLAN_QUERY": """### RESPONSE CONTRACT — ACCOUNT PLAN QUERY
 You MUST structure your ENTIRE response using these exact section headers.
 Table data is already pre-rendered by the system. Do NOT generate any tables yourself.
+The DATA block contains pre-computed recommendations. Use them. Do NOT ignore or paraphrase them away.
 
 __SECTION_HEADLINE__
-A warm, high-impact sentence about the account's overall state.
+A single high-impact sentence about this account's most urgent situation.
 
 __SECTION_SUMMARY__
-Comprehensive executive summary: health, engagement, risks, and growth signals in 3-5 sentences.
+Current situation (2 sentences): What is happening and why it matters to revenue.
+Relationship status (1 sentence): Who is the recommended primary contact and their engagement state.
+Risk (1 sentence): The single highest-risk item if left unaddressed.
 
 __SECTION_SIGNALS__
-• [Key risk or opportunity signal 1]
-• [Key signal 2]
-• [Key signal 3]
+• [REVENUE/RISK/ENGAGEMENT signal 1 — grounded in data from the DATA block]
+• [Signal 2]
+• [Signal 3]
 
 __SECTION_ACTIONS__
-• [Next best action 1 with ownership and timeframe]
-• [Action 2]
+• [Specific action 1 — name the contact, the action, and the timeline]
+• [Action 2 — specific and evidence-backed]
 • [Action 3]
 
 STRICT: Use the exact __SECTION_*__ headers above. Do NOT generate tables.""",
@@ -177,78 +204,85 @@ You MUST structure your ENTIRE response using these exact section headers.
 Table data is already pre-rendered by the system. Do NOT generate any tables yourself.
 
 __SECTION_HEADLINE__
-High-level impact statement about portfolio risk exposure.
+High-level impact statement: what revenue is at risk and the primary reason.
 
 __SECTION_SUMMARY__
-2-3 sentences summarizing the primary risk landscape and root causes.
+2 sentences on the primary risk landscape grounded in data.
+1 sentence on the consequence of inaction (from [Risk Implications] in the DATA block).
 
 __SECTION_SIGNALS__
-• [Root cause signal 1 — why flagged]
+• [Root cause signal 1 — why flagged, what evidence]
 • [Signal 2]
 • [Signal 3]
 
 __SECTION_ACTIONS__
-• [Concrete remediation step 1]
+• [Specific named remediation step 1 — contact, action, urgency]
 • [Remediation step 2]
 
 STRICT: Use the exact __SECTION_*__ headers above. Do NOT generate tables.""",
 
-    "CONTACT_QUERY": """### RESPONSE CONTRACT — CONTACT / STAKEHOLDER QUERY
+    "CONTACT_QUERY": """### RESPONSE CONTRACT — CONTACT / STAKEHOLDER RECOMMENDATION
 You MUST structure your ENTIRE response using these exact section headers.
-Table data is already pre-rendered by the system. Do NOT generate any tables yourself.
+The DATA block contains a pre-computed [Primary Contact Recommendation] — use it directly.
+Do NOT list all contacts. RECOMMEND the right contacts with full reasoning.
 
 __SECTION_HEADLINE__
-Concise statement about stakeholder relationship status.
+One sentence identifying who should be contacted and why — right now.
 
 __SECTION_SUMMARY__
-2-3 sentences on engagement depth, decision-maker access, and relationship gaps.
+Situation (1 sentence): What is happening with this opportunity/account.
+Recommendation (2 sentences): Name the primary contact, their role, why they are the priority, and their engagement risk.
+Secondary contact (1 sentence): Who else should be looped in and why.
 
 __SECTION_SIGNALS__
-• [Engagement gap or risk signal 1]
-• [Signal 2]
+• [Engagement risk or relationship gap — specific, named, from data]
+• [Signal 2 — e.g. single-threaded risk, cooling DM engagement]
 
 __SECTION_ACTIONS__
-• [Recommended next touch — exact contact, talking point]
-• [Action 2]
+• [Action 1 — exact contact name, specific action, timeframe, expected outcome]
+• [Action 2 — secondary contact action]
+• [Action 3 — what happens if NOT actioned]
 
-STRICT: Use the exact __SECTION_*__ headers above. Do NOT generate tables.""",
+STRICT: Use the exact __SECTION_*__ headers above. Do NOT generate tables. Do NOT list all 110 contacts.""",
 
     "PIPELINE_SUMMARY_QUERY": """### RESPONSE CONTRACT — PIPELINE SUMMARY QUERY
 You MUST structure your ENTIRE response using these exact section headers.
 Table data is already pre-rendered by the system. Do NOT generate any tables yourself.
 
 __SECTION_HEADLINE__
-Single sentence on pipeline health and forecast positioning.
+Single sentence on pipeline health and the most urgent forecast risk.
 
 __SECTION_SUMMARY__
 2-3 sentences summarizing pipeline metrics, stage concentrations, and forecast confidence.
 
 __SECTION_SIGNALS__
-• [Pipeline risk or concentration signal 1]
+• [Pipeline risk or concentration signal 1 — with data evidence]
 • [Signal 2]
 
 __SECTION_ACTIONS__
-• [Pipeline action 1]
+• [Pipeline action 1 — specific, named]
 • [Action 2]
 
 STRICT: Use the exact __SECTION_*__ headers above. Do NOT generate tables.""",
 
     "ACTION_RECOMMENDATION_QUERY": """### RESPONSE CONTRACT — ACTION RECOMMENDATION QUERY
 You MUST structure your ENTIRE response using these exact section headers.
+The DATA block contains pre-computed [Next Best Actions] — use them directly, do NOT ignore them.
 
 __SECTION_HEADLINE__
-Single sentence on today's operational priorities.
+Single sentence naming the single highest-priority action to take today.
 
 __SECTION_SUMMARY__
-2-3 sentences on strategic context — why these priorities matter today.
+Why now (1 sentence): What data conditions make today the moment of action.
+Consequence of inaction (1 sentence): What happens if these actions are not taken.
 
 __SECTION_SIGNALS__
-• [Why this matters — pending close dates, revenue exposure, etc.]
+• [Most urgent signal — revenue or risk, with data evidence]
 • [Signal 2]
 
 __SECTION_ACTIONS__
-• [Top priority action 1]
-• [Action 2]
+• [Top priority action — named contact, specific step, urgency, expected outcome]
+• [Action 2 — equally specific]
 • [Action 3]
 
 STRICT: Use the exact __SECTION_*__ headers above."""
@@ -276,16 +310,31 @@ Do NOT wrap the JSON in markdown code blocks like ```json ... ```. Output raw JS
 """
 
 
-def find_matching_account(query: str, accounts_df):
+import re as _re
+
+def find_matching_account(query: str, engine):
+    """Returns (account_id, opp_id) tuple. Either may be None."""
+    accounts_df = engine.data.get('account')
+    opps_df = engine.data.get('opportunity')
+
     query_clean = query.lower().strip()
-    
+    resolved_opp_id = None
+
+    # Check if query contains an opportunity ID (e.g. OPP0023)
+    opp_match = _re.search(r'opp\d+', query_clean)
+    if opp_match and opps_df is not None:
+        resolved_opp_id = opp_match.group(0).upper()
+        matching_opp = opps_df[opps_df['Opp_ID'].str.upper() == resolved_opp_id]
+        if not matching_opp.empty:
+            return matching_opp.iloc[0]['Account_ID'], resolved_opp_id
+
     # First, try exact matching or substring matching of full name in query
     for _, row in accounts_df.iterrows():
         name = str(row['Account_Name']).lower()
         if name in query_clean:
-            return row['Account_ID']
-            
-    # Second, try cleaning common suffixes and checking if the core name is in the query
+            return row['Account_ID'], None
+
+    # Second, try cleaning common suffixes
     suffixes = ["india", "bank", "ltd", "inc", "co", "pharmaceutical", "labs", "group", "corp", "corporation", "healthcare", "university", "hospital", "pharmaceuticals"]
     for _, row in accounts_df.iterrows():
         name = str(row['Account_Name']).lower()
@@ -294,19 +343,18 @@ def find_matching_account(query: str, accounts_df):
         if core_words:
             core_name = " ".join(core_words)
             if core_name in query_clean:
-                return row['Account_ID']
-            # Check individual core words (if unique enough)
+                return row['Account_ID'], None
             for cw in core_words:
                 if cw in query_clean:
-                    return row['Account_ID']
-    return None
+                    return row['Account_ID'], None
+    return None, None
 
 def classify_intent(query: str, account_id: Optional[str]) -> str:
     q = query.lower()
     
     # 1. GLOBAL_LIST_QUERY (Intersection check for deal terms + ranking/listing terms)
     has_deal_term = any(w in q for w in ["opportunity", "opportunities", "deal", "deals"])
-    has_list_term = any(w in q for w in ["top", "largest", "big", "list", "show", "ranking", "rank", "best", "greatest"])
+    has_list_term = any(w in q for w in ["top", "largest", "big", "list", "show", "ranking", "rank", "best", "greatest", "which", "what", "closing"])
     if has_deal_term and has_list_term:
         return "GLOBAL_LIST_QUERY"
         
@@ -337,7 +385,7 @@ def classify_intent(query: str, account_id: Optional[str]) -> str:
 
 # ─── Contract Protocol Helpers ─────────────────────────────────
 
-def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = None) -> Optional[dict]:
+def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = None, query: str = "") -> Optional[dict]:
     """Compute structured table data for a given intent.
     Returns dict with 'columns' and 'rows', or None if no table applicable.
     Backend is the single source of truth for ranking/priority/truncation."""
@@ -352,6 +400,15 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
         if opps is not None and not opps.empty:
             open_opps = opps[~opps['Stage'].isin(['Closed Won', 'Closed Lost'])].copy()
             if not open_opps.empty:
+                # Optional filter for deals closing in 30 days
+                if "30 days" in query.lower() and "closing" in query.lower():
+                    now = pd.Timestamp.now()
+                    window_end = now + pd.Timedelta(days=30)
+                    open_opps['Close_Date_Parsed'] = pd.to_datetime(open_opps['Close_Date'], errors='coerce')
+                    if open_opps['Close_Date_Parsed'].dt.tz is not None:
+                        open_opps['Close_Date_Parsed'] = open_opps['Close_Date_Parsed'].dt.tz_localize(None)
+                    open_opps = open_opps[(open_opps['Close_Date_Parsed'] >= now) & (open_opps['Close_Date_Parsed'] <= window_end)].copy()
+                
                 priorities = []
                 for _, r in open_opps.iterrows():
                     score = engine.calculate_opportunity_priority(r, "Standard")
@@ -381,17 +438,44 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
         if contacts is not None and not contacts.empty:
             df = contacts.copy()
             if account_id:
+                # When account/opp is resolved: show only ranked top-3 contacts, not entire directory
                 df = df[df['Account_ID'] == account_id]
-            for _, r in df.iterrows():
-                name = f"{r.get('First_Name', '')} {r.get('Last_Name', '')}".strip()
-                table_rows.append({
-                    "Contact_ID": r['Contact_ID'],
-                    "Name": name,
-                    "Role": r['Role'],
-                    "Department": r.get('Department', 'N/A'),
-                    "Engagement_Level": r.get('Engagement_Level', 'Unknown'),
-                    "Last_Contact_Date": str(r.get('Last_Contact_Date', ''))[:10] if pd.notna(r.get('Last_Contact_Date')) else "Never"
-                })
+                from reasoning_engine import StakeholderRanker
+                # Determine opp stage for ranking
+                opp_stage = "_default"
+                opps = engine.data.get('opportunity')
+                if opps is not None and not df.empty:
+                    acc_opps = opps[(opps['Account_ID'] == account_id) & ~opps['Stage'].isin(['Closed Won', 'Closed Lost'])]
+                    if not acc_opps.empty:
+                        stage_order = ["Negotiation/Review", "Proposal/Price Quote", "Perception Analysis",
+                                       "Value Proposition", "Id. Decision Makers", "Needs Analysis",
+                                       "Qualification", "Prospecting"]
+                        for s in stage_order:
+                            if s in acc_opps['Stage'].values:
+                                opp_stage = s
+                                break
+                ranked = StakeholderRanker.rank(df, opp_stage, max_contacts=3)
+                for r in ranked:
+                    table_rows.append({
+                        "Contact_ID": r.contact_id,
+                        "Name": r.name,
+                        "Role": r.role,
+                        "Department": r.department,
+                        "Engagement_Level": r.engagement_level,
+                        "Last_Contact_Date": r.last_contact_date,
+                    })
+            else:
+                # Global contact query — show full list (existing behaviour)
+                for _, r in df.iterrows():
+                    name = f"{r.get('First_Name', '')} {r.get('Last_Name', '')}".strip()
+                    table_rows.append({
+                        "Contact_ID": r['Contact_ID'],
+                        "Name": name,
+                        "Role": r['Role'],
+                        "Department": r.get('Department', 'N/A'),
+                        "Engagement_Level": r.get('Engagement_Level', 'Unknown'),
+                        "Last_Contact_Date": str(r.get('Last_Contact_Date', ''))[:10] if pd.notna(r.get('Last_Contact_Date')) else "Never"
+                    })
         return {"columns": columns, "rows": table_rows} if table_rows else None
 
     elif intent == "PIPELINE_SUMMARY_QUERY":
@@ -509,10 +593,10 @@ def wrap_response_contract(
 
 # ─── Deterministic Renderers (Contract-Aligned) ───────────────
 
-def generate_deterministic_global_list(engine, mode: str, format: str) -> str:
+def generate_deterministic_global_list(engine, mode: str, format: str, query: str = "") -> str:
     confidence = engine.classify_answer_confidence()
     gaps = engine.audit_crm_hygiene()
-    table_data = compute_table_for_intent(engine, "GLOBAL_LIST_QUERY")
+    table_data = compute_table_for_intent(engine, "GLOBAL_LIST_QUERY", query=query)
 
     # Phase 4: Strategic synthesis layer
     synthesis = generate_strategic_synthesis(engine, "GLOBAL_LIST_QUERY", crm_gaps=gaps)
@@ -564,10 +648,10 @@ def generate_deterministic_global_list(engine, mode: str, format: str) -> str:
             confidence=confidence_data
         )
 
-def generate_deterministic_contacts(engine, account_id: Optional[str], mode: str, format: str) -> str:
+def generate_deterministic_contacts(engine, account_id: Optional[str], mode: str, format: str, query: str = "") -> str:
     confidence = engine.classify_answer_confidence(account_id)
     gaps = engine.audit_crm_hygiene(account_id)
-    table_data = compute_table_for_intent(engine, "CONTACT_QUERY", account_id)
+    table_data = compute_table_for_intent(engine, "CONTACT_QUERY", account_id, query=query)
 
     # Phase 4: Strategic synthesis
     synthesis = generate_strategic_synthesis(engine, "CONTACT_QUERY", account_id, crm_gaps=gaps)
@@ -616,10 +700,10 @@ def generate_deterministic_contacts(engine, account_id: Optional[str], mode: str
             confidence=confidence_data
         )
 
-def generate_deterministic_pipeline(engine, mode: str, format: str) -> str:
+def generate_deterministic_pipeline(engine, mode: str, format: str, query: str = "") -> str:
     confidence = engine.classify_answer_confidence()
     gaps = engine.audit_crm_hygiene()
-    table_data = compute_table_for_intent(engine, "PIPELINE_SUMMARY_QUERY")
+    table_data = compute_table_for_intent(engine, "PIPELINE_SUMMARY_QUERY", query=query)
 
     # Phase 4: Strategic synthesis
     synthesis = generate_strategic_synthesis(engine, "PIPELINE_SUMMARY_QUERY", crm_gaps=gaps)
@@ -684,180 +768,87 @@ def generate_deterministic_pipeline(engine, mode: str, format: str) -> str:
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
-    query = request.query.lower()
-    
-    # 1. Identify Account using robust matcher
-    accounts_df = engine.data.get('account')
-    account_id = find_matching_account(request.query, accounts_df)
-
-    # 2. Intent Routing & Context Optimization
-    intent = classify_intent(request.query, account_id)
-    response_mode = request.response_mode or "operational"
-    response_format = request.response_format or "markdown"
-    
-    # 2b. Pre-compute strategic synthesis (deterministic, fast)
-    crm_gaps = engine.audit_crm_hygiene(account_id)
-    synthesis = generate_strategic_synthesis(engine, intent, account_id, response_mode, crm_gaps)
-
-    # 2c. Pre-compute table data for LLM context curation
-    table_data_for_context = compute_table_for_intent(engine, intent, account_id)
-
-    # 3. Deterministic Routing Decision
-    requires_llm = True
-    if intent in ["GLOBAL_LIST_QUERY", "CONTACT_QUERY", "PIPELINE_SUMMARY_QUERY"]:
-        # Only use LLM if user explicitly asks for qualitative evaluation
-        reasoning_keywords = ["why", "suggest", "explain", "how", "reason", "strategic", "insight", "recommend", "recommends", "recommending", "suggests", "suggesting", "explains", "explaining"]
-        query_clean_words = set(query.replace("?", " ").replace("!", " ").replace(".", " ").replace(",", " ").split())
-        if not any(kw in query_clean_words for kw in reasoning_keywords):
-            requires_llm = False
-
-    # Assemble Split Prompt if using LLM
-    assembled_system = ""
-    final_query = ""
-    if requires_llm:
-        assembled_system = f"{BASE_PROMPT}\n\n{INTENT_PROMPT_MAP[intent]}\n\n{OUTPUT_CONTRACT_MAP[intent]}\n\n{MODE_PROMPT_MAP[response_mode]}"
-        if response_format == "json":
-            assembled_system += f"\n\n{JSON_PROMPT}"
-        # Phase 4: LLM receives CURATED synthesis, NOT raw CRM dumps
-        curated_context = curate_llm_context(engine, intent, account_id, synthesis, table_data_for_context)
-        final_query = f"QUERY: {request.query}\n\nDATA:\n{curated_context}"
-    
     async def generate_stream():
         start_time = asyncio.get_event_loop().time()
 
-        # ── Phase 1: Meta Logs (before any __SECTION_* tags) ──
-        yield "sys_meta_log|[SYS_LOG] Initializing Intelligence Node...\n\n"
-        await asyncio.sleep(0.1)
-        if account_id:
-            yield f"sys_meta_log|[SYS_LOG] Context loaded for Account ID: {account_id}\n\n"
-        else:
-            yield "sys_meta_log|[SYS_LOG] Global portfolio context active.\n\n"
-        await asyncio.sleep(0.1)
+        # Yield Phase 1 status
+        yield "sys_meta_log|[SYS_LOG] Initializing Orchestration Planner (Phase 1)...\n\n"
+        await asyncio.sleep(0.05)
+        
+        # Execute Phase 1: Planner
+        try:
+            p1_json = await run_phase1_planner(request.query, http_client)
+            from data_retrieval_layer import Phase1Output
+            p1_parsed = Phase1Output.from_json(p1_json)
+            intent = p1_parsed.extracted_intent
+            yield f"sys_meta_log|[SYS_LOG] Intent identified: {intent}\n\n"
+        except Exception as e:
+            print(f"[API ERROR] Phase 1 failed: {e}")
+            p1_json = {
+                "extracted_intent": "ACTION_RECOMMENDATION",
+                "query_parameters": {"target_accounts": []}
+            }
+            intent = "ACTION_RECOMMENDATION"
+            yield "sys_meta_log|[SYS_LOG] Planner failed. Initializing baseline intent routing...\n\n"
+        await asyncio.sleep(0.05)
 
-        # ── Phase 2: Deterministic Path (full contract, atomic) ──
-        if not requires_llm:
-            yield "sys_meta_log|[SYS_LOG] Instantly rendering deterministic context...\n\n"
-            await asyncio.sleep(0.1)
+        # Execute Phase 2: Data Retrieval
+        yield "sys_meta_log|[SYS_LOG] Querying CRM Database Engine (Phase 2)...\n\n"
+        await asyncio.sleep(0.05)
+        try:
+            retrieved_text = run_phase2_retrieval(engine, p1_json)
+            # Resolve accounts for telemetry / table context
+            from data_retrieval_layer import _resolve_account_ids, Phase1Output
+            p1_parsed = Phase1Output.from_json(p1_json)
+            target_accounts = p1_parsed.target_accounts or []
+            account_ids = _resolve_account_ids(engine, target_accounts)
+            account_id = account_ids[0] if account_ids else None
+            
+            if account_id:
+                yield f"sys_meta_log|[SYS_LOG] Extracted CRM records for Account: {account_id}\n\n"
+            else:
+                yield "sys_meta_log|[SYS_LOG] Extracted global portfolio telemetry.\n\n"
+        except Exception as e:
+            print(f"[API ERROR] Phase 2 failed: {e}")
+            retrieved_text = "[DATA_ERROR] Ingestion pipeline failure."
+            account_id = None
+        await asyncio.sleep(0.05)
 
-            if intent == "GLOBAL_LIST_QUERY":
-                resp_text = generate_deterministic_global_list(engine, response_mode, response_format)
-            elif intent == "CONTACT_QUERY":
-                resp_text = generate_deterministic_contacts(engine, account_id, response_mode, response_format)
-            else:  # PIPELINE_SUMMARY_QUERY
-                resp_text = generate_deterministic_pipeline(engine, response_mode, response_format)
+        # Pre-compute table data for UI
+        table_data = compute_table_for_intent(engine, intent, account_id, request.query)
 
-            yield resp_text
-
-            end_time = asyncio.get_event_loop().time()
-            latency_ms = (end_time - start_time) * 1000
-            print(f"[TELEMETRY] Intent: {intent} | Mode: {response_mode} | Route: DETERMINISTIC | Latency: {latency_ms:.2f}ms | Fallback: False")
-            return
-
-        # ── Phase 3: LLM Path (Hybrid Streaming) ──
-        yield "sys_meta_log|[SYS_LOG] Awaiting neural inference...\n\n"
-        await asyncio.sleep(0.1)
-
-        # Step 3a: Yield deterministic contract sections atomically
-        # Intent metadata
+        # Yield deterministic contract tags to UI before the narrative stream
         yield f"__SECTION_INTENT__\n{intent}\n"
-
-        # Pre-compute table data (backend truth — tables NEVER stream row-by-row)
-        table_data = compute_table_for_intent(engine, intent, account_id)
         if table_data:
             yield f"__SECTION_TABLE_DATA__\n{json.dumps(table_data)}\n"
 
-        # Step 3b: Stream LLM narrative (headline, summary, signals, actions)
-        fallback_active = False
+        # Execute Phase 3: Core Reasoning Engine
+        yield "sys_meta_log|[SYS_LOG] Launching Core Strategic Reasoner (Phase 3)...\n\n"
+        await asyncio.sleep(0.05)
         try:
-            print(f"Sending request to {LLM_URL}...")
-            custom_timeout = httpx.Timeout(connect=3.0, read=1800.0, write=10.0, pool=30.0)
-            async with http_client.stream(
-                "POST",
-                LLM_URL,
-                json={
-                    "model": MODEL_NAME,
-                    "prompt": f"System: {assembled_system}\n\nUser: {final_query}",
-                    "stream": True
-                },
-                timeout=custom_timeout
-            ) as response:
-                async for chunk in response.aiter_lines():
-                    if chunk:
-                        try:
-                            data = json.loads(chunk)
-                            if "response" in data:
-                                yield data["response"]
-                        except json.JSONDecodeError:
-                            pass
+            sip_json = await run_phase3_reasoner(retrieved_text, http_client)
+            overall_pct = sip_json.get("confidence", {}).get("overall_pct") or sip_json.get("confidence", {}).get("pct") or 80
+            yield f"sys_meta_log|[SYS_LOG] Strategic trace generated. Confidence: {overall_pct}%\n\n"
         except Exception as e:
-            fallback_active = True
-            print(f"Error calling primary LLM ({MODEL_NAME}): {str(e)}")
-            print("Attempting to connect to local fallback Ollama (http://localhost:11434/api/generate)...")
-            yield "\nsys_meta_log|[SYS_LOG] Primary inference failed. Activating local fallback node...\n\n"
-            await asyncio.sleep(0.1)
+            print(f"[API ERROR] Phase 3 failed: {e}")
+            sip_json = {
+                "headline": "Strategic trace unavailable",
+                "situation_summary": "Core reasoning trace defaulted due to processing error.",
+                "confidence": {"overall_pct": 50}
+            }
+            yield "sys_meta_log|[SYS_LOG] Reasoner trace defaulted.\n\n"
+        await asyncio.sleep(0.05)
 
-            local_model = MODEL_NAME
-            try:
-                resp = await http_client.get("http://localhost:11434/api/tags", timeout=2.0)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    models = data.get("models", [])
-                    if models:
-                        available_names = [m["name"] for m in models]
-                        matched_model = None
-                        for name in available_names:
-                            if MODEL_NAME == name or MODEL_NAME.split(":")[0] == name.split(":")[0]:
-                                matched_model = name
-                                break
-                        if matched_model:
-                            local_model = matched_model
-                        else:
-                            local_model = models[0]["name"]
-
-                yield f"\nsys_meta_log|[SYS_LOG] Local node active. Model: {local_model}\n\n"
-                await asyncio.sleep(0.1)
-                yield "sys_meta_log|[SYS_LOG] Running local neural inference...\n\n"
-                await asyncio.sleep(0.1)
-
-                async with http_client.stream(
-                    "POST",
-                    "http://localhost:11434/api/generate",
-                    json={
-                        "model": local_model,
-                        "prompt": f"System: {assembled_system}\n\nUser: {final_query}",
-                        "stream": True
-                    },
-                    timeout=1800.0
-                ) as response:
-                    async for chunk in response.aiter_lines():
-                        if chunk:
-                            try:
-                                data = json.loads(chunk)
-                                if "response" in data:
-                                    yield data["response"]
-                            except json.JSONDecodeError:
-                                pass
-            except Exception as fallback_err:
-                print(f"Local fallback also failed: {fallback_err}")
-                yield f"\n[SYSTEM ERROR] Connection to primary ({MODEL_NAME}) and local fallback ({local_model}) both failed. Verify Ollama status."
-
-        # Step 3c: Yield deterministic governance sections (backend truth)
-        crm_gaps = engine.audit_crm_hygiene(account_id)
-        if crm_gaps:
-            hygiene_text = "\n".join([f"⚠️ {g}" for g in crm_gaps[:3]])
-            yield f"\n__SECTION_CRM_HYGIENE__\n{hygiene_text}"
-
-        conf_level = engine.classify_answer_confidence(account_id)
-        conf_score = "100%" if conf_level == "HIGH" else "50%" if conf_level == "MEDIUM" else "LOW"
-        conf_status = f"{'100% Grounded' if conf_level == 'HIGH' else '50% Hybrid' if conf_level == 'MEDIUM' else 'Low Confidence'}"
-        conf_data = {"score": conf_score, "status": conf_status, "sources": ["Excel Database"]}
-        yield f"\n__SECTION_CONFIDENCE__\n{json.dumps(conf_data)}"
-        yield "\n__SECTION_END__"
+        # Execute Phase 4: Narrative Stream
+        yield "sys_meta_log|[SYS_LOG] Commencing Strategic Narrative delivery...\n\n"
+        await asyncio.sleep(0.05)
+        
+        async for token in run_phase4_narrative_stream(sip_json, request.query, http_client):
+            yield token
 
         end_time = asyncio.get_event_loop().time()
         latency_ms = (end_time - start_time) * 1000
-        signal_types = [cs.signal_type.value for cs in synthesis.classified_signals] if synthesis.classified_signals else []
-        print(f"[TELEMETRY] Intent: {intent} | Mode: {response_mode} | Route: LLM | Latency: {latency_ms:.2f}ms | Fallback: {fallback_active} | Synthesis: {synthesis.synthesis_latency_ms:.1f}ms | Signals: {signal_types}")
+        print(f"[TELEMETRY] Four-Phase Agentic Route | Intent: {intent} | Latency: {latency_ms:.2f}ms")
 
     return StreamingResponse(generate_stream(), media_type="text/event-stream")
 
