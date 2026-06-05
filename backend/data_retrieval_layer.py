@@ -150,6 +150,31 @@ def _parse_time_window(time_window: Optional[str]) -> Optional[datetime]:
     return None
 
 
+def normalize_stage_name(stage_str: Optional[str]) -> Optional[str]:
+    """Normalize common stage names/phrases extracted by Phase 1 Planner
+    to match valid substrings of CRM database Stage values."""
+    if not stage_str:
+        return None
+    s = stage_str.lower().strip()
+    if "negotiation" in s:
+        return "Negotiation"
+    if "perception" in s:
+        return "Perception"
+    if "proposal" in s:
+        return "Proposal"
+    if "proposition" in s:
+        return "Proposition"
+    if "decision" in s:
+        return "Decision"
+    if "needs" in s:
+        return "Needs"
+    if "qualification" in s:
+        return "Qualification"
+    if "prospecting" in s:
+        return "Prospecting"
+    return stage_str
+
+
 def _resolve_account_ids(engine, target_names: List[str]) -> List[str]:
     """Fuzzy-resolve account names from Phase 1 to actual Account_IDs.
 
@@ -298,8 +323,9 @@ def _retrieve_pipeline_data(engine, p1: Phase1Output, account_ids: List[str]) ->
 
     # Filter: by stage
     if p1.stage_filter:
-        stage_lower = p1.stage_filter.lower()
-        df = df[df["Stage"].str.lower().str.contains(stage_lower, na=False)]
+        stage_norm = normalize_stage_name(p1.stage_filter)
+        if stage_norm:
+            df = df[df["Stage"].str.lower().str.contains(stage_norm.lower(), na=False)]
 
     # Filter: by time window (close date within window)
     cutoff = _parse_time_window(p1.time_window)

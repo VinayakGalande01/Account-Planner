@@ -385,13 +385,33 @@ def classify_intent(query: str, account_id: Optional[str]) -> str:
 
 # ─── Contract Protocol Helpers ─────────────────────────────────
 
-def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = None, query: str = "") -> Optional[dict]:
+def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = None, query: str = "", p1_json: Optional[dict] = None) -> Optional[dict]:
     """Compute structured table data for a given intent.
     Returns dict with 'columns' and 'rows', or None if no table applicable.
     Backend is the single source of truth for ranking/priority/truncation."""
 
+    from data_retrieval_layer import Phase1Output, _resolve_account_ids, normalize_stage_name
+    p1 = Phase1Output.from_json(p1_json) if p1_json else None
+
+    if p1:
+        if p1.stage_filter in ("null", "none", "None", "undefined", ""):
+            p1.stage_filter = None
+        else:
+            p1.stage_filter = normalize_stage_name(p1.stage_filter)
+        if p1.time_window in ("null", "none", "None", "undefined", ""):
+            p1.time_window = None
+        if isinstance(p1.limit, str):
+            if p1.limit in ("null", "none", "None", "undefined", ""):
+                p1.limit = None
+            else:
+                try:
+                    p1.limit = int(p1.limit)
+                except ValueError:
+                    p1.limit = None
+
     budget = RESPONSE_BUDGET.get(intent, {"max_rows": 15})
     max_rows = budget.get("max_rows", 15)
+    lim = p1.limit if (p1 and p1.limit and isinstance(p1.limit, int)) else max_rows
 
     if intent == "GLOBAL_LIST_QUERY":
         columns = ["Rank", "Opp_ID", "Opp_Name", "Account_ID", "Stage", "Amount_USD", "Probability_Pct", "Close_Date", "Priority_Band"]
@@ -400,23 +420,77 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
         if opps is not None and not opps.empty:
             open_opps = opps[~opps['Stage'].isin(['Closed Won', 'Closed Lost'])].copy()
             if not open_opps.empty:
-                # Optional filter for deals closing in 30 days
-                if "30 days" in query.lower() and "closing" in query.lower():
-                    now = pd.Timestamp.now()
-                    window_end = now + pd.Timedelta(days=30)
-                    open_opps['Close_Date_Parsed'] = pd.to_datetime(open_opps['Close_Date'], errors='coerce')
-                    if open_opps['Close_Date_Parsed'].dt.tz is not None:
-                        open_opps['Close_Date_Parsed'] = open_opps['Close_Date_Parsed'].dt.tz_localize(None)
-                    open_opps = open_opps[(open_opps['Close_Date_Parsed'] >= now) & (open_opps['Close_Date_Parsed'] <= window_end)].copy()
+                # 1. Filter by target accounts if resolved
+                tgt_acc_ids = []
+                if account_id:
+                    tgt_acc_ids = [account_id]
+                elif p1 and p1.target_accounts:
+                    tgt_acc_ids = _resolve_account_ids(engine, p1.target_accounts)
                 
+                if tgt_acc_ids:
+                    open_opps = open_opps[open_opps["Account_ID"].isin(tgt_acc_ids)]
+
+                # 2. Filter by target opportunities if resolved
+                if p1 and p1.target_opportunities:
+                    opp_ids = [o.strip().upper() for o in p1.target_opportunities]
+                    open_opps = open_opps[open_opps["Opp_ID"].str.upper().isin(opp_ids)]
+
+                # 3. Filter by stage if present
+                stage_f = p1.stage_filter if p1 else None
+                if not stage_f and "negotiation" in query.lower():
+                    stage_f = "Negotiation"
+                elif not stage_f and "perception" in query.lower():
+                    stage_f = "Perception"
+                elif not stage_f and "proposal" in query.lower():
+                    stage_f = "Proposal"
+                elif not stage_f and "proposition" in query.lower():
+                    stage_f = "Proposition"
+
+                if stage_f:
+                    open_opps = open_opps[open_opps['Stage'].str.lower().str.contains(stage_f.lower(), na=False)]
+
+                # 4. Filter close date by time window
+                time_w = p1.time_window if p1 else None
+                if not time_w and "30 days" in query.lower() and "closing" in query.lower():
+                    time_w = "30 days"
+                
+                if time_w:
+                    from data_retrieval_layer import _parse_time_window
+                    cutoff = _parse_time_window(time_w)
+                    if cutoff:
+                        open_opps['Close_Date_Parsed'] = pd.to_datetime(open_opps['Close_Date'], errors='coerce')
+                        if open_opps['Close_Date_Parsed'].dt.tz is not None:
+                            open_opps['Close_Date_Parsed'] = open_opps['Close_Date_Parsed'].dt.tz_localize(None)
+                        now = pd.Timestamp.now().tz_localize(None)
+                        cutoff_ts = pd.Timestamp(cutoff).tz_localize(None)
+                        open_opps = open_opps[(open_opps['Close_Date_Parsed'] >= now) & (open_opps['Close_Date_Parsed'] <= cutoff_ts)].copy()
+
+                # Calculate Priorities
                 priorities = []
                 for _, r in open_opps.iterrows():
                     score = engine.calculate_opportunity_priority(r, "Standard")
                     priorities.append(score)
                 open_opps['Priority_Score'] = priorities
-                ranked = open_opps.sort_values(by='Priority_Score', ascending=False)
+
+                # Sorting
+                sort_col = 'Priority_Score'
+                ascending = False
+                if p1 and p1.sort_by:
+                    sb = p1.sort_by.lower()
+                    if "probability" in sb:
+                        sort_col = "Probability_Pct"
+                    elif "close" in sb or "date" in sb:
+                        sort_col = "Close_Date"
+                        ascending = True
+                    elif "stage" in sb:
+                        sort_col = "Stage"
+                        ascending = True
+                    elif "amount" in sb or "value" in sb:
+                        sort_col = "Amount_USD"
+                
+                ranked = open_opps.sort_values(by=sort_col, ascending=ascending)
                 all_scores = priorities
-                for rank, (_, r) in enumerate(ranked.head(max_rows).iterrows(), 1):
+                for rank, (_, r) in enumerate(ranked.head(lim).iterrows(), 1):
                     raw_score = float(r['Priority_Score'])
                     table_rows.append({
                         "Rank": rank,
@@ -437,15 +511,23 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
         contacts = engine.data.get('contact')
         if contacts is not None and not contacts.empty:
             df = contacts.copy()
-            if account_id:
+            
+            # Use target account resolved ID
+            tgt_acc_id = account_id
+            if not tgt_acc_id and p1 and p1.target_accounts:
+                acc_ids = _resolve_account_ids(engine, p1.target_accounts)
+                if acc_ids:
+                    tgt_acc_id = acc_ids[0]
+
+            if tgt_acc_id:
                 # When account/opp is resolved: show only ranked top-3 contacts, not entire directory
-                df = df[df['Account_ID'] == account_id]
+                df = df[df['Account_ID'] == tgt_acc_id]
                 from reasoning_engine import StakeholderRanker
                 # Determine opp stage for ranking
                 opp_stage = "_default"
                 opps = engine.data.get('opportunity')
                 if opps is not None and not df.empty:
-                    acc_opps = opps[(opps['Account_ID'] == account_id) & ~opps['Stage'].isin(['Closed Won', 'Closed Lost'])]
+                    acc_opps = opps[(opps['Account_ID'] == tgt_acc_id) & ~opps['Stage'].isin(['Closed Won', 'Closed Lost'])]
                     if not acc_opps.empty:
                         stage_order = ["Negotiation/Review", "Proposal/Price Quote", "Perception Analysis",
                                        "Value Proposition", "Id. Decision Makers", "Needs Analysis",
@@ -466,7 +548,13 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
                     })
             else:
                 # Global contact query — show full list (existing behaviour)
-                for _, r in df.iterrows():
+                # Apply filter by target contacts if present
+                if p1 and p1.target_contacts:
+                    c_names_lower = [c.lower() for c in p1.target_contacts]
+                    df['Full_Name'] = (df.get('First_Name', '') + ' ' + df.get('Last_Name', '')).str.lower().str.strip()
+                    df = df[df['Full_Name'].apply(lambda fn: any(cn in fn for cn in c_names_lower))]
+
+                for _, r in df.head(lim).iterrows():
                     name = f"{r.get('First_Name', '')} {r.get('Last_Name', '')}".strip()
                     table_rows.append({
                         "Contact_ID": r['Contact_ID'],
@@ -484,7 +572,70 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
         opps = engine.data.get('opportunity')
         if opps is not None and not opps.empty:
             open_opps = opps[~opps['Stage'].isin(['Closed Won', 'Closed Lost'])].copy()
-            for _, r in open_opps.iterrows():
+            
+            # Apply Filters
+            # 1. Filter by target accounts if resolved
+            tgt_acc_ids = []
+            if account_id:
+                tgt_acc_ids = [account_id]
+            elif p1 and p1.target_accounts:
+                tgt_acc_ids = _resolve_account_ids(engine, p1.target_accounts)
+            
+            if tgt_acc_ids:
+                open_opps = open_opps[open_opps["Account_ID"].isin(tgt_acc_ids)]
+
+            # 2. Filter by target opportunities if resolved
+            if p1 and p1.target_opportunities:
+                opp_ids = [o.strip().upper() for o in p1.target_opportunities]
+                open_opps = open_opps[open_opps["Opp_ID"].str.upper().isin(opp_ids)]
+
+            # 3. Filter by stage if present
+            stage_f = p1.stage_filter if p1 else None
+            # Extract stage_f from query if not explicitly set
+            if not stage_f and "negotiation" in query.lower():
+                stage_f = "Negotiation"
+            elif not stage_f and "perception" in query.lower():
+                stage_f = "Perception"
+            elif not stage_f and "proposal" in query.lower():
+                stage_f = "Proposal"
+            elif not stage_f and "proposition" in query.lower():
+                stage_f = "Proposition"
+
+            if stage_f:
+                open_opps = open_opps[open_opps['Stage'].str.lower().str.contains(stage_f.lower(), na=False)]
+
+            # 4. Filter by time window if present
+            time_w = p1.time_window if p1 else None
+            if not time_w and "30 days" in query.lower() and "closing" in query.lower():
+                time_w = "30 days"
+            
+            if time_w:
+                from data_retrieval_layer import _parse_time_window
+                cutoff = _parse_time_window(time_w)
+                if cutoff:
+                    open_opps['Close_Date_Parsed'] = pd.to_datetime(open_opps['Close_Date'], errors='coerce')
+                    if open_opps['Close_Date_Parsed'].dt.tz is not None:
+                        open_opps['Close_Date_Parsed'] = open_opps['Close_Date_Parsed'].dt.tz_localize(None)
+                    now = pd.Timestamp.now().tz_localize(None)
+                    cutoff_ts = pd.Timestamp(cutoff).tz_localize(None)
+                    open_opps = open_opps[(open_opps['Close_Date_Parsed'] >= now) & (open_opps['Close_Date_Parsed'] <= cutoff_ts)].copy()
+
+            # Sorting
+            sort_col = 'Amount_USD'
+            ascending = False
+            if p1 and p1.sort_by:
+                sb = p1.sort_by.lower()
+                if "probability" in sb:
+                    sort_col = "Probability_Pct"
+                elif "close" in sb or "date" in sb:
+                    sort_col = "Close_Date"
+                    ascending = True
+                elif "stage" in sb:
+                    sort_col = "Stage"
+                    ascending = True
+            open_opps = open_opps.sort_values(by=sort_col, ascending=ascending)
+
+            for _, r in open_opps.head(lim).iterrows():
                 table_rows.append({
                     "Opp_ID": r['Opp_ID'],
                     "Opp_Name": r['Opp_Name'],
@@ -493,7 +644,7 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
                     "Probability_Pct": int(r['Probability_Pct']) if pd.notna(r['Probability_Pct']) else 0,
                     "Close_Date": str(r['Close_Date'])[:10] if pd.notna(r['Close_Date']) else ""
                 })
-        return {"columns": columns, "rows": table_rows[:max_rows]} if table_rows else None
+        return {"columns": columns, "rows": table_rows} if table_rows else None
 
     elif intent == "ACCOUNT_PLAN_QUERY" and account_id:
         columns = ["Opp_ID", "Opp_Name", "Stage", "Amount_USD", "Probability_Pct", "Close_Date"]
@@ -502,7 +653,32 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
         if opps is not None and not opps.empty:
             acc_opps = opps[opps['Account_ID'] == account_id].copy()
             open_opps = acc_opps[~acc_opps['Stage'].isin(['Closed Won', 'Closed Lost'])]
-            for _, r in open_opps.iterrows():
+
+            # Apply Filters (stage, limit, etc.)
+            stage_f = p1.stage_filter if p1 else None
+            if not stage_f and "negotiation" in query.lower():
+                stage_f = "Negotiation"
+            elif not stage_f and "perception" in query.lower():
+                stage_f = "Perception"
+            elif not stage_f and "proposal" in query.lower():
+                stage_f = "Proposal"
+            elif not stage_f and "proposition" in query.lower():
+                stage_f = "Proposition"
+
+            if stage_f:
+                open_opps = open_opps[open_opps['Stage'].str.lower().str.contains(stage_f.lower(), na=False)]
+            if p1 and p1.time_window:
+                from data_retrieval_layer import _parse_time_window
+                cutoff = _parse_time_window(p1.time_window)
+                if cutoff:
+                    open_opps['Close_Date_Parsed'] = pd.to_datetime(open_opps['Close_Date'], errors='coerce')
+                    if open_opps['Close_Date_Parsed'].dt.tz is not None:
+                        open_opps['Close_Date_Parsed'] = open_opps['Close_Date_Parsed'].dt.tz_localize(None)
+                    now = pd.Timestamp.now().tz_localize(None)
+                    cutoff_ts = pd.Timestamp(cutoff).tz_localize(None)
+                    open_opps = open_opps[(open_opps['Close_Date_Parsed'] >= now) & (open_opps['Close_Date_Parsed'] <= cutoff_ts)].copy()
+
+            for _, r in open_opps.head(lim).iterrows():
                 table_rows.append({
                     "Opp_ID": r['Opp_ID'],
                     "Opp_Name": r['Opp_Name'],
@@ -514,39 +690,163 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
         return {"columns": columns, "rows": table_rows[:max_rows]} if table_rows else None
 
     elif intent == "RISK_ANALYSIS_QUERY":
-        columns = ["Rank", "Opp_ID", "Opp_Name", "Account_ID", "Stage", "Amount_USD", "Probability_Pct", "Close_Date"]
-        table_rows = []
-        opps = engine.data.get('opportunity')
-        if opps is not None and not opps.empty:
-            open_opps = opps[~opps['Stage'].isin(['Closed Won', 'Closed Lost'])].copy()
-            if not open_opps.empty:
-                # Risk-rank by low probability + high value (higher risk = lower prob * higher value)
-                risk_scores = []
-                for _, r in open_opps.iterrows():
-                    try:
-                        score = engine.calculate_risk_priority(r)
-                    except (AttributeError, TypeError):
-                        prob = float(r.get('Probability_Pct', 50)) if pd.notna(r.get('Probability_Pct')) else 50
-                        amt = float(r.get('Amount_USD', 0)) if pd.notna(r.get('Amount_USD')) else 0
-                        score = (100 - prob) * (amt / 100000)
-                    risk_scores.append(score)
-                open_opps['Risk_Score'] = risk_scores
-                ranked = open_opps.sort_values(by='Risk_Score', ascending=False).head(max_rows)
-                for rank, (_, r) in enumerate(ranked.iterrows(), 1):
+        # Check context-sensitivity (Cases vs Accounts vs Opportunities)
+        q_lower = query.lower()
+        if "case" in q_lower or "support" in q_lower or "ticket" in q_lower:
+            # Table of Open Support Cases
+            columns = ["Case_ID", "Account_Name", "Subject", "Severity", "Status", "Open_Date", "CSAT_Score"]
+            table_rows = []
+            cases_df = engine.data.get('case')
+            accounts_df = engine.data.get('account')
+            if cases_df is not None and not cases_df.empty:
+                open_cases = cases_df[
+                    (cases_df["Severity"].isin(["Critical", "High"])) &
+                    (cases_df["Status"] != "Closed")
+                ].copy()
+                # Apply account filters if resolved
+                tgt_acc_ids = []
+                if account_id:
+                    tgt_acc_ids = [account_id]
+                elif p1 and p1.target_accounts:
+                    tgt_acc_ids = _resolve_account_ids(engine, p1.target_accounts)
+                
+                if tgt_acc_ids:
+                    open_cases = open_cases[open_cases["Account_ID"].isin(tgt_acc_ids)]
+
+                if not open_cases.empty:
+                    if accounts_df is not None:
+                        open_cases = open_cases.merge(accounts_df[["Account_ID", "Account_Name"]], on="Account_ID", how="left")
+                    open_cases = open_cases.sort_values(by="Open_Date", ascending=False)
+                    for _, r in open_cases.head(lim).iterrows():
+                        table_rows.append({
+                            "Case_ID": r['Case_ID'],
+                            "Account_Name": r.get('Account_Name', 'Unknown'),
+                            "Subject": r['Subject'],
+                            "Severity": r['Severity'],
+                            "Status": r['Status'],
+                            "Open_Date": str(r['Open_Date'])[:10] if pd.notna(r['Open_Date']) else "",
+                            "CSAT_Score": float(r['CSAT_Score']) if pd.notna(r['CSAT_Score']) else 0.0
+                        })
+            return {"columns": columns, "rows": table_rows} if table_rows else None
+
+        elif "account" in q_lower or "health" in q_lower:
+            # Table of Account Health / Risk Priority
+            columns = ["Rank", "Account_ID", "Account_Name", "Account_Tier", "Risk_Score", "Classification", "Open_Critical_Cases", "Open_Pipeline_USD"]
+            table_rows = []
+            accounts_df = engine.data.get('account')
+            opps = engine.data.get('opportunity')
+            cases = engine.data.get('case')
+            if accounts_df is not None and not accounts_df.empty:
+                rows = []
+                # Filter strategic/key accounts if query specifies them
+                for _, acc in accounts_df.iterrows():
+                    aid = acc["Account_ID"]
+                    risk_data = engine.calculate_risk_score(aid)
+                    risk_score = risk_data.get('risk_score', 0)
+                    risk_priority = engine.calculate_risk_priority(aid, risk_score)
+                    
+                    critical_cases = 0
+                    if cases is not None and not cases.empty:
+                        acc_cases = cases[cases["Account_ID"] == aid]
+                        open_critical = acc_cases[
+                            (acc_cases["Severity"].isin(["Critical", "High"])) &
+                            (acc_cases["Status"] != "Closed")
+                        ]
+                        critical_cases = len(open_critical)
+                    
+                    open_pipeline = 0.0
+                    if opps is not None and not opps.empty:
+                        acc_opps = opps[(opps["Account_ID"] == aid) & (~opps["Stage"].isin(["Closed Won", "Closed Lost"]))]
+                        open_pipeline = float(acc_opps["Amount_USD"].sum())
+                    
+                    rows.append({
+                        "Account_ID": aid,
+                        "Account_Name": acc.get("Account_Name", ""),
+                        "Account_Tier": acc.get("Account_Tier", ""),
+                        "Risk_Score": risk_score,
+                        "Classification": risk_data.get("classification", "🟢 LOW RISK"),
+                        "Risk_Priority": risk_priority,
+                        "Open_Critical_Cases": critical_cases,
+                        "Open_Pipeline_USD": open_pipeline
+                    })
+                
+                health_df = pd.DataFrame(rows)
+                # Sort by Risk Priority
+                ranked = health_df.sort_values(by="Risk_Priority", ascending=False)
+                for rank, (_, r) in enumerate(ranked.head(lim).iterrows(), 1):
                     table_rows.append({
                         "Rank": rank,
-                        "Opp_ID": r['Opp_ID'],
-                        "Opp_Name": r['Opp_Name'],
-                        "Account_ID": r['Account_ID'],
-                        "Stage": r['Stage'],
-                        "Amount_USD": float(r['Amount_USD']) if pd.notna(r['Amount_USD']) else 0,
-                        "Probability_Pct": int(r['Probability_Pct']) if pd.notna(r['Probability_Pct']) else 0,
-                        "Close_Date": str(r['Close_Date'])[:10] if pd.notna(r['Close_Date']) else ""
+                        "Account_ID": r["Account_ID"],
+                        "Account_Name": r["Account_Name"],
+                        "Account_Tier": r["Account_Tier"],
+                        "Risk_Score": int(r["Risk_Score"]),
+                        "Classification": r["Classification"],
+                        "Open_Critical_Cases": int(r["Open_Critical_Cases"]),
+                        "Open_Pipeline_USD": float(r["Open_Pipeline_USD"])
                     })
-        return {"columns": columns, "rows": table_rows} if table_rows else None
+            return {"columns": columns, "rows": table_rows} if table_rows else None
 
-    # ACTION_RECOMMENDATION_QUERY and others — no table
-    return None
+        else:
+            # Default: Opportunities ranked by Risk Score
+            columns = ["Rank", "Opp_ID", "Opp_Name", "Account_ID", "Stage", "Amount_USD", "Probability_Pct", "Close_Date"]
+            table_rows = []
+            opps = engine.data.get('opportunity')
+            if opps is not None and not opps.empty:
+                open_opps = opps[~opps['Stage'].isin(['Closed Won', 'Closed Lost'])].copy()
+                
+                # Apply stage, account and other filters
+                tgt_acc_ids = []
+                if account_id:
+                    tgt_acc_ids = [account_id]
+                elif p1 and p1.target_accounts:
+                    tgt_acc_ids = _resolve_account_ids(engine, p1.target_accounts)
+                
+                if tgt_acc_ids:
+                    open_opps = open_opps[open_opps["Account_ID"].isin(tgt_acc_ids)]
+
+                if p1 and p1.target_opportunities:
+                    opp_ids = [o.strip().upper() for o in p1.target_opportunities]
+                    open_opps = open_opps[open_opps["Opp_ID"].str.upper().isin(opp_ids)]
+
+                stage_f = p1.stage_filter if p1 else None
+                if not stage_f and "negotiation" in query.lower():
+                    stage_f = "Negotiation"
+                elif not stage_f and "perception" in query.lower():
+                    stage_f = "Perception"
+                elif not stage_f and "proposal" in query.lower():
+                    stage_f = "Proposal"
+                elif not stage_f and "proposition" in query.lower():
+                    stage_f = "Proposition"
+
+                if stage_f:
+                    open_opps = open_opps[open_opps['Stage'].str.lower().str.contains(stage_f.lower(), na=False)]
+
+                if not open_opps.empty:
+                    # Risk-rank by low probability + high value (higher risk = lower prob * higher value)
+                    risk_scores = []
+                    for _, r in open_opps.iterrows():
+                        try:
+                            score = engine.calculate_risk_priority(r)
+                        except (AttributeError, TypeError):
+                            prob = float(r.get('Probability_Pct', 50)) if pd.notna(r.get('Probability_Pct')) else 50
+                            amt = float(r.get('Amount_USD', 0)) if pd.notna(r.get('Amount_USD')) else 0
+                            score = (100 - prob) * (amt / 100000)
+                        risk_scores.append(score)
+                    open_opps['Risk_Score'] = risk_scores
+                    
+                    ranked = open_opps.sort_values(by='Risk_Score', ascending=False)
+                    for rank, (_, r) in enumerate(ranked.head(lim).iterrows(), 1):
+                        table_rows.append({
+                            "Rank": rank,
+                            "Opp_ID": r['Opp_ID'],
+                            "Opp_Name": r['Opp_Name'],
+                            "Account_ID": r['Account_ID'],
+                            "Stage": r['Stage'],
+                            "Amount_USD": float(r['Amount_USD']) if pd.notna(r['Amount_USD']) else 0,
+                            "Probability_Pct": int(r['Probability_Pct']) if pd.notna(r['Probability_Pct']) else 0,
+                            "Close_Date": str(r['Close_Date'])[:10] if pd.notna(r['Close_Date']) else ""
+                        })
+            return {"columns": columns, "rows": table_rows} if table_rows else None
 
 
 def wrap_response_contract(
@@ -781,14 +1081,23 @@ async def chat(request: ChatRequest):
             from data_retrieval_layer import Phase1Output
             p1_parsed = Phase1Output.from_json(p1_json)
             intent = p1_parsed.extracted_intent
+            # Normalize intent key (Suffix Normalization)
+            intent_map = {
+                "PIPELINE_QUERY": "PIPELINE_SUMMARY_QUERY",
+                "RISK_ANALYSIS": "RISK_ANALYSIS_QUERY",
+                "HEALTH_QUERY": "RISK_ANALYSIS_QUERY",
+                "ACCOUNT_PLAN": "ACCOUNT_PLAN_QUERY",
+                "ACTION_RECOMMENDATION": "ACTION_RECOMMENDATION_QUERY",
+            }
+            intent = intent_map.get(intent, intent)
             yield f"sys_meta_log|[SYS_LOG] Intent identified: {intent}\n\n"
         except Exception as e:
             print(f"[API ERROR] Phase 1 failed: {e}")
             p1_json = {
-                "extracted_intent": "ACTION_RECOMMENDATION",
+                "extracted_intent": "ACTION_RECOMMENDATION_QUERY",
                 "query_parameters": {"target_accounts": []}
             }
-            intent = "ACTION_RECOMMENDATION"
+            intent = "ACTION_RECOMMENDATION_QUERY"
             yield "sys_meta_log|[SYS_LOG] Planner failed. Initializing baseline intent routing...\n\n"
         await asyncio.sleep(0.05)
 
@@ -815,7 +1124,7 @@ async def chat(request: ChatRequest):
         await asyncio.sleep(0.05)
 
         # Pre-compute table data for UI
-        table_data = compute_table_for_intent(engine, intent, account_id, request.query)
+        table_data = compute_table_for_intent(engine, intent, account_id, request.query, p1_json)
 
         # Yield deterministic contract tags to UI before the narrative stream
         yield f"__SECTION_INTENT__\n{intent}\n"
@@ -826,8 +1135,8 @@ async def chat(request: ChatRequest):
         yield "sys_meta_log|[SYS_LOG] Launching Core Strategic Reasoner (Phase 3)...\n\n"
         await asyncio.sleep(0.05)
         try:
-            sip_json = await run_phase3_reasoner(retrieved_text, http_client)
-            overall_pct = sip_json.get("confidence", {}).get("overall_pct") or sip_json.get("confidence", {}).get("pct") or 80
+            sip_json = await run_phase3_reasoner(retrieved_text, p1_json, http_client)
+            overall_pct = sip_json.get("confidence", {}).get("overall_confidence") or 80
             yield f"sys_meta_log|[SYS_LOG] Strategic trace generated. Confidence: {overall_pct}%\n\n"
         except Exception as e:
             print(f"[API ERROR] Phase 3 failed: {e}")

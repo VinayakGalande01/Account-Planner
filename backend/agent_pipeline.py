@@ -36,7 +36,7 @@ import re
 
 def clean_and_parse_json(text: str) -> dict:
     """Robust parser that strips markdown wrappers, sanitizes control characters,
-    and parses JSON."""
+    performs syntax healing on missing delimiters, and parses JSON."""
     clean_text = text.strip()
     
     # Remove markdown code fences if present (e.g. ```json ... ```)
@@ -54,11 +54,22 @@ def clean_and_parse_json(text: str) -> dict:
     start = clean_text.find("{")
     end = clean_text.rfind("}")
     if start != -1 and end != -1:
-        extracted = clean_text[start:end+1]
+        clean_text = clean_text[start:end+1]
         try:
-            return json.loads(extracted, strict=False)
+            return json.loads(clean_text, strict=False)
         except json.JSONDecodeError:
             pass
+
+    # Regex Syntax Healing: inject missing commas (Step D Refinement)
+    # 1. Properties or elements separated by newline: "val"\n"key" -> "val",\n"key"
+    healed = re.sub(r'("|\d+|true|false|null|\}|\])\s*\n\s*"', r'\1,\n"', clean_text)
+    # 2. Array objects missing commas: }\n{ -> },\n{
+    healed = re.sub(r'\}\s*\n\s*\{', r'},\n{', healed)
+
+    try:
+        return json.loads(healed, strict=False)
+    except json.JSONDecodeError:
+        pass
 
     # Clean non-printable control characters except \t, \n, \r
     sanitized = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", clean_text)
@@ -105,32 +116,67 @@ Analyze the user query, classify intent, extract parameters, and output ONLY a v
 Do not include any pre/post text. Output raw JSON only.
 """
 
-PHASE3_REASONER_PROMPT = """You are the Core Reasoner for APEX.
-Analyze the retrieved CRM data context, run strategic business thinking, and output ONLY a valid JSON representing the Structured Intelligence Package (SIP) exactly matching this schema:
+PHASE3_REASONER_PROMPT = """You are the Core Reasoning Engine of APEX, operating as an Elite Enterprise Account Strategist with 25+ years of experience in B2B revenue operations.
+
+Your input consists of:
+1. The Decision Context and Execution Plan calculated in Phase 1.
+2. Raw data subsets retrieved from the CRM tables (Account, Opportunity, Contact, Activity, Case).
+
+Your task is to synthesize this input and construct a comprehensive, highly strategic 'Structured Intelligence Package' in strict JSON format.
+
+CRITICAL DESIGN AND REASONING CONSTRAINTS:
+1. NO GENERIC RECOMMENDATIONS: Do not say 'conduct stakeholder mapping' or 'follow up soon'. You must name specific people, actions, deadlines (e.g., 'within 5 business days'), and revenue justifications derived from the metrics.
+2. STAKEHOLDER SELECTION: Analyze engagement levels, activity notes, and roles. Identify explicit 'blockers', 'champions', or 'decision makers'.
+3. EXPLAINABILITY TRACE: For every single recommendation, you must populate the reasoning trace tracking: Observation (what the raw data explicitly states) -> Inference (what that implies for the deal) -> Decision (the strategic focus) -> Recommendation.
+4. OUTCOME MODELING: Estimate quantitative outcomes (Revenue Impact, Risk Reduction) and assign an explicit business rationale.
+5. EVIDENCE-BASED CONFIDENCE MAPPING: Rate your confidence (1-100) across all categories based on data completeness. If Activity Notes are missing or stale (>30 days), drastically reduce Data and Reasoning Confidence.
+
+You must output a single, valid JSON object matching this exact architectural structure without any markdown wrappers or conversational text:
 {
-  "headline": "One short strategic headline",
-  "situation": "1-2 sentences summarizing the current state and its business relevance",
-  "contact": {
-    "name": "Full name or empty string",
-    "role": "Role (e.g. Decision Maker) or empty string",
-    "action": "Specific next step with them or empty string"
+  "intent": "...",
+  "decision_context": "...",
+  "desired_outcome": "...",
+  "account_state": {
+    "health_score": 1-100,
+    "risk_factors": []
   },
-  "actions": [
+  "opportunity_state": {
+    "deal_velocity": "STALLING|ACCELERATING|NORMAL",
+    "value_at_risk_usd": 0.00
+  },
+  "stakeholder_state": {
+    "primary_decision_maker": "NAME or UNMAPPED",
+    "key_influencers": [],
+    "blockers": []
+  },
+  "reasoning_trace": {
+    "observations": [],
+    "inferences": [],
+    "decisions": []
+  },
+  "recommendations": [
     {
-      "text": "Specific evidence-based action (who, what, when)",
-      "impact": "Expected positive business impact",
-      "urgency": "CRITICAL" | "HIGH" | "MEDIUM"
+      "action": "EXPLICIT_ACTION_STEP",
+      "reason": "STRATEGIC_WHY",
+      "expected_impact": "BUSINESS_OUTCOME",
+      "urgency": "IMMEDIATE|HIGH|MEDIUM",
+      "timeline_days": 5
     }
   ],
-  "risks": [
-    "Core data-derived risk statement"
-  ],
+  "alternative_recommendations": [],
+  "expected_outcomes": {
+    "expected_revenue_impact_usd": 0.00,
+    "expected_risk_reduction_pct": 0
+  },
   "confidence": {
-    "overall": "HIGH" | "MEDIUM" | "LOW",
-    "pct": 0 to 100
+    "intent_confidence": 1-100,
+    "decision_confidence": 1-100,
+    "data_confidence": 1-100,
+    "reasoning_confidence": 1-100,
+    "recommendation_confidence": 1-100,
+    "overall_confidence": 1-100
   }
 }
-Do not invent facts. Only use numbers and names from the data. Do not include any pre/post text. Output raw JSON only.
 """
 
 PHASE4_NARRATIVE_PROMPT = """You are the APEX Strategic Narrative Layer.
@@ -237,43 +283,8 @@ async def _get_active_llm_config(client: httpx.AsyncClient) -> tuple[str, str]:
     except Exception:
         pass
         
-    # 4. Try to auto-detect local fallback Ollama (http://localhost:11434)
-    fallback_url = "http://localhost:11434/api/generate"
-    try:
-        res = await client.get("http://localhost:11434/api/tags", timeout=2.0)
-        if res.status_code == 200:
-            data = res.json()
-            models = data.get("models", [])
-            if models:
-                available_names = [m["name"] for m in models]
-                matched_model = primary_model
-                if primary_model not in available_names:
-                    # Match by base name
-                    base_model = primary_model.split(":")[0]
-                    found = False
-                    for name in available_names:
-                        if base_model in name:
-                            matched_model = name
-                            found = True
-                            break
-                    if not found:
-                        matched_model = models[0]["name"]
-                
-                print(f"[LLM CONFIG] Primary LLM unreachable. Auto-healed to local fallback at {fallback_url} (model: {matched_model})")
-                _cached_url = fallback_url
-                _cached_model = matched_model
-                # Save to file cache
-                try:
-                    with open(cache_path, "w", encoding="utf-8") as f:
-                        json.dump({"url": _cached_url, "model": _cached_model}, f)
-                except Exception:
-                    pass
-                return _cached_url, _cached_model
-    except Exception:
-        pass
-        
-    # Default fallback to configured values if both are completely unreachable
-    print(f"[LLM CONFIG] Both primary and local fallback unreachable. Defaulting to configured {primary_url}")
+    # Default fallback to configured values if primary is completely unreachable
+    print(f"[LLM CONFIG] Primary LLM unreachable. Defaulting to configured environment values: {primary_url} (model: {primary_model})")
     return primary_url, primary_model
 
 
@@ -285,42 +296,54 @@ async def run_phase1_planner(query: str, client: httpx.AsyncClient) -> dict:
     """Phase 1: Parse user query into structured context JSON using local LLM."""
     print(f"[PHASE 1] Analyzing query intent & parameters: '{query}'...")
     
-    try:
-        active_url, active_model = await _get_active_llm_config(client)
-        payload = {
-            "model": active_model,
-            "prompt": f"System: {PHASE1_PLANNER_PROMPT}\n\nUser Query: {query}\nOutput ONLY valid JSON code block.",
-            "stream": False
-        }
-        response = await client.post(active_url, json=payload, timeout=120.0)
-        if response.status_code == 200:
-            raw_text = response.json().get("response", "")
-            return clean_and_parse_json(raw_text)
-        else:
-            raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"[PHASE 1 WARNING] LLM planner failed: {e.__class__.__name__} - {e}. Activating deterministic fallback.")
-        # Minimal robust fallback
-        return {
-            "extracted_intent": "ACTION_RECOMMENDATION",
-            "decision_context": {
-                "label": "Operational Overview",
-                "desired_outcome": "Address general portfolio inquiry"
-            },
-            "query_parameters": {
-                "target_accounts": [],
-                "target_opportunities": [],
-                "target_contacts": [],
-                "time_window": None,
-                "stage_filter": None,
-                "limit": 10,
-                "sort_by": None
-            },
-            "secondary_intents": [],
-            "confidence": "MEDIUM"
-        }
+    max_attempts = 5
+    cooldown_seconds = 3.5
+    timeout_seconds = 1200.0 # 20 minutes
+    
+    for attempt in range(1, max_attempts + 1):
+        try:
+            active_url, active_model = await _get_active_llm_config(client)
+            payload = {
+                "model": active_model,
+                "prompt": f"System: {PHASE1_PLANNER_PROMPT}\n\nUser Query: {query}\nOutput ONLY valid JSON code block.",
+                "stream": False
+            }
+            custom_timeout = httpx.Timeout(timeout_seconds)
+            response = await client.post(active_url, json=payload, timeout=custom_timeout)
+            if response.status_code == 200:
+                raw_text = response.json().get("response", "")
+                return clean_and_parse_json(raw_text)
+            else:
+                raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
+        except Exception as e:
+            print(f"[PHASE 1 WARNING] Attempt {attempt}/{max_attempts} failed: {e.__class__.__name__} - {e}.")
+            if attempt < max_attempts:
+                print(f"[PHASE 1] Halting for {cooldown_seconds}s before next retry...")
+                await asyncio.sleep(cooldown_seconds)
+            else:
+                import traceback
+                traceback.print_exc()
+                print(f"[PHASE 1 ERROR] All {max_attempts} attempts failed. Activating deterministic fallback.")
+                
+    # Minimal robust fallback
+    return {
+        "extracted_intent": "ACTION_RECOMMENDATION",
+        "decision_context": {
+            "label": "Operational Overview",
+            "desired_outcome": "Address general portfolio inquiry"
+        },
+        "query_parameters": {
+            "target_accounts": [],
+            "target_opportunities": [],
+            "target_contacts": [],
+            "time_window": None,
+            "stage_filter": None,
+            "limit": 10,
+            "sort_by": None
+        },
+        "secondary_intents": [],
+        "confidence": "MEDIUM"
+    }
 
 
 def run_phase2_retrieval(engine: DataEngine, phase1_json: dict) -> str:
@@ -329,53 +352,126 @@ def run_phase2_retrieval(engine: DataEngine, phase1_json: dict) -> str:
     return execute_data_retrieval(engine, phase1_json)
 
 
-async def run_phase3_reasoner(retrieved_text: str, client: httpx.AsyncClient) -> dict:
+async def run_phase3_reasoner(retrieved_text: str, phase1_json: dict, client: httpx.AsyncClient) -> dict:
     """Phase 3: Execute deep strategic business reasoning on the retrieved data -> SIP JSON."""
     print("[PHASE 3] Executing core business reasoning on retrieved facts...")
     
-    try:
-        active_url, active_model = await _get_active_llm_config(client)
-        payload = {
-            "model": active_model,
-            "prompt": f"System: {PHASE3_REASONER_PROMPT}\n\nRetrieved CRM Data Context:\n{retrieved_text}\nOutput ONLY valid JSON code block.",
-            "stream": False
-        }
-        response = await client.post(active_url, json=payload, timeout=180.0)
-        if response.status_code == 200:
-            raw_text = response.json().get("response", "")
-            return clean_and_parse_json(raw_text)
-        else:
-            raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"[PHASE 3 ERROR] Core Reasoner failed: {e.__class__.__name__} - {e}. Generating safe fallback reasoning package.")
-        return {
-            "headline": "Core Reasoning Unreachable — Displaying Raw Portfolio Baseline",
-            "situation_summary": "System was unable to establish a deep neural reasoning trace due to local LLM timeout.",
-            "primary_contact_recommendation": None,
-            "next_best_actions": [
-                {
-                    "text": "Check connection to your local Ollama node",
-                    "reason": "Neural engine request timed out",
-                    "expected_impact": "Restores full cognitive capabilities",
-                    "ignore_risk": "Cognitive actions remain degraded",
-                    "urgency": "HIGH",
-                    "owner": "Account Manager"
-                }
-            ],
-            "risk_implications": ["System is running on degraded deterministic rules."],
-            "business_outcome": "Nominal tracking",
-            "confidence": {
-                "intent": "MEDIUM",
-                "decision": "MEDIUM",
-                "data": "HIGH",
-                "reasoning": "LOW",
-                "recommendation": "LOW",
-                "overall": "LOW",
-                "overall_pct": 30
+    max_attempts = 5
+    cooldown_seconds = 3.5
+    timeout_seconds = 1200.0 # 20 minutes
+    custom_timeout = httpx.Timeout(timeout_seconds)
+    
+    for attempt in range(1, max_attempts + 1):
+        try:
+            active_url, active_model = await _get_active_llm_config(client)
+            
+            system_content = PHASE3_REASONER_PROMPT
+            user_content = (
+                f"CONTEXT DETAILS:\n{json.dumps(phase1_json, indent=2)}\n\n"
+                f"RAW CRM DATA SUBSET EXECUTED:\n{retrieved_text}\n"
+                f"Output ONLY valid JSON code block."
+            )
+
+            # Attempt to use Chat API (Step B Refinement - Token Hygiene)
+            chat_url = active_url.replace("/api/generate", "/api/chat")
+            chat_payload = {
+                "model": active_model,
+                "messages": [
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": user_content}
+                ],
+                "stream": False
             }
+            
+            try:
+                print(f"[PHASE 3] Attempt {attempt}/{max_attempts} - Chat API call: {chat_url}")
+                response = await client.post(chat_url, json=chat_payload, timeout=custom_timeout)
+                if response.status_code == 200:
+                    raw_text = response.json().get("message", {}).get("content", "")
+                    return clean_and_parse_json(raw_text)
+                else:
+                    print(f"[PHASE 3 WARNING] Chat API returned {response.status_code}. Trying Generate API fallback...")
+            except Exception as chat_err:
+                print(f"[PHASE 3 WARNING] Chat API failed: {chat_err}. Trying Generate API fallback...")
+
+            # Fallback to Generate API (Raw Prompt concatenation)
+            prompt_content = f"System: {system_content}\n\nCONTEXT DETAILS:\n{json.dumps(phase1_json, indent=2)}\n\nRAW CRM DATA SUBSET EXECUTED:\n{retrieved_text}\nOutput ONLY valid JSON code block."
+            generate_payload = {
+                "model": active_model,
+                "prompt": prompt_content,
+                "stream": False
+            }
+            print(f"[PHASE 3] Attempt {attempt}/{max_attempts} - Generate API call: {active_url}")
+            response = await client.post(active_url, json=generate_payload, timeout=custom_timeout)
+            if response.status_code == 200:
+                raw_text = response.json().get("response", "")
+                return clean_and_parse_json(raw_text)
+            else:
+                raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
+                
+        except Exception as e:
+            print(f"[PHASE 3 WARNING] Attempt {attempt}/{max_attempts} failed: {e.__class__.__name__} - {e}.")
+            if attempt < max_attempts:
+                print(f"[PHASE 3] Halting for {cooldown_seconds}s before next retry...")
+                await asyncio.sleep(cooldown_seconds)
+            else:
+                import traceback
+                traceback.print_exc()
+                print(f"[PHASE 3 ERROR] All {max_attempts} attempts failed. Generating safe fallback reasoning package.")
+                
+    # Safe default fallback matrix aligned to the upgraded schema (Step C Refinement)
+    fallback_plan = {
+        "intent": phase1_json.get("intent") or phase1_json.get("extracted_intent") or "ACTION_RECOMMENDATION",
+        "decision_context": "Core Strategic Reasoner Trace Offline",
+        "desired_outcome": "Verify connection and restore dynamic reasoning engine functionality",
+        "account_state": {
+            "health_score": 100,
+            "risk_factors": []
+        },
+        "opportunity_state": {
+            "deal_velocity": "NORMAL",
+            "value_at_risk_usd": 0.00
+        },
+        "stakeholder_state": {
+            "primary_decision_maker": "UNMAPPED",
+            "key_influencers": [],
+            "blockers": []
+        },
+        "reasoning_trace": {
+            "observations": [
+                "APEX lost connection to your remote reasoning GPU."
+            ],
+            "inferences": [
+                "Dynamic cognitive trace is currently unavailable."
+            ],
+            "decisions": [
+                "Defaulting to safe local rule-based diagnostics."
+            ]
+        },
+        "recommendations": [
+            {
+                "action": "Check connection to your local Ollama node or remote GPU.",
+                "reason": "Restores full cognitive strategic capabilities.",
+                "expected_impact": "Cognitive actions return to active status.",
+                "urgency": "HIGH",
+                "timeline_days": 1
+            }
+        ],
+        "alternative_recommendations": [],
+        "expected_outcomes": {
+            "expected_revenue_impact_usd": 0.00,
+            "expected_risk_reduction_pct": 0
+        },
+        "confidence": {
+            "intent_confidence": 100,
+            "decision_confidence": 100,
+            "data_confidence": 100,
+            "reasoning_confidence": 0,
+            "recommendation_confidence": 0,
+            "overall_confidence": 0
         }
+    }
+    return fallback_plan
 
 
 async def run_phase4_narrative_stream(
@@ -445,7 +541,7 @@ async def test_agent_pipeline():
         print(f"\n[PHASE 2 RESULT] Length: {len(p2_res)} chars. Sample:\n{p2_res[:800]}")
         
         # Phase 3
-        p3_res = await run_phase3_reasoner(p2_res, client)
+        p3_res = await run_phase3_reasoner(p2_res, p1_res, client)
         print(f"\n[PHASE 3 RESULT] Structured Intelligence Package (SIP):\n{json.dumps(p3_res, indent=2)}")
         
         # Phase 4 Narrative sample

@@ -29,7 +29,13 @@ export function createEmptyContract(rawContent: string = ''): ResponseContract {
 export function parseResponseContract(content: string): ResponseContract {
   const contract = createEmptyContract(content);
 
-  if (!content.includes('__SECTION_')) {
+  // Filter out sys_meta_log lines to prevent payload corruption
+  const cleanContent = content
+    .split('\n')
+    .filter((line) => !line.startsWith('sys_meta_log|'))
+    .join('\n');
+
+  if (!cleanContent.includes('__SECTION_')) {
     return contract;
   }
 
@@ -37,7 +43,7 @@ export function parseResponseContract(content: string): ResponseContract {
 
   // Split by section headers — regex captures group names between underscores
   // Result: [prefix, sectionName, sectionContent, sectionName, sectionContent, ...]
-  const parts = content.split(/__SECTION_(\w+)__/);
+  const parts = cleanContent.split(/__SECTION_(\w+)__/);
 
   for (let i = 1; i < parts.length; i += 2) {
     const sectionName = parts[i] as SectionName;
@@ -147,7 +153,13 @@ export function parseStreamingSections(content: string): StreamParseResult {
     }
   }
 
-  if (!content.includes('__SECTION_')) {
+  // Filter out sys_meta_log lines to prevent payload corruption
+  const cleanContent = content
+    .split('\n')
+    .filter((line) => !line.startsWith('sys_meta_log|'))
+    .join('\n');
+
+  if (!cleanContent.includes('__SECTION_')) {
     return {
       completedSections: new Map(),
       activeSection: null,
@@ -157,7 +169,7 @@ export function parseStreamingSections(content: string): StreamParseResult {
     };
   }
 
-  const parts = content.split(/__SECTION_(\w+)__/);
+  const parts = cleanContent.split(/__SECTION_(\w+)__/);
   const completedSections = new Map<SectionName, string>();
   let activeSection: SectionName | null = null;
   let activeSectionContent = '';

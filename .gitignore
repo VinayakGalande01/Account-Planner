@@ -34,3 +34,4 @@ yarn-error.log*
 # System
 .DS_Store
 Thumbs.db
+backend/llm_cache.json
