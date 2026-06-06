@@ -77,7 +77,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     selectedAccount, 
     setSelectedAccount 
   } = useData();
-  const [consoleActive, setConsoleActive] = useState(false);
+  const [consoleActive, setConsoleActive] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
 

@@ -163,7 +163,7 @@ export default function LandingPage({ onInitialize }: { onInitialize: () => void
           </motion.div>
 
           {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-foreground uppercase tracking-[0.25em] leading-[1.1] font-[family-name:var(--font-mono)]">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-foreground uppercase tracking-[0.08em] leading-[1.15] break-words w-full font-[family-name:var(--font-mono)]">
             Grow Your Sales{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-blue-400 to-primary">
               & Manage
