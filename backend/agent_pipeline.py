@@ -121,15 +121,19 @@ PHASE3_REASONER_PROMPT = """You are the Core Reasoning Engine of APEX, operating
 Your input consists of:
 1. The Decision Context and Execution Plan calculated in Phase 1.
 2. Raw data subsets retrieved from the CRM tables (Account, Opportunity, Contact, Activity, Case).
+3. The deterministic [DATA_SUFFICIENCY_REPORT] and [CONTRADICTIONS_AND_WARNINGS] if any are triggered.
 
 Your task is to synthesize this input and construct a comprehensive, highly strategic 'Structured Intelligence Package' in strict JSON format.
 
 CRITICAL DESIGN AND REASONING CONSTRAINTS:
 1. NO GENERIC RECOMMENDATIONS: Do not say 'conduct stakeholder mapping' or 'follow up soon'. You must name specific people, actions, deadlines (e.g., 'within 5 business days'), and revenue justifications derived from the metrics.
-2. STAKEHOLDER SELECTION: Analyze engagement levels, activity notes, and roles. Identify explicit 'blockers', 'champions', or 'decision makers'.
-3. EXPLAINABILITY TRACE: For every single recommendation, you must populate the reasoning trace tracking: Observation (what the raw data explicitly states) -> Inference (what that implies for the deal) -> Decision (the strategic focus) -> Recommendation.
-4. OUTCOME MODELING: Estimate quantitative outcomes (Revenue Impact, Risk Reduction) and assign an explicit business rationale.
-5. EVIDENCE-BASED CONFIDENCE MAPPING: Rate your confidence (1-100) across all categories based on data completeness. If Activity Notes are missing or stale (>30 days), drastically reduce Data and Reasoning Confidence.
+2. STAKEHOLDER SELECTION & GROUNDING: Never fabricate, invent, or guess any contact names. If the referenced entity exists in CRM, use its name. Otherwise, explicitly state: "No mapped contact available." NEVER generate actions like "Contact [Name]" if no contact is mapped.
+3. CONFIDENCE-DRIVEN AGGRESSIVENESS: Your tone and recommendations must match the data confidence. HIGH CONFIDENCE: Recommend immediate, aggressive execution. LOW CONFIDENCE: Recommend validation, investigation, and data hygiene actions before escalation.
+4. EVIDENCE REQUIREMENT: Every single strategic recommendation MUST explicitly cite at least one supporting evidence point directly derived from the CRM data.
+5. EXPLAINABILITY & EVIDENCE TRACE: For every major recommendation, you must populate the 5-step reasoning trace tracking: Priority Badge (Priority: CRITICAL/HIGH/MEDIUM/LOW) -> Observation -> Evidence -> Business Impact -> Implication -> Action.
+6. NO FAKE PRECISION: Do not invent expected revenue impact dollar amounts or risk reduction percentages. Use qualitative bands ("HIGH", "MEDIUM", "LOW") or reference the exact deterministic numbers calculated by the engine in the context.
+7. DUAL MODES (FACTUAL vs STRATEGIC): If `intent` is `CONTACT_QUERY`, run in Factual Mode: leave the `reasoning_trace` empty and only output the raw facts. For all other intents, run in Strategic Mode and fully execute the 5-step reasoning trace.
+8. CONTRADICTION & SUFFICIENCY INTEGRATION: Respect the deterministic sufficiency score and contradiction warning signals. Lower overall confidence if data is insufficient.
 
 You must output a single, valid JSON object matching this exact architectural structure without any markdown wrappers or conversational text:
 {
@@ -151,7 +155,9 @@ You must output a single, valid JSON object matching this exact architectural st
   },
   "reasoning_trace": {
     "observations": [],
-    "inferences": [],
+    "evidence": [],
+    "business_impact": [],
+    "implications": [],
     "decisions": []
   },
   "recommendations": [
@@ -165,8 +171,9 @@ You must output a single, valid JSON object matching this exact architectural st
   ],
   "alternative_recommendations": [],
   "expected_outcomes": {
-    "expected_revenue_impact_usd": 0.00,
-    "expected_risk_reduction_pct": 0
+    "expected_revenue_impact": "HIGH|MEDIUM|LOW",
+    "expected_risk_reduction": "HIGH|MEDIUM|LOW",
+    "revenue_exposure_usd": 0.00
   },
   "confidence": {
     "intent_confidence": 1-100,
@@ -175,6 +182,62 @@ You must output a single, valid JSON object matching this exact architectural st
     "reasoning_confidence": 1-100,
     "recommendation_confidence": 1-100,
     "overall_confidence": 1-100
+  }
+}
+"""
+
+PHASE3_FACTUAL_PROMPT = """You are the APEX Factual Router.
+Your ONLY task is to read the exact facts from the retrieved CRM data and output them cleanly.
+DO NOT invent any actions, do NOT generate a reasoning trace, do NOT attempt to strategize.
+If the requested entity (e.g. contact) is not explicitly listed in the data, you MUST state "No mapped contact available".
+
+You must output a single, valid JSON object matching this exact structure:
+{
+  "intent": "CONTACT_QUERY",
+  "decision_context": "...",
+  "desired_outcome": "...",
+  "account_state": {
+    "health_score": 100,
+    "risk_factors": []
+  },
+  "opportunity_state": {
+    "deal_velocity": "NORMAL",
+    "value_at_risk_usd": 0.00
+  },
+  "stakeholder_state": {
+    "primary_decision_maker": "NAME or 'No mapped contact available'",
+    "key_influencers": ["NAME 1", "NAME 2"],
+    "blockers": []
+  },
+  "reasoning_trace": {
+    "observations": [],
+    "evidence": [],
+    "business_impact": [],
+    "implications": [],
+    "decisions": []
+  },
+  "recommendations": [
+    {
+      "action": "Ensure mapped stakeholders are correct and reach out for validation if missing.",
+      "reason": "Standard contact hygiene",
+      "expected_impact": "Improved stakeholder map",
+      "urgency": "MEDIUM",
+      "timeline_days": 5
+    }
+  ],
+  "alternative_recommendations": [],
+  "expected_outcomes": {
+    "expected_revenue_impact": "LOW",
+    "expected_risk_reduction": "LOW",
+    "revenue_exposure_usd": 0.00
+  },
+  "confidence": {
+    "intent_confidence": 100,
+    "decision_confidence": 100,
+    "data_confidence": 100,
+    "reasoning_confidence": 100,
+    "recommendation_confidence": 100,
+    "overall_confidence": 100
   }
 }
 """
@@ -191,22 +254,28 @@ __SECTION_INTENT__
 __SECTION_HEADLINE__
 [headline from SIP]
 
+__SECTION_EXECUTIVE_SUMMARY__
+[CRITICAL: Maximum 3 bullet points. Provide a high-level executive summary of the most important findings and risks.]
+
 __SECTION_SUMMARY__
 [Based on situation, contact, and risks from SIP, write a human, professional overview in 3 clear sentences]
 
 __SECTION_SIGNALS__
-• [Formulate strategic signal 1 based on SIP risks and situation - with details and numbers]
-• [Signal 2]
-• [Signal 3]
+• [Formulate strategic Business Risk signal 1 based on SIP. Every signal MUST show concrete data evidence and relative portfolio context percentages. Place priority badges at the start if available (e.g. 'Priority: CRITICAL').]
+• [Business Risk Signal 2]
+• [Business Risk Signal 3]
+
+__SECTION_WHY_THIS_MATTERS__
+[A high-impact executive block. Summarize the revenue exposure, forecast impact, and macro importance of the signals. Explain exactly why this matters to the business in 2-3 compelling sentences, linking raw numbers to quarter-end forecast accuracy and concentration risks.]
 
 __SECTION_ACTIONS__
-• [Action 1 from SIP actions - specific contact, action, timeline, expected impact]
+• [Action 1 from SIP actions - MUST cite evidence from CRM. If LOW confidence, recommend validation. If HIGH confidence, recommend aggressive execution.]
 • [Action 2]
 • [Action 3]
 
-[Include CRM Hygiene gaps if any in the data context, e.g.]
 __SECTION_CRM_HYGIENE__
-⚠️ [Hygiene Gap]
+⚠️ [Data Quality Risk / Hygiene Gap 1]
+⚠️ [Data Quality Risk / Hygiene Gap 2]
 
 __SECTION_CONFIDENCE__
 {"score": "<confidence_pct>%", "status": "<confidence_pct>% Grounded (Direct facts from Excel)", "sources": ["Excel Database"]}
@@ -352,7 +421,7 @@ def run_phase2_retrieval(engine: DataEngine, phase1_json: dict) -> str:
     return execute_data_retrieval(engine, phase1_json)
 
 
-async def run_phase3_reasoner(retrieved_text: str, phase1_json: dict, client: httpx.AsyncClient) -> dict:
+async def run_phase3_reasoner(retrieved_text: str, phase1_json: dict, client: httpx.AsyncClient, governance_directives: Optional[List[str]] = None) -> dict:
     """Phase 3: Execute deep strategic business reasoning on the retrieved data -> SIP JSON."""
     print("[PHASE 3] Executing core business reasoning on retrieved facts...")
     
@@ -365,7 +434,14 @@ async def run_phase3_reasoner(retrieved_text: str, phase1_json: dict, client: ht
         try:
             active_url, active_model = await _get_active_llm_config(client)
             
-            system_content = PHASE3_REASONER_PROMPT
+            intent = phase1_json.get("intent") or phase1_json.get("extracted_intent") or ""
+            is_factual = intent == "CONTACT_QUERY"
+            system_content = PHASE3_FACTUAL_PROMPT if is_factual else PHASE3_REASONER_PROMPT
+
+            if governance_directives:
+                system_content += "\n\n[HARD_CONSTRAINTS]\n"
+                for directive in governance_directives:
+                    system_content += f"- {directive}\n"
             user_content = (
                 f"CONTEXT DETAILS:\n{json.dumps(phase1_json, indent=2)}\n\n"
                 f"RAW CRM DATA SUBSET EXECUTED:\n{retrieved_text}\n"
@@ -508,6 +584,7 @@ async def run_phase4_narrative_stream(
         fallback_summary = sip_json.get("situation") or sip_json.get("situation_summary") or "Strategic overview trace loaded."
         yield f"__SECTION_SUMMARY__\nI have successfully retrieved the core data package, but experienced an issue compiling the natural language stream. Here is the direct situation overview: {fallback_summary}\n"
         yield f"__SECTION_SIGNALS__\n• [RISK] Reasoning trace fallback initialized.\n"
+        yield f"__SECTION_WHY_THIS_MATTERS__\nThe primary reasoner returned a fallback due to stream latency. Remotely hosted sales copilot nodes are currently offline or busy. Re-run your query or inspect remote logs.\n"
         yield f"__SECTION_ACTIONS__\n• [Action] Check the status of your remote GPU node.\n"
         yield f"__SECTION_CRM_HYGIENE__\n⚠️ Database access functional. LLM Narrative node offline.\n"
         yield f"__SECTION_CONFIDENCE__\n{{\"score\": \"30%\", \"status\": \"Degraded\", \"sources\": [\"Excel Database\"]}}\n"
@@ -541,7 +618,16 @@ async def test_agent_pipeline():
         print(f"\n[PHASE 2 RESULT] Length: {len(p2_res)} chars. Sample:\n{p2_res[:800]}")
         
         # Phase 3
-        p3_res = await run_phase3_reasoner(p2_res, p1_res, client)
+        from intelligence_layer import generate_strategic_synthesis
+        from data_retrieval_layer import Phase1Output
+        p1_parsed = Phase1Output.from_json(p1_res)
+        synthesis = generate_strategic_synthesis(
+            engine,
+            intent=p1_res.get("extracted_intent", ""),
+            account_id=None,
+            query_scope=p1_parsed.query_scope
+        )
+        p3_res = await run_phase3_reasoner(p2_res, p1_res, client, synthesis.governance_directives)
         print(f"\n[PHASE 3 RESULT] Structured Intelligence Package (SIP):\n{json.dumps(p3_res, indent=2)}")
         
         # Phase 4 Narrative sample

@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import os
+from typing import Optional, List, Dict, Any
 
 class DataEngine:
     def __init__(self, excel_path: str):
@@ -1072,3 +1073,113 @@ class DataEngine:
                 })
 
         return results
+
+    def calculate_data_sufficiency(self, account_id: Optional[str] = None) -> dict:
+        """Audits the data sufficiency and metadata completeness for an account.
+        Returns a score (0-100) and list of gaps/reasons."""
+        accounts = self.data.get('account')
+        contacts = self.data.get('contact')
+        activities = self.data.get('activity')
+        
+        if accounts is None or accounts.empty:
+            return {"score": 0, "status": "LOW", "reasons": ["No account sheet loaded"]}
+            
+        gaps = []
+        score = 100
+        
+        if account_id:
+            # Audit specific account
+            acc_row = accounts[accounts['Account_ID'] == account_id]
+            if acc_row.empty:
+                return {"score": 0, "status": "LOW", "reasons": ["Account ID not found"]}
+            
+            # 1. Mapped Contacts Check (35%)
+            acc_contacts = contacts[contacts['Account_ID'] == account_id] if contacts is not None else pd.DataFrame()
+            contact_count = len(acc_contacts)
+            if contact_count == 0:
+                score -= 35
+                gaps.append("Zero contacts mapped to this account")
+            elif contact_count < 3:
+                score -= 15
+                gaps.append(f"Low contact depth: only {contact_count} contacts mapped (minimum 3 recommended)")
+                
+            # 2. Decision Maker Check (35%)
+            has_dm = False
+            if contact_count > 0:
+                has_dm = not acc_contacts[acc_contacts['Role'].str.contains('Decision Maker|C-Suite|VP|Director|Buyer|Executive', na=False, case=False)].empty
+            if not has_dm:
+                score -= 35
+                gaps.append("No active Decision Maker mapped to this account")
+                
+            # 3. Recent Engagement Check (30%)
+            acc_activities = activities[activities['Account_ID'] == account_id] if activities is not None else pd.DataFrame()
+            recent_count = 0
+            if not acc_activities.empty:
+                act_dates = pd.to_datetime(acc_activities['Activity_Date'], errors='coerce')
+                now = datetime.now()
+                cutoff = now - timedelta(days=90)
+                recent_count = len(acc_activities[act_dates > cutoff])
+            
+            if recent_count == 0:
+                score -= 30
+                gaps.append("Zero activities logged in the last 90 days (dormant account)")
+            elif recent_count < 2:
+                score -= 15
+                gaps.append(f"Low activity momentum: only {recent_count} activities logged in the last 90 days")
+        else:
+            # Global Audit (e.g. averages across Strategic accounts)
+            strat_accs = accounts[accounts['Account_Tier'] == 'Strategic']
+            if strat_accs.empty:
+                strat_accs = accounts
+                
+            missing_dm_count = 0
+            low_contacts_count = 0
+            dormant_count = 0
+            total_accs = len(strat_accs)
+            
+            for _, acc in strat_accs.iterrows():
+                aid = acc['Account_ID']
+                
+                # Check contacts
+                acc_contacts = contacts[contacts['Account_ID'] == aid] if contacts is not None else pd.DataFrame()
+                if len(acc_contacts) < 3:
+                    low_contacts_count += 1
+                
+                # Check DM
+                has_dm = not acc_contacts[acc_contacts['Role'].str.contains('Decision Maker|C-Suite|VP|Director|Buyer|Executive', na=False, case=False)].empty if not acc_contacts.empty else False
+                if not has_dm:
+                    missing_dm_count += 1
+                
+                # Check activities
+                acc_activities = activities[activities['Account_ID'] == aid] if activities is not None else pd.DataFrame()
+                recent_count = 0
+                if not acc_activities.empty:
+                    act_dates = pd.to_datetime(acc_activities['Activity_Date'], errors='coerce')
+                    recent_count = len(acc_activities[act_dates > (datetime.now() - timedelta(days=90))])
+                if recent_count == 0:
+                    dormant_count += 1
+            
+            # Deduct scores based on portfolio gaps
+            if total_accs > 0:
+                pct_missing_dm = (missing_dm_count / total_accs) * 100
+                pct_low_contacts = (low_contacts_count / total_accs) * 100
+                pct_dormant = (dormant_count / total_accs) * 100
+                
+                if pct_missing_dm > 20:
+                    score -= int(pct_missing_dm * 0.3)
+                    gaps.append(f"{pct_missing_dm:.0f}% of strategic accounts are missing a mapped Decision Maker")
+                if pct_low_contacts > 20:
+                    score -= int(pct_low_contacts * 0.2)
+                    gaps.append(f"{pct_low_contacts:.0f}% of strategic accounts have low contact depth (< 3 contacts)")
+                if pct_dormant > 20:
+                    score -= int(pct_dormant * 0.3)
+                    gaps.append(f"{pct_dormant:.0f}% of strategic accounts have zero logged activity in the last 90 days")
+        
+        score = max(0, score)
+        status = "HIGH" if score >= 80 else "MEDIUM" if score >= 50 else "LOW"
+        
+        return {
+            "score": score,
+            "status": status,
+            "reasons": gaps if gaps else ["All target sufficiency markers met"]
+        }

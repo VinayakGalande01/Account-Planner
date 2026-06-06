@@ -50,6 +50,17 @@ class Phase1Output:
     secondary_intents: Optional[List[str]] = None
     confidence: str = "HIGH"
 
+    @property
+    def query_scope(self) -> str:
+        """Classify the query scope to determine context depth."""
+        has_entities = bool(self.target_accounts or self.target_opportunities or self.target_contacts)
+        portfolio_intents = {"PIPELINE_QUERY", "PIPELINE_SUMMARY", "RISK_ANALYSIS"}
+        if self.extracted_intent in portfolio_intents and not has_entities:
+            return "Portfolio"
+        elif has_entities:
+            return "Entity"
+        return "Mixed"
+
     @classmethod
     def from_json(cls, raw: dict) -> "Phase1Output":
         """Parse the raw Phase 1 JSON into a typed dataclass.
@@ -178,7 +189,7 @@ def normalize_stage_name(stage_str: Optional[str]) -> Optional[str]:
 def _resolve_account_ids(engine, target_names: List[str]) -> List[str]:
     """Fuzzy-resolve account names from Phase 1 to actual Account_IDs.
 
-    Performs case-insensitive substring matching against the Account_Name column.
+    Performs strict case-insensitive substring matching against the Account_Name column.
     """
     accounts = engine.data.get("account")
     if accounts is None or accounts.empty or not target_names:
@@ -187,12 +198,14 @@ def _resolve_account_ids(engine, target_names: List[str]) -> List[str]:
     resolved = []
     for name in target_names:
         name_lower = name.lower().strip()
+        if len(name_lower) < 3:  # Prevent overly broad matching
+            continue
         for _, row in accounts.iterrows():
             db_name = str(row.get("Account_Name", "")).lower()
-            if name_lower in db_name or db_name in name_lower:
+            if name_lower in db_name or db_name == name_lower:
                 resolved.append(str(row["Account_ID"]))
                 break
-    return resolved
+    return list(set(resolved))
 
 
 def _resolve_opportunity_ids(engine, target_opps: List[str]) -> List[str]:
@@ -270,9 +283,18 @@ def _retrieve_contact_data(engine, p1: Phase1Output, account_ids: List[str]) -> 
 
     df = contacts.copy()
 
+    # Filter by target contacts if present
+    if p1.target_contacts:
+        c_names = [c.lower().strip() for c in p1.target_contacts]
+        df["_full_name"] = (df.get("First_Name", "") + " " + df.get("Last_Name", "")).str.lower().str.strip()
+        df = df[df["_full_name"].apply(lambda fn: any((cn in fn) for cn in c_names if len(cn) > 2))]
+
     # Filter by resolved accounts
     if account_ids:
         df = df[df["Account_ID"].isin(account_ids)]
+
+    if p1.query_scope == "Entity" and df.empty:
+        return "[CONTACTS]\nNo records found for the requested entity.\n"
 
     # Enrich with account name
     accounts = engine.data.get("account")
@@ -321,6 +343,14 @@ def _retrieve_pipeline_data(engine, p1: Phase1Output, account_ids: List[str]) ->
     if account_ids:
         df = df[df["Account_ID"].isin(account_ids)]
 
+    # Filter: by target opportunities
+    if p1.target_opportunities:
+        o_ids = [o.upper().strip() for o in p1.target_opportunities]
+        df = df[df["Opp_ID"].str.upper().isin(o_ids)]
+
+    if p1.query_scope == "Entity" and df.empty:
+        return "[OPPORTUNITIES]\nNo records found for the requested entity.\n"
+
     # Filter: by stage
     if p1.stage_filter:
         stage_norm = normalize_stage_name(p1.stage_filter)
@@ -366,11 +396,23 @@ def _retrieve_pipeline_data(engine, p1: Phase1Output, account_ids: List[str]) ->
     weighted = _safe_float((df["Amount_USD"] * df["Probability_Pct"] / 100.0).sum())
     deal_count = len(df)
 
+    # Calculate global totals for relative context
+    global_total = 0.0
+    global_weighted = 0.0
+    if p1.query_scope != "Entity" and opps is not None and not opps.empty:
+        g_opps = opps[~opps['Stage'].isin(['Closed Won', 'Closed Lost'])].copy()
+        global_total = _safe_float(g_opps["Amount_USD"].sum())
+        global_weighted = _safe_float((g_opps["Amount_USD"] * g_opps["Probability_Pct"] / 100.0).sum())
+
     sections.append("[PIPELINE_METRICS]")
     sections.append(f"Total Open Pipeline: ${total_value:,.2f}")
     sections.append(f"Weighted Forecast: ${weighted:,.2f}")
     sections.append(f"Active Deal Count: {deal_count}")
     sections.append(f"Execution Gap: ${total_value - weighted:,.2f}")
+    if global_total > 0 and total_value < global_total and p1.query_scope != "Entity":
+        pct_of_global = (total_value / global_total) * 100
+        pct_of_weighted = (weighted / global_weighted) * 100 if global_weighted > 0 else 0.0
+        sections.append(f"Portfolio Contribution: This segment represents {pct_of_global:.1f}% of total open pipeline value (${global_total:,.2f}) and {pct_of_weighted:.1f}% of total weighted forecast (${global_weighted:,.2f}).")
     sections.append("")
 
     # Stage breakdown
@@ -404,6 +446,9 @@ def _retrieve_health_data(engine, p1: Phase1Output, account_ids: List[str]) -> s
     acc_df = accounts.copy()
     if account_ids:
         acc_df = acc_df[acc_df["Account_ID"].isin(account_ids)]
+
+    if p1.query_scope == "Entity" and acc_df.empty:
+        return "[HEALTH_DATA]\nNo records found for the requested entity.\n"
 
     # Build a per-account health/risk summary
     rows = []
@@ -581,6 +626,9 @@ def _retrieve_action_data(engine, p1: Phase1Output, account_ids: List[str]) -> s
     sections = []
 
     # Get health matrix (reuse the health retriever for consistency)
+    if p1.query_scope == "Entity" and not account_ids and not p1.target_contacts and not p1.target_opportunities:
+        return "[ACTION_DATA]\nNo records found for the requested entity.\n"
+
     sections.append(_retrieve_health_data(engine, p1, account_ids))
 
     # Add pipeline data as supplementary
@@ -675,6 +723,12 @@ def execute_data_retrieval(engine, phase1_json: dict) -> str:
                 if not match.empty:
                     account_ids.append(str(match.iloc[0]["Account_ID"]))
 
+    # Audits: Sufficiency and Contradiction detection
+    acc_id = account_ids[0] if account_ids else None
+    sufficiency = engine.calculate_data_sufficiency(acc_id)
+    from intelligence_layer import ContradictionDetector
+    warnings = ContradictionDetector.detect_contradictions(engine, acc_id)
+
     # 3. Build the consolidated payload
     payload_sections = []
 
@@ -684,6 +738,7 @@ def execute_data_retrieval(engine, phase1_json: dict) -> str:
     payload_sections.append(f"Intent: {p1.extracted_intent}")
     payload_sections.append(f"Decision: {p1.decision_context_label}")
     payload_sections.append(f"Desired Outcome: {p1.decision_context_outcome}")
+    payload_sections.append(f"Query Scope: {p1.query_scope}")
     if account_ids:
         # Resolve names for readability
         accounts = engine.data.get("account")
@@ -725,7 +780,23 @@ def execute_data_retrieval(engine, phase1_json: dict) -> str:
                 payload_sections.append(f"\n[SECONDARY_CONTEXT — {sec_intent}]")
                 payload_sections.append(sec_retriever(engine, p1, account_ids))
 
-    # ── Section 4: Retrieval Metadata Footer ──────────────────────
+    # ── Section 4: Deterministic Intelligence Audits ──────────────
+    payload_sections.append("\n" + "=" * 60)
+    payload_sections.append("[DATA_SUFFICIENCY_REPORT]")
+    payload_sections.append(f"Audit Score: {sufficiency['score']}/100")
+    payload_sections.append(f"Audit Status: {sufficiency['status']}")
+    for reason in sufficiency['reasons']:
+        payload_sections.append(f"• {reason}")
+    payload_sections.append("=" * 60)
+
+    if warnings:
+        payload_sections.append("\n" + "=" * 60)
+        payload_sections.append("[CONTRADICTIONS_AND_WARNINGS]")
+        for warn in warnings:
+            payload_sections.append(f"⚠️ {warn}")
+        payload_sections.append("=" * 60)
+
+    # ── Section 5: Retrieval Metadata Footer ──────────────────────
     elapsed_ms = (time.perf_counter() - start) * 1000
     payload_sections.append("=" * 60)
     payload_sections.append("[DATA_RETRIEVAL_METADATA]")

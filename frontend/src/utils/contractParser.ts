@@ -58,6 +58,10 @@ export function parseResponseContract(content: string): ResponseContract {
         contract.headline = sectionContent;
         break;
 
+      case 'EXECUTIVE_SUMMARY':
+        contract.executiveSummary = sectionContent;
+        break;
+
       case 'SUMMARY':
         contract.summary = sectionContent;
         break;
@@ -80,6 +84,10 @@ export function parseResponseContract(content: string): ResponseContract {
 
       case 'SIGNALS':
         contract.signals = parseBulletList(sectionContent);
+        break;
+
+      case 'WHY_THIS_MATTERS':
+        contract.whyThisMatters = sectionContent;
         break;
 
       case 'ACTIONS':

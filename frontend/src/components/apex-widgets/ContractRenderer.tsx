@@ -22,6 +22,29 @@ type WidgetRenderer = (content: string) => React.ReactNode;
 const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
   HEADLINE: (content) => <HeadlineWidget content={content} />,
 
+  EXECUTIVE_SUMMARY: (content) => {
+    const points = content
+      .split('\n')
+      .filter((l) => l.trim())
+      .map((l) => l.replace(/^[•\-*\d.)+\s]+/, '').trim())
+      .filter(Boolean);
+    return (
+      <div className="apex-executive-summary border-l-2 border-indigo-500 bg-indigo-950/10 pl-4 pr-3 py-3 rounded-r my-2">
+        <div className="text-[11px] font-bold text-indigo-400 uppercase tracking-widest mb-2 font-[family-name:var(--font-mono)]">
+          Executive Summary
+        </div>
+        <ul className="space-y-1.5">
+          {points.map((point, i) => (
+            <li key={i} className="text-[13px] text-zinc-200 flex items-start">
+              <span className="text-indigo-500 mr-2 mt-0.5">▪</span>
+              <span>{point}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  },
+
   SUMMARY: (content) => <SummaryWidget content={content} />,
 
   TABLE_DATA: (content) => {
@@ -43,6 +66,17 @@ const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
       .filter(Boolean);
     return <SignalsWidget signals={signals} />;
   },
+
+  WHY_THIS_MATTERS: (content) => (
+    <div className="apex-why-this-matters border border-zinc-800 bg-zinc-950/40 p-4 rounded-lg my-2">
+      <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 font-[family-name:var(--font-mono)]">
+        Why This Matters
+      </div>
+      <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold italic">
+        {content}
+      </p>
+    </div>
+  ),
 
   ACTIONS: (content) => {
     const actions = content
@@ -228,6 +262,11 @@ export function FinalizedContractRenderer({ contract }: FinalizedRendererProps) 
           <HeadlineWidget content={contract.headline} />
         </div>
       )}
+      {contract.executiveSummary && (
+        <div className="apex-section-block">
+          {WIDGET_REGISTRY['EXECUTIVE_SUMMARY'](contract.executiveSummary)}
+        </div>
+      )}
       {contract.summary && (
         <div className="apex-section-block">
           <SummaryWidget content={contract.summary} />
@@ -246,6 +285,18 @@ export function FinalizedContractRenderer({ contract }: FinalizedRendererProps) 
       {contract.signals.length > 0 && (
         <div className="apex-section-block">
           <SignalsWidget signals={contract.signals} />
+        </div>
+      )}
+      {contract.whyThisMatters && (
+        <div className="apex-section-block">
+          <div className="apex-why-this-matters border border-zinc-800 bg-zinc-950/40 p-4 rounded-lg my-2">
+            <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 font-[family-name:var(--font-mono)]">
+              Why This Matters
+            </div>
+            <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold italic">
+              {contract.whyThisMatters}
+            </p>
+          </div>
         </div>
       )}
       {contract.actions.length > 0 && (

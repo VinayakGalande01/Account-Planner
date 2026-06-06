@@ -34,6 +34,8 @@ export interface ResponseContract {
   queryType: string;
   /** Primary operational headline */
   headline: string;
+  /** Max 3-bullet executive summary (optional) */
+  executiveSummary?: string;
   /** 2-4 line context summary */
   summary: string;
   /** Structured table data for deterministic rendering (supports sort/filter/export) */
@@ -48,6 +50,8 @@ export interface ResponseContract {
   crmWarnings: string[];
   /** Grounding & integrity metadata (secondary governance, collapsed by default) */
   confidence: ConfidenceData | null;
+  /** Executive Why This Matters summary */
+  whyThisMatters?: string;
   /** Raw text content for fallback rendering */
   rawContent: string;
   /** Whether the response contains structured __SECTION_*__ tags */
@@ -60,10 +64,12 @@ export interface ResponseContract {
 export type SectionName =
   | 'INTENT'
   | 'HEADLINE'
+  | 'EXECUTIVE_SUMMARY'
   | 'SUMMARY'
   | 'TABLE_DATA'
   | 'TABLE'
   | 'SIGNALS'
+  | 'WHY_THIS_MATTERS'
   | 'ACTIONS'
   | 'CRM_HYGIENE'
   | 'CONFIDENCE'
@@ -75,10 +81,12 @@ export type SectionName =
  */
 export const SECTION_RENDER_ORDER: SectionName[] = [
   'HEADLINE',     // Level 1: Primary attention anchor
+  'EXECUTIVE_SUMMARY', // Level 1.5: High-level overview
   'SUMMARY',      // Level 2: Context framing
   'TABLE_DATA',   // Level 3: Tactical data (structured JSON — preferred)
   'TABLE',        // Level 3: Tactical data (markdown fallback)
   'SIGNALS',      // Level 4: Key intelligence
+  'WHY_THIS_MATTERS', // Level 4.5: Executive importance bridge
   'ACTIONS',      // Level 5: Operational directives
   'CRM_HYGIENE',  // Level 6: Secondary governance (collapsible)
   'CONFIDENCE',   // Level 6: Secondary governance (collapsible)

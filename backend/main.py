@@ -858,6 +858,8 @@ def wrap_response_contract(
     actions: list = None,
     crm_hygiene: list = None,
     confidence: dict = None,
+    why_this_matters: str = None,
+    executive_summary: str = None,
 ) -> str:
     """Canonical serializer for the __SECTION_*__ streaming transport format.
     Produces the tagged envelope that the frontend ContractRenderer parses.
@@ -866,6 +868,8 @@ def wrap_response_contract(
 
     parts.append(f"__SECTION_INTENT__\n{intent}")
     parts.append(f"__SECTION_HEADLINE__\n{headline}")
+    if executive_summary:
+        parts.append(f"__SECTION_EXECUTIVE_SUMMARY__\n{executive_summary}")
     parts.append(f"__SECTION_SUMMARY__\n{summary}")
 
     if table_data is not None:
@@ -874,6 +878,9 @@ def wrap_response_contract(
     if signals:
         signal_text = "\n".join([f"• {s}" for s in signals])
         parts.append(f"__SECTION_SIGNALS__\n{signal_text}")
+
+    if why_this_matters:
+        parts.append(f"__SECTION_WHY_THIS_MATTERS__\n{why_this_matters}")
 
     if actions:
         action_text = "\n".join([f"• {a}" for a in actions])
@@ -905,14 +912,10 @@ def generate_deterministic_global_list(engine, mode: str, format: str, query: st
     headline = f"Top {row_count} Prioritized Opportunities — Portfolio Intelligence"
 
     # "Why This Matters" enriched summary
-    base_summary = {
+    summary = {
         "executive": "Ultra-concise view of top-level revenue deals.",
         "analyst": f"Full diagnostic breakdown: {row_count} top deals ranked by priority band.",
     }.get(mode, f"Actionable view of {row_count} prioritized active deals.")
-    if synthesis.why_this_matters:
-        summary = f"{base_summary} {synthesis.why_this_matters}"
-    else:
-        summary = base_summary
 
     # Classified signals (revenue-first, CRM-last)
     signals = synthesis.get_all_signals_for_display(RESPONSE_BUDGET["GLOBAL_LIST_QUERY"]["max_signals"])
@@ -945,7 +948,8 @@ def generate_deterministic_global_list(engine, mode: str, format: str, query: st
             signals=signals,
             actions=actions,
             crm_hygiene=crm_only if crm_only else None,
-            confidence=confidence_data
+            confidence=confidence_data,
+            why_this_matters=synthesis.why_this_matters if synthesis.why_this_matters else None
         )
 
 def generate_deterministic_contacts(engine, account_id: Optional[str], mode: str, format: str, query: str = "") -> str:
@@ -963,10 +967,7 @@ def generate_deterministic_contacts(engine, account_id: Optional[str], mode: str
         "executive": "Ultra-concise overview of mapped key stakeholders and active relationship gaps.",
         "analyst": f"Full diagnostic contact report: {contact_count} contacts with engagement analysis.",
     }.get(mode, "Actionable overview of stakeholders and next recommended contact.")
-    if synthesis.why_this_matters:
-        summary = f"{base_summary} {synthesis.why_this_matters}"
-    else:
-        summary = base_summary
+    summary = base_summary
 
     signals = synthesis.get_all_signals_for_display(RESPONSE_BUDGET["CONTACT_QUERY"]["max_signals"])
     actions = synthesis.actions
@@ -997,7 +998,8 @@ def generate_deterministic_contacts(engine, account_id: Optional[str], mode: str
             signals=signals if signals else None,
             actions=actions,
             crm_hygiene=crm_only if crm_only else None,
-            confidence=confidence_data
+            confidence=confidence_data,
+            why_this_matters=synthesis.why_this_matters if synthesis.why_this_matters else None
         )
 
 def generate_deterministic_pipeline(engine, mode: str, format: str, query: str = "") -> str:
@@ -1027,10 +1029,7 @@ def generate_deterministic_pipeline(engine, mode: str, format: str, query: str =
         "executive": f"Ultra-concise view: {fmt_total} total pipeline, {fmt_weighted} weighted forecast.",
         "analyst": f"Full diagnostic pipeline: {fmt_total} total | {fmt_weighted} weighted | {deal_count} active deals.",
     }.get(mode, f"Actionable pipeline overview: {fmt_total} total open pipeline | {fmt_weighted} weighted forecast | {deal_count} active deals.")
-    if synthesis.why_this_matters:
-        summary = f"{base_summary} {synthesis.why_this_matters}"
-    else:
-        summary = base_summary
+    summary = base_summary
 
     signals = synthesis.get_all_signals_for_display(RESPONSE_BUDGET["PIPELINE_SUMMARY_QUERY"]["max_signals"])
     actions = synthesis.actions
@@ -1063,7 +1062,8 @@ def generate_deterministic_pipeline(engine, mode: str, format: str, query: str =
             signals=signals,
             actions=actions,
             crm_hygiene=crm_only if crm_only else None,
-            confidence=confidence_data
+            confidence=confidence_data,
+            why_this_matters=synthesis.why_this_matters if synthesis.why_this_matters else None
         )
 
 @app.post("/api/chat")
@@ -1135,7 +1135,15 @@ async def chat(request: ChatRequest):
         yield "sys_meta_log|[SYS_LOG] Launching Core Strategic Reasoner (Phase 3)...\n\n"
         await asyncio.sleep(0.05)
         try:
-            sip_json = await run_phase3_reasoner(retrieved_text, p1_json, http_client)
+            from intelligence_layer import generate_strategic_synthesis
+            synthesis = generate_strategic_synthesis(
+                engine,
+                intent=intent,
+                account_id=account_id,
+                mode="strategic",
+                query_scope=p1_parsed.query_scope
+            )
+            sip_json = await run_phase3_reasoner(retrieved_text, p1_json, http_client, synthesis.governance_directives)
             overall_pct = sip_json.get("confidence", {}).get("overall_confidence") or 80
             yield f"sys_meta_log|[SYS_LOG] Strategic trace generated. Confidence: {overall_pct}%\n\n"
         except Exception as e:

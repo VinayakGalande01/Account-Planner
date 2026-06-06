@@ -117,6 +117,126 @@ class SignalClassifier:
 
 
 # ═══════════════════════════════════════════════════════════════
+# CONTRADICTION DETECTION SYSTEM
+# ═══════════════════════════════════════════════════════════════
+
+class ContradictionDetector:
+    """Detects logical contradictions between CRM data markers (e.g. high probability
+    deals with zero activity, imminent close dates with zero contact)."""
+
+    @staticmethod
+    def detect_contradictions(engine, account_id: Optional[str] = None) -> List[str]:
+        """Scans opportunities, activities, and support cases for contradictions.
+        Returns a list of clear contradiction warning strings."""
+        warnings = []
+        opps = engine.data.get('opportunity')
+        activities = engine.data.get('activity')
+        cases = engine.data.get('case')
+        accounts = engine.data.get('account')
+
+        # Filter scope
+        if opps is not None and not opps.empty:
+            open_opps = opps[~opps['Stage'].isin(['Closed Won', 'Closed Lost'])].copy()
+            if account_id:
+                open_opps = open_opps[open_opps['Account_ID'] == account_id]
+
+            now = datetime.now()
+
+            # Rule 1: The Ghost Deal (High probability, but no activity in > 45 days)
+            for _, opp in open_opps.iterrows():
+                opp_id = opp['Opp_ID']
+                opp_name = opp['Opp_Name']
+                prob = opp.get('Probability_Pct', 0)
+                aid = opp['Account_ID']
+
+                acc_name = "Unknown Account"
+                if accounts is not None:
+                    acc_row = accounts[accounts['Account_ID'] == aid]
+                    if not acc_row.empty:
+                        acc_name = acc_row.iloc[0]['Account_Name']
+
+                # High probability threshold = 75%
+                if pd.notna(prob) and prob >= 75:
+                    # Check activities
+                    days_since_act = 999
+                    if activities is not None and not activities.empty:
+                        opp_acts = activities[(activities['Account_ID'] == aid)]
+                        if not opp_acts.empty:
+                            last_act = pd.to_datetime(opp_acts['Activity_Date']).max()
+                            if pd.notna(last_act):
+                                try:
+                                    if last_act.tzinfo is not None:
+                                        last_act = last_act.tz_localize(None)
+                                except Exception:
+                                    pass
+                                days_since_act = (now - last_act).days
+                    
+                    if days_since_act > 45:
+                        warnings.append(
+                            f"Opportunity {opp_id} ({opp_name} on {acc_name}) has high probability ({prob}%) "
+                            f"but has had zero communication logged in the last {days_since_act if days_since_act < 900 else '45+'} days."
+                        )
+
+                # Rule 2: The Imminent Close Cliff (Close date < 14 days, but zero contact in > 30 days)
+                close_dt = pd.to_datetime(opp.get('Close_Date'), errors='coerce')
+                if pd.notna(close_dt):
+                    try:
+                        if close_dt.tzinfo is not None:
+                            close_dt = close_dt.tz_localize(None)
+                    except Exception:
+                        pass
+                    days_until_close = (close_dt - now).days
+                    
+                    if 0 <= days_until_close <= 14:
+                        # Check last activity
+                        days_since_act = 999
+                        if activities is not None and not activities.empty:
+                            opp_acts = activities[activities['Account_ID'] == aid]
+                            if not opp_acts.empty:
+                                last_act = pd.to_datetime(opp_acts['Activity_Date']).max()
+                                if pd.notna(last_act):
+                                    try:
+                                        if last_act.tzinfo is not None:
+                                            last_act = last_act.tz_localize(None)
+                                    except Exception:
+                                        pass
+                                    days_since_act = (now - last_act).days
+                        
+                        if days_since_act > 30:
+                            warnings.append(
+                                f"Opportunity {opp_id} ({opp_name} on {acc_name}) is scheduled to close in {days_until_close} days "
+                                f"but has had no active engagement logged for {days_since_act if days_since_act < 900 else '30+'} days."
+                            )
+
+        # Rule 3: Support CSAT / Healthy Paradox
+        if accounts is not None and not accounts.empty:
+            acc_scope = accounts if not account_id else accounts[accounts['Account_ID'] == account_id]
+            for _, acc in acc_scope.iterrows():
+                aid = acc['Account_ID']
+                acc_name = acc['Account_Name']
+                
+                # Check cases
+                if cases is not None and not cases.empty:
+                    acc_cases = cases[cases['Account_ID'] == aid]
+                    if not acc_cases.empty:
+                        open_crit = len(acc_cases[(acc_cases['Severity'] == 'Critical') & (acc_cases['Status'] != 'Closed')])
+                        avg_csat = acc_cases['CSAT_Score'].mean()
+                        
+                        if open_crit > 0 and acc.get('Account_Tier') == 'Strategic':
+                            warnings.append(
+                                f"Strategic Account {acc_name} has {open_crit} unresolved critical support case(s) "
+                                f"pending, which conflicts with standard service level requirements."
+                            )
+                        if pd.notna(avg_csat) and avg_csat < 2.5 and len(acc_cases) >= 2:
+                            warnings.append(
+                                f"Account {acc_name} shows critical relationship risk: Average support CSAT "
+                                f"is poor ({avg_csat:.1f}/5) across {len(acc_cases)} tickets."
+                            )
+
+        return warnings
+
+
+# ═══════════════════════════════════════════════════════════════
 # HUMANIZED PRIORITY SYSTEM
 # ═══════════════════════════════════════════════════════════════
 
@@ -503,6 +623,10 @@ def generate_why_this_matters(intent: str, engine, account_id: Optional[str] = N
 class SynthesisResult:
     """Output of generate_strategic_synthesis(). Contains all computed intelligence."""
     classified_signals: List[ClassifiedSignal] = field(default_factory=list)
+    business_risks: List[ClassifiedSignal] = field(default_factory=list)
+    data_quality_risks: List[ClassifiedSignal] = field(default_factory=list)
+    overall_confidence: str = "HIGH"
+    governance_directives: List[str] = field(default_factory=list)
     portfolio_insights: List[str] = field(default_factory=list)
     temporal_insights: List[str] = field(default_factory=list)
     why_this_matters: Optional[str] = None
@@ -525,6 +649,7 @@ def generate_strategic_synthesis(
     account_id: Optional[str] = None,
     mode: str = "operational",
     crm_gaps: Optional[List[str]] = None,
+    query_scope: str = "Mixed",
 ) -> SynthesisResult:
     """Master orchestrator for the intelligence synthesis layer.
 
@@ -548,24 +673,55 @@ def generate_strategic_synthesis(
     budget = RESPONSE_BUDGET.get(intent, {"max_signals": 4, "max_actions": 3})
 
     # 1. Portfolio Intelligence (cross-entity)
-    result.portfolio_insights = PortfolioIntelligence.generate_all(engine)
+    if query_scope != "Entity":
+        result.portfolio_insights = PortfolioIntelligence.generate_all(engine)
 
     # 2. Temporal Intelligence (trajectory)
-    result.temporal_insights = TemporalIntelligence.generate_all(engine)
+    if query_scope != "Entity":
+        result.temporal_insights = TemporalIntelligence.generate_all(engine)
 
-    # 3. Classify and rank CRM hygiene gaps (always deprioritized)
-    raw_signals = []
+    # 3. Classify and rank CRM hygiene gaps vs Business risks
+    hygiene_signals = []
     if crm_gaps:
         # Strip the ⚠️ prefix for classification
-        raw_signals.extend([g.replace("⚠️ ", "").strip() for g in crm_gaps])
+        hygiene_signals.extend([g.replace("⚠️ ", "").strip() for g in crm_gaps])
+
+    result.data_quality_risks = SignalClassifier.classify_and_rank(hygiene_signals, budget.get("max_signals", 4))
 
     # Add portfolio + temporal insights as raw signals for unified ranking
+    raw_signals = []
     raw_signals.extend(result.portfolio_insights)
     raw_signals.extend(result.temporal_insights)
 
-    result.classified_signals = SignalClassifier.classify_and_rank(
+    result.business_risks = SignalClassifier.classify_and_rank(
         raw_signals, budget.get("max_signals", 4)
     )
+    result.classified_signals = result.business_risks + result.data_quality_risks
+
+    # Adjust confidence dynamically based on data sufficiency
+    sufficiency = engine.calculate_data_sufficiency(account_id)
+    if sufficiency["score"] < 60:
+        result.overall_confidence = "LOW"
+        result.governance_directives.append(
+            "HARD CONSTRAINT: Data sufficiency is LOW (<60%). You MUST recommend validation and data gathering actions. "
+            "Do NOT recommend aggressive execution, escalation, or closing actions until data gaps are resolved."
+        )
+    else:
+        result.overall_confidence = "HIGH"
+
+    # Evaluate Contradictions and CRM Gaps for directives
+    warnings = ContradictionDetector.detect_contradictions(engine, account_id)
+    if warnings:
+        for w in warnings:
+            result.governance_directives.append(f"HARD CONSTRAINT (Contradiction Detected): {w}. Ensure recommendations DO NOT conflict with this.")
+
+    if crm_gaps:
+        for gap in crm_gaps:
+            if "Decision Maker" in gap or "0 Contacts" in gap:
+                result.governance_directives.append(
+                    "HARD CONSTRAINT: Missing stakeholders detected. You MUST explicitly state 'No mapped contact available' "
+                    "if asked who to contact, and prioritize stakeholder discovery over deal advancement."
+                )
 
     # 4. "Why This Matters" engine
     result.why_this_matters = generate_why_this_matters(intent, engine, account_id)
