@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, TrendingDown, Sliders, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
 
 // Pipeline stages in order
 const STAGES = [
@@ -113,6 +115,7 @@ function SegmentedBar({ label, value, maxValue, color, simMultiplier }: { label:
 }
 
 export default function PipelineView() {
+  const { authFetch } = useAuth();
   const [pipelineData, setPipelineData] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
@@ -122,12 +125,13 @@ export default function PipelineView() {
   const [cycleAcceleration, setCycleAcceleration] = useState(0); // in percent (0% to 50%)
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8002/api/pipeline/summary')
+    authFetch('http://127.0.0.1:8002/api/pipeline/summary')
       .then(res => res.json())
       .then(data => {
         setPipelineData(data.stage_summary || {});
         setLoading(false);
       })
+
       .catch(() => {
         // Fallback mock data
         setPipelineData({

@@ -9,6 +9,8 @@ import {
   Info, AlertCircle
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
+
 
 interface AccountDetailProps {
   account: any;
@@ -96,12 +98,13 @@ function MicroTrend() {
 
 export default function AccountDetail({ account, onBack }: AccountDetailProps) {
   const { setActiveTab, setAiCommand } = useData();
+  const { authFetch } = useAuth();
   const [details, setDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`http://127.0.0.1:8002/api/accounts/${account.Account_ID}/details`)
+    authFetch(`http://127.0.0.1:8002/api/accounts/${account.Account_ID}/details`)
       .then(res => res.json())
       .then(data => {
         setDetails(data);
@@ -109,6 +112,7 @@ export default function AccountDetail({ account, onBack }: AccountDetailProps) {
       })
       .catch(() => setLoading(false));
   }, [account.Account_ID]);
+
 
   const handleLaunchIntel = () => {
     setAiCommand(`Give me a detailed strategic health check on ${account.Account_Name}. Focus on current pipeline and engagement risks.`);

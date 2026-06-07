@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldAlert, AlertTriangle, Lightbulb, Zap, X, Terminal, ArrowRight, Activity, Sparkles } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
+
 
 interface Insight {
   id: string;
@@ -28,15 +30,17 @@ interface ProactiveInsightsProps {
 
 export default function ProactiveInsights({ isOpen, onClose }: ProactiveInsightsProps) {
   const { setAiCommand, setActiveTab } = useData();
+  const { authFetch } = useAuth();
   const [data, setData] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchInsights = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8002/api/insights');
+      const res = await authFetch('http://localhost:8002/api/insights');
       const json = await res.json();
       setData(json);
+
     } catch (err) {
       console.error('Failed to fetch insights', err);
       // Fallback fallback mock data

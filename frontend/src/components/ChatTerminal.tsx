@@ -4,7 +4,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Terminal, Bot, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { parseResponseContract } from '../utils/contractParser';
+
 import { ContractRenderer, FinalizedContractRenderer } from './apex-widgets';
 import type { ResponseContract } from '../types/responseContract';
 
@@ -62,6 +64,7 @@ function RenderMessageLines({ content }: { content: string }) {
 
 export default function ChatTerminal() {
   const { aiCommand, setAiCommand } = useData();
+  const { authFetch } = useAuth();
 
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState('');
@@ -97,13 +100,14 @@ export default function ChatTerminal() {
     setProcessingStage('running');
 
     try {
-      const response = await fetch('http://127.0.0.1:8002/api/chat', {
+      const response = await authFetch('http://127.0.0.1:8002/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: textToSend }),
       });
 
       if (!response.body) throw new Error('No stream body');
+
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');

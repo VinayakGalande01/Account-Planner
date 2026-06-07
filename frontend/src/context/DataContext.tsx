@@ -1,6 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+
 
 interface DataContextType {
   accounts: any[];
@@ -19,6 +21,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
+  const { user, authFetch } = useAuth();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -28,14 +31,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
 
   const fetchData = async () => {
+    if (!user) {
+      setAccounts([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8002/api/accounts/enriched');
+      const res = await authFetch('http://127.0.0.1:8002/api/accounts/enriched');
       const data = await res.json();
       setAccounts(Array.isArray(data) ? data : []);
     } catch {
       try {
-        const res = await fetch('http://127.0.0.1:8002/api/accounts');
+        const res = await authFetch('http://127.0.0.1:8002/api/accounts');
         const data = await res.json();
         setAccounts(data || []);
       } catch {
@@ -48,7 +56,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user]);
+
 
   return (
     <DataContext.Provider value={{ 

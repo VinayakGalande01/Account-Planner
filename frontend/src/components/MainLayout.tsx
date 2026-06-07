@@ -11,8 +11,11 @@ import AccountDetail from './AccountDetail';
 import ProactiveInsights from './ProactiveInsights';
 import { useData } from '../context/DataContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import AuthPage from './AuthPage';
 
 import { motion, AnimatePresence } from 'framer-motion';
+
 
 
 /* ── Global Loading Context ── */
@@ -69,6 +72,8 @@ function TopographicOverlay() {
 }
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading: authLoading, logout } = useAuth();
+
   const { theme, toggleTheme } = useTheme();
   const { 
     accounts, 
@@ -80,6 +85,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     setSelectedAccount 
   } = useData();
   const [consoleActive, setConsoleActive] = useState(true);
+
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
 
@@ -240,10 +246,27 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#020202] text-foreground flex flex-col justify-center items-center font-[family-name:var(--font-mono)]">
+        <div className="absolute inset-0 scanlines opacity-50 pointer-events-none" />
+        <div className="w-10 h-10 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
+        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.3em] animate-pulse">
+          VERIFYING OPERATOR KEY...
+        </span>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage />;
+  }
+
   // ═══ Landing Mode ═══
   if (!consoleActive) {
     return <LandingPage onInitialize={handleInitialize} />;
   }
+
 
   // ═══ Console Mode ═══
   return (
@@ -346,9 +369,20 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-primary rounded-full" />
               </button>
               
-              <div className="w-7 h-7 rounded-md bg-muted border border-border flex items-center justify-center cursor-pointer hover:border-primary/30 transition-all">
-                <User className="w-3.5 h-3.5 text-zinc-500" />
+              <div className="flex items-center gap-3">
+                <div className="text-right hidden sm:block">
+                  <p className="text-[11px] font-black uppercase tracking-[0.05em] text-foreground leading-none">{user?.name}</p>
+                  <p className="text-[9px] text-zinc-500 font-medium font-[family-name:var(--font-mono)] leading-none mt-1">{user?.email}</p>
+                </div>
+                <button
+                  onClick={logout}
+                  className="w-7 h-7 rounded-md bg-muted border border-border flex items-center justify-center cursor-pointer hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 text-zinc-500 transition-all"
+                  title="Logout Operator"
+                >
+                  <User className="w-3.5 h-3.5" />
+                </button>
               </div>
+
             </div>
           </header>
 

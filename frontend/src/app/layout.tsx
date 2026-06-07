@@ -5,6 +5,8 @@ import './globals.css';
 import MainLayout from '../components/MainLayout';
 import { DataProvider } from '../context/DataContext';
 import { ThemeProvider } from '../context/ThemeContext';
+import { AuthProvider } from '../context/AuthContext';
+
 
 
 const inter = Inter({
@@ -55,12 +57,15 @@ export default function RootLayout({
       </head>
       <body className="bg-background text-foreground antialiased selection:bg-primary/30 min-h-screen font-[family-name:var(--font-inter)]">
         <ThemeProvider>
-          <DataProvider>
-            <MainLayout>
-              {children}
-            </MainLayout>
-          </DataProvider>
+          <AuthProvider>
+            <DataProvider>
+              <MainLayout>
+                {children}
+              </MainLayout>
+            </DataProvider>
+          </AuthProvider>
         </ThemeProvider>
+
       </body>
     </html>
   );
