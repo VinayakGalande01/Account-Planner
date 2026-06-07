@@ -85,6 +85,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     setSelectedAccount 
   } = useData();
   const [consoleActive, setConsoleActive] = useState(true);
+  const [showAuthForm, setShowAuthForm] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setShowAuthForm(false);
+    }
+  }, [user]);
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
@@ -259,7 +266,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   }
 
   if (!user) {
-    return <AuthPage />;
+    if (showAuthForm) {
+      return <AuthPage onBack={() => setShowAuthForm(false)} />;
+    }
+    return <LandingPage onInitialize={() => setShowAuthForm(true)} />;
   }
 
   // ═══ Landing Mode ═══

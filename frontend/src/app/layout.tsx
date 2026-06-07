@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Rajdhani, Chivo } from 'next/font/google';
 import './globals.css';
 import MainLayout from '../components/MainLayout';
 import { DataProvider } from '../context/DataContext';
@@ -21,6 +21,20 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
+const rajdhani = Rajdhani({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-rajdhani',
+  display: 'swap',
+});
+
+const chivo = Chivo({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '700'],
+  variable: '--font-chivo',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Account Planner | Tactical Command Center',
   description: 'ERP-Grade Enterprise Account Intelligence & Strategic Control System',
@@ -32,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable} ${rajdhani.variable} ${chivo.variable}`} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

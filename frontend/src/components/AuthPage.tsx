@@ -8,7 +8,11 @@ import { useTheme } from '../context/ThemeContext';
 
 
 
-export default function AuthPage() {
+interface AuthPageProps {
+  onBack?: () => void;
+}
+
+export default function AuthPage({ onBack }: AuthPageProps) {
   const { login, signup, error, loading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [isLogin, setIsLogin] = useState(true);
@@ -209,6 +213,18 @@ export default function AuthPage() {
             {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
           </button>
         </div>
+
+        {onBack && (
+          <div className="mt-4 text-center border-t border-white/[0.04] pt-4">
+            <button
+              type="button"
+              onClick={onBack}
+              className="text-[10px] text-zinc-600 hover:text-primary uppercase tracking-widest font-[family-name:var(--font-mono)] transition-colors cursor-pointer"
+            >
+              ← Back to Home
+            </button>
+          </div>
+        )}
       </motion.div>
     </div>
   );
