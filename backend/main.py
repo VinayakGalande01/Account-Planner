@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
@@ -40,13 +40,25 @@ load_dotenv(override=True)
 
 app = FastAPI(title="Account Planner Agent API")
 
+from auth.router import router as auth_router
+app.include_router(auth_router)
+
+from auth.dependencies import get_current_user
+from models.user import User
+
+
+
+# Configure allowed CORS origins dynamically
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Global connection pool client to reuse TCP connections across API calls (improves latency & keeps connections alive)
 http_client = httpx.AsyncClient(timeout=httpx.Timeout(connect=3.0, read=1800.0, write=10.0, pool=30.0))
@@ -1067,7 +1079,7 @@ def generate_deterministic_pipeline(engine, mode: str, format: str, query: str =
         )
 
 @app.post("/api/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, current_user: User = Depends(get_current_user)):
     async def generate_stream():
         start_time = asyncio.get_event_loop().time()
 
@@ -1173,7 +1185,7 @@ async def chat(request: ChatRequest):
 # ─── New Tactical Endpoints ───────────────────────────────────
 
 @app.get("/api/insights")
-async def get_insights():
+async def get_insights(current_user: User = Depends(get_current_user)):
     """Analyzes the account portfolio and pipeline to generate proactive insights, alerts, and suggestions using rules + LLM."""
     from datetime import datetime
     try:
@@ -1382,7 +1394,7 @@ async def health_check():
     }
 
 @app.get("/api/accounts/enriched")
-async def get_enriched_accounts():
+async def get_enriched_accounts(current_user: User = Depends(get_current_user)):
     """Returns all accounts with computed health scores, pipeline values, and last activity dates."""
     try:
         enriched = engine.get_enriched_accounts_list()
@@ -1391,7 +1403,7 @@ async def get_enriched_accounts():
         return []
 
 @app.get("/api/pipeline/summary")
-async def get_pipeline_summary():
+async def get_pipeline_summary(current_user: User = Depends(get_current_user)):
     """Returns aggregated pipeline data grouped by stage."""
     try:
         analysis = engine.get_pipeline_analysis()
@@ -1400,7 +1412,7 @@ async def get_pipeline_summary():
         return {"total_value": 0, "weighted_value": 0, "deal_count": 0, "stage_summary": {}}
 
 @app.get("/api/accounts/{account_id}/details")
-async def get_account_details(account_id: str):
+async def get_account_details(account_id: str, current_user: User = Depends(get_current_user)):
     """Returns real JSON details for a specific account."""
     try:
         details = engine.get_account_details_json(account_id)
@@ -1416,7 +1428,7 @@ async def root():
     return {"message": "Account Planner Agent API is running"}
 
 @app.get("/api/accounts")
-async def get_accounts():
+async def get_accounts(current_user: User = Depends(get_current_user)):
     if 'account' not in engine.data:
         return []
     return engine.data['account'][['Account_ID', 'Account_Name', 'Account_Tier']].to_dict('records')
