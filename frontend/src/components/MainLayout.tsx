@@ -3,13 +3,14 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import Sidebar from './Sidebar';
 import LandingPage from './LandingPage';
-import { Database, Zap, Globe, Lock, Sliders, Cpu, Bell, User, Sparkles } from 'lucide-react';
+import { Database, Zap, Globe, Lock, Sliders, Cpu, Bell, User, Sparkles, Sun, Moon } from 'lucide-react';
 import PortfolioLedger from './PortfolioLedger';
 import PipelineView from './PipelineView';
 import ChatTerminal from './ChatTerminal';
 import AccountDetail from './AccountDetail';
 import ProactiveInsights from './ProactiveInsights';
 import { useData } from '../context/DataContext';
+import { useTheme } from '../context/ThemeContext';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -68,6 +69,7 @@ function TopographicOverlay() {
 }
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
+  const { theme, toggleTheme } = useTheme();
   const { 
     accounts, 
     loading, 
@@ -277,8 +279,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           className="flex-1 flex flex-col overflow-hidden relative"
         >
           {/* Header */}
-          <header className="h-14 border-b border-white/[0.04] bg-[#050505]/80 backdrop-blur-xl flex items-center justify-between px-6 shrink-0 z-50">
-            <div className="flex items-center gap-3 text-[13px] font-bold uppercase tracking-[0.15em] text-zinc-600 font-[family-name:var(--font-mono)]">
+          <header className="h-14 border-b border-border bg-card/80 backdrop-blur-xl flex items-center justify-between px-6 shrink-0 z-50">
+            <div className="flex items-center gap-3 text-[13px] font-bold uppercase tracking-[0.15em] text-zinc-600 dark:text-zinc-500 font-[family-name:var(--font-mono)]">
               <span
                 onClick={() => setActiveTab('Dashboard')}
                 className="hover:text-primary cursor-pointer transition-colors duration-150"
@@ -298,7 +300,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                     <div className="w-[2px] h-full bg-primary pulse-waveform" style={{ animationDelay: '200ms' }} />
                     <div className="w-[2px] h-full bg-primary pulse-waveform" style={{ animationDelay: '400ms' }} />
                   </div>
-                  <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-[0.1em] font-[family-name:var(--font-mono)]">
+                  <span className="text-[12px] font-bold text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.1em] font-[family-name:var(--font-mono)]">
                     ONLINE
                   </span>
                 </div>
@@ -315,18 +317,36 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <button
                 onClick={() => setInsightsOpen(prev => !prev)}
                 className={`p-1.5 rounded transition-all duration-150 relative ${
-                  insightsOpen ? 'text-primary bg-primary/10 border border-primary/20' : 'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.03]'
+                  insightsOpen ? 'text-primary bg-primary/10 border border-primary/20' : 'text-zinc-600 hover:text-zinc-400 hover:bg-muted dark:hover:bg-white/[0.03]'
                 }`}
                 data-tooltip="Proactive Intel"
               >
                 <Sparkles className="w-4 h-4" />
                 <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-secondary rounded-full animate-pulse" />
               </button>
-              <button className="p-1.5 text-zinc-600 hover:text-zinc-400 transition-colors relative">
+              
+              {/* Theme Toggle Button */}
+              <button
+                onClick={toggleTheme}
+                className="p-1.5 text-zinc-600 hover:text-primary hover:bg-muted dark:hover:bg-white/[0.03] rounded transition-all duration-150 flex items-center justify-center"
+                data-tooltip={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              >
+                <motion.div
+                  initial={false}
+                  animate={{ rotate: theme === 'dark' ? 0 : 180, scale: 1 }}
+                  whileTap={{ scale: 0.9 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </motion.div>
+              </button>
+
+              <button className="p-1.5 text-zinc-600 hover:text-zinc-400 hover:bg-muted dark:hover:bg-white/[0.03] rounded transition-colors relative">
                 <Bell className="w-4 h-4" />
                 <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-primary rounded-full" />
               </button>
-              <div className="w-7 h-7 rounded-md bg-white/[0.03] border border-white/[0.06] flex items-center justify-center cursor-pointer hover:border-primary/30 transition-all">
+              
+              <div className="w-7 h-7 rounded-md bg-muted border border-border flex items-center justify-center cursor-pointer hover:border-primary/30 transition-all">
                 <User className="w-3.5 h-3.5 text-zinc-500" />
               </div>
             </div>

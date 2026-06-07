@@ -64,7 +64,7 @@ function StepLineChart({ forecasted, actual, simulated }: StepLineChartProps) {
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-24" preserveAspectRatio="none">
       {/* Grid lines */}
       {[0.25, 0.5, 0.75].map(f => (
-        <line key={f} x1={padding} x2={w - padding} y1={padding + usableH * (1 - f)} y2={padding + usableH * (1 - f)} stroke="rgba(255,255,255,0.03)" strokeWidth="0.3" />
+        <line key={f} x1={padding} x2={w - padding} y1={padding + usableH * (1 - f)} y2={padding + usableH * (1 - f)} stroke="var(--color-border)" strokeWidth="0.3" opacity="0.3" />
       ))}
       
       {/* Forecasted — dashed cobalt */}
@@ -74,7 +74,7 @@ function StepLineChart({ forecasted, actual, simulated }: StepLineChartProps) {
       <path d={toPath(simulated)} fill="none" stroke="#7c3aed" strokeWidth="1.2" strokeLinecap="round" className="drop-shadow-[0_0_3px_rgba(124,58,237,0.8)]" />
       
       {/* Actual — solid white */}
-      <path d={toPath(actual)} fill="none" stroke="#f4f4f5" strokeWidth="0.8" strokeLinecap="round" />
+      <path d={toPath(actual)} fill="none" stroke="currentColor" strokeWidth="0.8" strokeLinecap="round" className="text-foreground" />
     </svg>
   );
 }
@@ -90,7 +90,7 @@ function SegmentedBar({ label, value, maxValue, color, simMultiplier }: { label:
       <span className="text-[12px] font-bold text-zinc-600 w-28 text-right shrink-0 font-[family-name:var(--font-mono)] uppercase tracking-[0.05em] group-hover:text-zinc-400 transition-colors truncate">
         {label}
       </span>
-      <div className="flex-1 h-[6px] bg-white/[0.03] rounded-sm overflow-hidden relative">
+      <div className="flex-1 h-[6px] bg-muted rounded-sm overflow-hidden relative">
         {/* Simulated shadow */}
         <div
           className="h-full rounded-sm absolute left-0 top-0 opacity-30 transition-all duration-300 ease-out"
@@ -182,9 +182,9 @@ export default function PipelineView() {
 
   return (
     <div className="space-y-6">
-      <div className="corner-brackets bg-[#080808] rounded-md overflow-hidden">
+      <div className="corner-brackets bg-card rounded-md overflow-hidden">
         {/* Header */}
-        <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between bg-white/[0.01]">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/30">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-3.5 h-3.5 text-primary" />
             <h3 className="text-[13px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
@@ -194,11 +194,11 @@ export default function PipelineView() {
           <div className="flex items-center gap-6">
             <div className="text-right">
               <p className="text-sm font-black text-foreground data-cell">{formatCurrency(totalPipeline)}</p>
-              <p className="text-[11px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">Open Pipeline</p>
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-500 font-black uppercase font-[family-name:var(--font-mono)]">Open Pipeline</p>
             </div>
             <div className="text-right">
               <p className="text-sm font-black text-emerald-500 data-cell">{formatCurrency(closedWon)}</p>
-              <p className="text-[11px] text-zinc-600 font-black uppercase font-[family-name:var(--font-mono)]">Closed Won</p>
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-500 font-black uppercase font-[family-name:var(--font-mono)]">Closed Won</p>
             </div>
           </div>
         </div>
@@ -207,32 +207,32 @@ export default function PipelineView() {
           {/* Forecasted vs Actual vs Simulated Step-Line */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)]">
+              <span className="text-[12px] font-bold text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)]">
                 Sales Speed: Actual vs. Simulation
               </span>
               <div className="flex items-center gap-4 text-[12px] font-[family-name:var(--font-mono)]">
                 <span className="flex items-center gap-1.5">
                   <span className="w-4 h-[1px] border-t border-dashed border-blue-500 inline-block" />
-                  <span className="text-zinc-600">Forecast</span>
+                  <span className="text-zinc-600 dark:text-zinc-500">Forecast</span>
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="w-4 h-[1.2px] bg-secondary inline-block" />
-                  <span className="text-zinc-600">Simulation</span>
+                  <span className="text-zinc-600 dark:text-zinc-500">Simulation</span>
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="w-4 h-[1px] bg-foreground inline-block" />
-                  <span className="text-zinc-600">Actual</span>
+                  <span className="text-zinc-600 dark:text-zinc-500">Actual</span>
                 </span>
               </div>
             </div>
-            <div className="bg-white/[0.01] rounded p-3 border border-white/[0.03]">
+            <div className="bg-muted/30 rounded p-3 border border-border">
               <StepLineChart forecasted={baseForecasted} actual={actual} simulated={simulatedForecast} />
             </div>
           </div>
 
           {/* Segmented Stage Bars */}
           <div>
-            <span className="text-[12px] font-bold text-zinc-600 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] mb-3 block">
+            <span className="text-[12px] font-bold text-zinc-600 dark:text-zinc-500 uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] mb-3 block">
               Sales Stages (Current vs. Simulated)
             </span>
             {loading ? (
@@ -258,12 +258,12 @@ export default function PipelineView() {
       </div>
 
       {/* Interactive What-If Simulator Panel */}
-      <div className="corner-brackets bg-[#080808] rounded-md overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center justify-between">
+      <div className="corner-brackets bg-card rounded-md overflow-hidden">
+        <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sliders className="w-3.5 h-3.5 text-secondary animate-pulse" />
             <h3 className="text-[13px] font-black uppercase tracking-[0.15em] text-secondary font-[family-name:var(--font-mono)]">
-              Sales Simulation Sliders
+              Sales Simulation Levers
             </h3>
           </div>
           {(winRateBoost !== 0 || dealSizeExpansion !== 1.0 || cycleAcceleration !== 0) && (
@@ -296,9 +296,9 @@ export default function PipelineView() {
                 max="25"
                 value={winRateBoost}
                 onChange={(e) => setWinRateBoost(parseInt(e.target.value))}
-                className="w-full accent-secondary bg-white/[0.04] h-[3px] rounded-lg cursor-pointer"
+                className="w-full accent-secondary bg-muted h-[3px] rounded-lg cursor-pointer"
               />
-              <p className="text-[11.5px] text-zinc-600 leading-normal font-medium">
+              <p className="text-[11.5px] text-zinc-600 dark:text-zinc-500 leading-normal font-medium">
                 Changes how likely we are to win open opportunities.
               </p>
             </div>
@@ -317,9 +317,9 @@ export default function PipelineView() {
                 max="175"
                 value={dealSizeExpansion * 100}
                 onChange={(e) => setDealSizeExpansion(parseInt(e.target.value) / 100)}
-                className="w-full accent-secondary bg-white/[0.04] h-[3px] rounded-lg cursor-pointer"
+                className="w-full accent-secondary bg-muted h-[3px] rounded-lg cursor-pointer"
               />
-              <p className="text-[11.5px] text-zinc-600 leading-normal font-medium">
+              <p className="text-[11.5px] text-zinc-600 dark:text-zinc-500 leading-normal font-medium">
                 Simulates selling larger contracts or cross-selling to active clients.
               </p>
             </div>
@@ -338,16 +338,16 @@ export default function PipelineView() {
                 max="40"
                 value={cycleAcceleration}
                 onChange={(e) => setCycleAcceleration(parseInt(e.target.value))}
-                className="w-full accent-secondary bg-white/[0.04] h-[3px] rounded-lg cursor-pointer"
+                className="w-full accent-secondary bg-muted h-[3px] rounded-lg cursor-pointer"
               />
-              <p className="text-[11.5px] text-zinc-600 leading-normal font-medium">
+              <p className="text-[11.5px] text-zinc-600 dark:text-zinc-500 leading-normal font-medium">
                 Simulates moving early deals faster through the sales cycle.
               </p>
             </div>
           </div>
 
           {/* Results Summary Bar */}
-          <div className="pt-4 border-t border-white/[0.04] flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
+          <div className="pt-4 border-t border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
             <div className="flex gap-6 shrink-0">
               <div>
                 <span className="text-[11px] text-zinc-500 font-black uppercase font-[family-name:var(--font-mono)] tracking-wider">
@@ -372,9 +372,9 @@ export default function PipelineView() {
               </div>
             </div>
 
-            <div className="flex-1 max-w-xl bg-white/[0.01] border border-white/[0.03] rounded p-3 relative overflow-hidden">
+            <div className="flex-1 max-w-xl bg-muted/30 border border-border rounded p-3 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-[2px] h-full bg-secondary" />
-              <p className="text-[13px] text-zinc-400 font-medium leading-relaxed font-[family-name:var(--font-mono)]">
+              <p className="text-[13px] text-zinc-400 dark:text-zinc-300 font-medium leading-relaxed font-[family-name:var(--font-mono)]">
                 <span className="font-black text-secondary uppercase tracking-widest block text-[11px] mb-0.5">AI Prediction</span>
                 {getSimulationCommentary()}
               </p>

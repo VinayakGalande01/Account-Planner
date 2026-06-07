@@ -7,31 +7,31 @@
 
 @theme {
   /* ── Base Palette ── */
-  --color-background: #030303;
-  --color-foreground: #f4f4f5;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
 
-  --color-card: #0a0a0b;
-  --color-card-foreground: #f4f4f5;
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
 
   /* ── Primary: Cobalt Blue ── */
-  --color-primary: #2563eb;
-  --color-primary-foreground: #ffffff;
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
 
   /* ── Secondary: Electric Violet (AI/System states) ── */
-  --color-secondary: #7c3aed;
-  --color-secondary-foreground: #ffffff;
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
 
   /* ── Neutral Scale ── */
-  --color-muted: #141414;
-  --color-muted-foreground: #71717a;
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
 
-  --color-accent: #1a1a1a;
-  --color-border: #1a1a1a;
+  --color-accent: var(--accent);
+  --color-border: var(--border);
 
   /* ── Semantic Colors ── */
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
 
   /* ── Radius ── */
   --radius-lg: 0.5rem;
@@ -41,6 +41,64 @@
 
 @layer base {
   :root {
+    /* LIGHT MODE (Default fallback) */
+    --background: #f9fafb;
+    --foreground: #09090b;
+
+    --card: #ffffff;
+    --card-foreground: #09090b;
+
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+
+    --secondary: #7c3aed;
+    --secondary-foreground: #ffffff;
+
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
+
+    --accent: #f4f4f5;
+    --border: #e4e4e7;
+
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+
+    --glass-border: rgba(0, 0, 0, 0.06);
+    --glass-border-subtle: rgba(0, 0, 0, 0.03);
+    --scanlines-color: rgba(0, 0, 0, 0.015);
+
+    color-scheme: light;
+  }
+
+  :root.dark {
+    /* DARK MODE */
+    --background: #030303;
+    --foreground: #f4f4f5;
+
+    --card: #0a0a0b;
+    --card-foreground: #f4f4f5;
+
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+
+    --secondary: #7c3aed;
+    --secondary-foreground: #ffffff;
+
+    --muted: #141414;
+    --muted-foreground: #71717a;
+
+    --accent: #1a1a1a;
+    --border: #1a1a1a;
+
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-border-subtle: rgba(255, 255, 255, 0.04);
+    --scanlines-color: rgba(255, 255, 255, 0.01);
+
     color-scheme: dark;
   }
 
@@ -54,6 +112,7 @@
 
   body {
     background-color: var(--color-background);
+    color: var(--color-foreground);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
@@ -70,14 +129,14 @@
 .glass-card {
   background-color: color-mix(in srgb, var(--color-card) 70%, transparent);
   backdrop-filter: blur(16px);
-  border: 1px solid color-mix(in srgb, white 6%, transparent);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
 }
 
 .glass-surface {
   background-color: color-mix(in srgb, var(--color-card) 40%, transparent);
   backdrop-filter: blur(24px) saturate(150%);
-  border: 1px solid color-mix(in srgb, white 4%, transparent);
+  border: 1px solid var(--glass-border-subtle);
   border-radius: var(--radius-lg);
 }
 
@@ -104,8 +163,8 @@
     0deg,
     transparent,
     transparent 1px,
-    rgba(255, 255, 255, 0.015) 1px,
-    rgba(255, 255, 255, 0.015) 2px
+    var(--scanlines-color) 1px,
+    var(--scanlines-color) 2px
   );
   z-index: 1;
 }
@@ -243,14 +302,14 @@
   top: 50%;
   transform: translateY(-50%);
   padding: 4px 10px;
-  background: #1a1a1a;
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--color-muted);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #a1a1aa;
+  color: var(--color-foreground);
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -329,7 +388,7 @@
 
 .corner-brackets {
   position: relative;
-  border: 1px solid #27272a; /* border-zinc-800 */
+  border: 1px solid var(--color-border);
 }
 
 .corner-brackets::before, .corner-brackets::after {
@@ -375,8 +434,8 @@
 .scanlines {
   background: repeating-linear-gradient(
     45deg,
-    rgba(255, 255, 255, 0.01),
-    rgba(255, 255, 255, 0.01) 1px,
+    var(--scanlines-color),
+    var(--scanlines-color) 1px,
     transparent 1px,
     transparent 4px
   );
@@ -408,8 +467,8 @@
 .chatbox-glow-ring {
   position: relative;
   border-radius: 12px;
-  background: #09090b;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
   transition: all 0.3s ease;
 }
 

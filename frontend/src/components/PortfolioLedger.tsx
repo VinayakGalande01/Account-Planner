@@ -105,34 +105,34 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
   }, [accounts]);
 
   return (
-    <div className="corner-brackets bg-[#080808] rounded-md overflow-hidden">
+    <div className="corner-brackets bg-card rounded-md overflow-hidden">
       {/* Header Bar */}
-      <div className="px-4 py-3 border-b border-white/[0.04] flex items-center justify-between bg-white/[0.01]">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between bg-muted/30">
         <div className="flex items-center gap-4">
           <h3 className="text-[13px] font-black uppercase tracking-[0.25em] text-foreground flex items-center gap-2 font-[family-name:var(--font-mono)]">
             <span className="text-primary">&gt;</span> Account Directory
-            <span className="text-zinc-800 ml-2 font-normal lowercase tracking-normal">{accounts.length} records</span>
+            <span className="text-zinc-600 dark:text-zinc-800 ml-2 font-normal lowercase tracking-normal">{accounts.length} records</span>
           </h3>
         </div>
         <div className="flex items-center gap-2">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-600" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
             <input
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Filter..."
-              className="bg-white/[0.02] border border-white/[0.04] rounded-md pl-7 pr-3 py-1.5 text-[13px] focus:outline-none focus:border-primary/30 text-foreground placeholder:text-zinc-700 w-36 font-[family-name:var(--font-mono)]"
+              className="bg-muted border border-border rounded-md pl-7 pr-3 py-1.5 text-[13px] focus:outline-none focus:border-primary/30 text-foreground placeholder:text-zinc-500 w-36 font-[family-name:var(--font-mono)]"
             />
           </div>
           {/* Tier Filter */}
           <select
             value={tierFilter}
             onChange={(e) => setTierFilter(e.target.value)}
-            className="bg-white/[0.02] border border-white/[0.04] rounded-md px-2 py-1.5 text-[13px] text-zinc-400 focus:outline-none focus:border-primary/30 font-[family-name:var(--font-mono)] uppercase appearance-none cursor-pointer"
+            className="bg-muted border border-border rounded-md px-2 py-1.5 text-[13px] text-zinc-500 dark:text-zinc-400 focus:outline-none focus:border-primary/30 font-[family-name:var(--font-mono)] uppercase appearance-none cursor-pointer"
           >
-            <option value="all">All Tiers</option>
-            {tiers.map(t => <option key={t} value={t}>{t}</option>)}
+            <option value="all" className="bg-card">All Tiers</option>
+            {tiers.map(t => <option key={t} value={t} className="bg-card">{t}</option>)}
           </select>
         </div>
       </div>
@@ -141,34 +141,34 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
       <div className="overflow-x-auto scrollbar-tactical" style={{ perspective: '1000px' }}>
         <table className="w-full text-left text-[13px] border-collapse">
           <thead>
-            <tr className="border-b border-white/[0.04] bg-white/[0.01]">
+            <tr className="border-b border-border bg-muted/30">
               <th
-                className="px-4 py-2.5 font-bold uppercase text-zinc-600 tracking-[0.08em] cursor-pointer hover:text-zinc-400 transition-colors select-none font-[family-name:var(--font-mono)]"
+                className="px-4 py-2.5 font-bold uppercase text-zinc-600 dark:text-zinc-500 tracking-[0.08em] cursor-pointer hover:text-zinc-400 transition-colors select-none font-[family-name:var(--font-mono)]"
                 onClick={() => handleSort('Account_Name')}
               >
                 <span className="inline-flex items-center gap-1.5">Account <SortIcon column="Account_Name" /></span>
               </th>
-              <th className="px-3 py-2.5 font-bold uppercase text-zinc-600 tracking-[0.08em] text-center font-[family-name:var(--font-mono)]">Industry</th>
-              <th className="px-3 py-2.5 font-bold uppercase text-zinc-600 tracking-[0.08em] text-center font-[family-name:var(--font-mono)]">Territory</th>
+              <th className="px-3 py-2.5 font-bold uppercase text-zinc-600 dark:text-zinc-500 tracking-[0.08em] text-center font-[family-name:var(--font-mono)]">Industry</th>
+              <th className="px-3 py-2.5 font-bold uppercase text-zinc-600 dark:text-zinc-500 tracking-[0.08em] text-center font-[family-name:var(--font-mono)]">Territory</th>
               <th
-                className="px-3 py-2.5 font-bold uppercase text-zinc-600 tracking-[0.08em] text-center cursor-pointer hover:text-zinc-400 transition-colors select-none font-[family-name:var(--font-mono)]"
+                className="px-3 py-2.5 font-bold uppercase text-zinc-600 dark:text-zinc-500 tracking-[0.08em] text-center cursor-pointer hover:text-zinc-400 transition-colors select-none font-[family-name:var(--font-mono)]"
                 onClick={() => handleSort('Account_Tier')}
               >
                 <span className="inline-flex items-center gap-1.5">Tier <SortIcon column="Account_Tier" /></span>
               </th>
               <th
-                className="px-3 py-2.5 font-bold uppercase text-zinc-600 tracking-[0.08em] text-center cursor-pointer hover:text-zinc-400 transition-colors select-none font-[family-name:var(--font-mono)]"
+                className="px-3 py-2.5 font-bold uppercase text-zinc-600 dark:text-zinc-500 tracking-[0.08em] text-center cursor-pointer hover:text-zinc-400 transition-colors select-none font-[family-name:var(--font-mono)]"
                 onClick={() => handleSort('health_score')}
               >
                 <span className="inline-flex items-center gap-1.5">Health <SortIcon column="health_score" /></span>
               </th>
               <th
-                className="px-3 py-2.5 font-bold uppercase text-zinc-600 tracking-[0.08em] text-right cursor-pointer hover:text-zinc-400 transition-colors select-none font-[family-name:var(--font-mono)]"
+                className="px-3 py-2.5 font-bold uppercase text-zinc-600 dark:text-zinc-500 tracking-[0.08em] text-right cursor-pointer hover:text-zinc-400 transition-colors select-none font-[family-name:var(--font-mono)]"
                 onClick={() => handleSort('total_pipeline_value')}
               >
                 <span className="inline-flex items-center gap-1.5 justify-end">Pipeline <SortIcon column="total_pipeline_value" /></span>
               </th>
-              <th className="px-3 py-2.5 font-bold uppercase text-zinc-600 tracking-[0.08em] text-center font-[family-name:var(--font-mono)]">Last Activity</th>
+              <th className="px-3 py-2.5 font-bold uppercase text-zinc-600 dark:text-zinc-500 tracking-[0.08em] text-center font-[family-name:var(--font-mono)]">Last Activity</th>
               <th className="px-3 py-2.5 w-10"></th>
             </tr>
           </thead>
@@ -177,7 +177,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
               <>
                 {/* Ghost skeleton rows */}
                 {Array.from({ length: 6 }).map((_, rowIdx) => (
-                  <tr key={rowIdx} className="border-b border-white/[0.02] ghost-row" style={{ height: '40px', animationDelay: `${rowIdx * 0.2}s` }}>
+                  <tr key={rowIdx} className="border-b border-border/40 ghost-row" style={{ height: '40px', animationDelay: `${rowIdx * 0.2}s` }}>
                     <td className="px-4 py-2"><div className="ghost-cell w-32" style={{ animationDelay: `${rowIdx * 0.15}s` }} /></td>
                     <td className="px-3 py-2"><div className="ghost-cell w-16 mx-auto" style={{ animationDelay: `${rowIdx * 0.15 + 0.05}s` }} /></td>
                     <td className="px-3 py-2"><div className="ghost-cell w-12 mx-auto" style={{ animationDelay: `${rowIdx * 0.15 + 0.1}s` }} /></td>
@@ -190,7 +190,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                 ))}
                 {/* Terminal log overlay */}
                 <tr>
-                  <td colSpan={8} className="px-4 py-3 bg-white/[0.01]">
+                  <td colSpan={8} className="px-4 py-3 bg-muted/30">
                     <div className="font-[family-name:var(--font-mono)] text-[12px] space-y-1">
                       <div className={logPhase >= 1 ? "text-emerald-500" : "text-emerald-500/40"}>
                         <span className="text-zinc-600">&gt;</span> Fetching Territory Data... 
@@ -234,7 +234,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                   }}
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   onClick={() => onAccountClick(acc)}
-                  className="border-b border-white/[0.02] cursor-pointer group relative"
+                  className="border-b border-border/40 cursor-pointer group relative"
                   style={{ height: '40px', transformStyle: 'preserve-3d' }}
                 >
                   <td className="px-4 py-0 relative z-10">
@@ -257,7 +257,7 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                   <td className="px-3 py-0 text-center relative z-10">
                     <div className="flex flex-col items-center gap-0.5">
                       <span className="text-[14px] font-black data-cell">{acc.health_score ?? '—'}</span>
-                      <div className="w-10 h-[3px] bg-white/[0.04] rounded-full overflow-hidden">
+                      <div className="w-10 h-[3px] bg-muted rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${getHealthColor(acc.health_score ?? 0)}`}
                           style={{ width: `${Math.min(acc.health_score ?? 0, 100)}%` }}
@@ -278,10 +278,10 @@ export default function PortfolioLedger({ accounts, loading, search, onSearchCha
                        
                        {/* Micro-actions overlay on hover */}
                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2 transition-opacity absolute right-4">
-                         <div className="p-1 hover:bg-white/[0.05] rounded text-zinc-400 hover:text-white transition-colors" data-tooltip="Edit">
+                         <div className="p-1 hover:bg-muted rounded text-zinc-400 hover:text-white transition-colors" data-tooltip="Edit">
                            <Edit className="w-3 h-3" />
                          </div>
-                         <div className="p-1 hover:bg-white/[0.05] rounded text-emerald-500 hover:text-white transition-colors" data-tooltip="Signal">
+                         <div className="p-1 hover:bg-muted rounded text-emerald-500 hover:text-white transition-colors" data-tooltip="Signal">
                            <Terminal className="w-3 h-3" />
                          </div>
                          <div className="p-1 hover:bg-red-500/10 rounded text-red-500 transition-colors" data-tooltip="Flag Risk">

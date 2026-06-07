@@ -33,10 +33,10 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
     <motion.aside
       animate={{ width: isCollapsed ? 64 : 240 }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-      className="border-r border-white/[0.04] bg-[#050505] flex flex-col h-full shrink-0 overflow-hidden relative z-40"
+      className="border-r border-border bg-card flex flex-col h-full shrink-0 overflow-hidden relative z-40"
     >
       {/* Logo */}
-      <div className="h-16 border-b border-white/[0.04] flex items-center gap-3 px-4 shrink-0">
+      <div className="h-16 border-b border-border flex items-center gap-3 px-4 shrink-0">
         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center font-black text-white text-[12px] shrink-0 shadow-[0_0_20px_rgba(37,99,235,0.3)]">
           AP
         </div>
@@ -67,7 +67,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
               } ${
                 isActive
                   ? 'bg-primary/10 text-primary'
-                  : 'text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-300'
+                  : 'text-zinc-500 hover:bg-muted dark:hover:bg-white/[0.03] hover:text-zinc-300'
               }`}
             >
               <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors duration-150 ${
@@ -93,7 +93,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
       {/* System Status */}
       <div className="px-2 pb-2 shrink-0">
         {!isCollapsed ? (
-          <div className="p-3 bg-white/[0.02] rounded-md border border-white/[0.04] space-y-2">
+          <div className="p-3 bg-muted/30 rounded-md border border-border space-y-2">
             <div className="flex items-center gap-2">
               <Activity className={`w-3 h-3 ${statusColor}`} />
               <span className={`text-[12px] font-bold uppercase tracking-[0.15em] ${statusColor} font-[family-name:var(--font-mono)]`}>
@@ -116,7 +116,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
       {/* Collapse Toggle */}
       <button
         onClick={onToggleCollapse}
-        className="h-10 border-t border-white/[0.04] flex items-center justify-center text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.03] transition-all shrink-0"
+        className="h-10 border-t border-border flex items-center justify-center text-zinc-600 hover:text-zinc-400 hover:bg-muted dark:hover:bg-white/[0.03] transition-all shrink-0"
       >
         {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
       </button>

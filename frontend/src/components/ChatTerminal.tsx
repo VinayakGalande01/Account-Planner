@@ -196,15 +196,15 @@ export default function ChatTerminal() {
   };
 
   return (
-    <div className="corner-brackets flex flex-col h-full bg-[#030303] rounded-md overflow-hidden relative">
+    <div className="corner-brackets flex flex-col h-full bg-background rounded-md overflow-hidden relative">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-white/[0.04] bg-white/[0.01] flex items-center justify-between shrink-0 relative z-10">
+      <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between shrink-0 relative z-10">
         <div className="flex items-center gap-3">
           <Terminal className="w-3.5 h-3.5 text-primary" />
           <span className="text-[13px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
             APEX v2.1
           </span>
-          <span className="text-[12px] text-zinc-600 font-[family-name:var(--font-mono)]">// CONNECTED</span>
+          <span className="text-[12px] text-zinc-500 dark:text-zinc-600 font-[family-name:var(--font-mono)]">// CONNECTED</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center space-x-[2px] h-2">
@@ -221,9 +221,9 @@ export default function ChatTerminal() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="px-4 py-2 border-b border-white/[0.04] bg-white/[0.01] relative z-10"
+            className="px-4 py-2 border-b border-border bg-muted/30 relative z-10"
           >
-            <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded text-[12px] font-black uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] border border-white/[0.06] ${stageConfig[processingStage].className}`}>
+            <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded text-[12px] font-black uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] border border-border ${stageConfig[processingStage].className}`}>
               <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
               {stageConfig[processingStage].label}
             </span>
@@ -253,7 +253,7 @@ export default function ChatTerminal() {
             </div>
 
             {msg.role === 'user' && (
-              <div className="w-6 h-6 rounded bg-white/[0.04] flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-6 h-6 rounded bg-muted flex items-center justify-center shrink-0 mt-0.5">
                 <User className="w-3 h-3 text-zinc-500" />
               </div>
             )}
@@ -280,7 +280,7 @@ export default function ChatTerminal() {
           <input
             type="text"
             placeholder="Ask a question about your accounts..."
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-zinc-700 focus:outline-none font-[family-name:var(--font-mono)] font-medium"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-zinc-500 focus:outline-none font-[family-name:var(--font-mono)] font-medium"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
