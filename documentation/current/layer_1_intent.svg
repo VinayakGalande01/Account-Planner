@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="100%" height="100%">
+    <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#0f172a" />
+            <stop offset="100%" stop-color="#1e293b" />
+        </linearGradient>
+        
+        <linearGradient id="primary" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#3b82f6" />
+            <stop offset="100%" stop-color="#2563eb" />
+        </linearGradient>
+        
+        <linearGradient id="secondary" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#8b5cf6" />
+            <stop offset="100%" stop-color="#6d28d9" />
+        </linearGradient>
+
+        <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.4"/>
+        </filter>
+
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+        </marker>
+    </defs>
+
+    <!-- Background -->
+    <rect width="100%" height="100%" fill="url(#bg)" rx="12" />
+    
+    <!-- Header -->
+    <text x="50" y="60" font-family="'Inter', sans-serif" font-size="28" font-weight="800" fill="#ffffff">PHASE 1: Intent Classification</text>
+    <rect x="50" y="80" width="900" height="2" fill="#334155" />
+
+    <!-- Info Panels -->
+    <!-- WHAT -->
+    <rect x="50" y="110" width="280" height="100" rx="8" fill="#1e293b" stroke="#3b82f6" stroke-width="2" />
+    <text x="70" y="140" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#60a5fa">WHAT (Objective)</text>
+    <text x="70" y="165" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">The system analyzes the raw text</text>
+    <text x="70" y="185" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">to determine exactly what the</text>
+    <text x="70" y="205" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">user wants and extracts targets.</text>
+
+    <!-- HOW -->
+    <rect x="360" y="110" width="280" height="100" rx="8" fill="#1e293b" stroke="#8b5cf6" stroke-width="2" />
+    <text x="380" y="140" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#a78bfa">HOW (Mechanism)</text>
+    <text x="380" y="165" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">Via `intent_classifier.py`.</text>
+    <text x="380" y="185" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">Applies Rule-based NLP and</text>
+    <text x="380" y="205" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">Regex dictionary matching.</text>
+
+    <!-- WHEN -->
+    <rect x="670" y="110" width="280" height="100" rx="8" fill="#1e293b" stroke="#10b981" stroke-width="2" />
+    <text x="690" y="140" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#34d399">WHEN (Timing)</text>
+    <text x="690" y="165" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">Immediately upon receiving</text>
+    <text x="690" y="185" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">the HTTP POST request from</text>
+    <text x="690" y="205" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">the Next.js client.</text>
+
+    <!-- Diagram Section -->
+    <rect x="50" y="250" width="900" height="300" rx="12" fill="#0f172a" stroke="#334155" stroke-dasharray="4,4" />
+    <text x="500" y="280" font-family="'Inter', sans-serif" font-size="14" font-weight="600" fill="#64748b" text-anchor="middle">Visual Data Flow</text>
+
+    <!-- Flow Lines -->
+    <path d="M 230 420 L 350 420" fill="none" stroke="#94a3b8" stroke-width="3" marker-end="url(#arrow)" />
+    <path d="M 650 420 L 770 420" fill="none" stroke="#94a3b8" stroke-width="3" marker-end="url(#arrow)" />
+
+    <!-- Step 1: Input -->
+    <g transform="translate(80, 360)" filter="url(#shadow)">
+        <rect width="150" height="120" rx="8" fill="#334155" />
+        <text x="75" y="30" font-family="'Inter', sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">Raw Query</text>
+        <text x="75" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">"Show me the</text>
+        <text x="75" y="75" font-family="'Inter', sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">pipeline for</text>
+        <text x="75" y="95" font-family="'Inter', sans-serif" font-size="12" fill="#facc15" font-weight="700" text-anchor="middle">Google</text>
+    </g>
+
+    <!-- Step 2: Processing Module -->
+    <g transform="translate(350, 340)" filter="url(#shadow)">
+        <rect width="300" height="160" rx="8" fill="url(#primary)" />
+        <text x="150" y="35" font-family="'Inter', sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">Intent Classifier Core</text>
+        
+        <rect x="20" y="60" width="260" height="30" rx="4" fill="#1e293b" />
+        <text x="150" y="80" font-family="'Inter', sans-serif" font-size="12" fill="#93c5fd" text-anchor="middle">1. Tokenization &amp; Normalization</text>
+
+        <rect x="20" y="100" width="260" height="30" rx="4" fill="#1e293b" />
+        <text x="150" y="120" font-family="'Inter', sans-serif" font-size="12" fill="#93c5fd" text-anchor="middle">2. Regex / Dictionary Lookup</text>
+    </g>
+
+    <!-- Step 3: Output -->
+    <g transform="translate(770, 360)" filter="url(#shadow)">
+        <rect width="160" height="120" rx="8" fill="#334155" stroke="#10b981" stroke-width="2" />
+        <text x="80" y="30" font-family="'Inter', sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">Structured Context</text>
+        <text x="80" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">Intent:</text>
+        <text x="80" y="75" font-family="'Inter', sans-serif" font-size="14" fill="#34d399" font-weight="700" text-anchor="middle">get_pipeline</text>
+        <text x="80" y="95" font-family="'Inter', sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">Entities: [Google]</text>
+    </g>
+
+</svg>

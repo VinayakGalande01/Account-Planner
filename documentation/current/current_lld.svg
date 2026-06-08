@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 800" width="100%" height="100%">
+    <defs>
+        <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#0f172a" />
+            <stop offset="100%" stop-color="#1e293b" />
+        </linearGradient>
+
+        <linearGradient id="routerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#2563eb" />
+            <stop offset="100%" stop-color="#1d4ed8" />
+        </linearGradient>
+
+        <linearGradient id="pipelineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#8b5cf6" />
+            <stop offset="100%" stop-color="#6d28d9" />
+        </linearGradient>
+
+        <linearGradient id="dataGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#10b981" />
+            <stop offset="100%" stop-color="#059669" />
+        </linearGradient>
+
+        <linearGradient id="reasoningGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#f59e0b" />
+            <stop offset="100%" stop-color="#d97706" />
+        </linearGradient>
+
+        <!-- Drop Shadow -->
+        <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.3"/>
+        </filter>
+
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+        </marker>
+    </defs>
+
+    <rect width="100%" height="100%" fill="url(#bgGradient)" rx="12" />
+    <text x="500" y="40" font-family="'Inter', sans-serif" font-size="24" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="1">APEX: Current Low Level Design (LLD)</text>
+    <text x="500" y="65" font-family="'Inter', sans-serif" font-size="14" font-weight="400" fill="#94a3b8" text-anchor="middle">FastAPI Internal Module Architecture</text>
+
+    <!-- Zone Background -->
+    <rect x="50" y="100" width="900" height="640" rx="16" fill="rgba(255, 255, 255, 0.03)" stroke="#475569" stroke-dasharray="6,4" />
+    <text x="120" y="130" font-family="'Inter', sans-serif" font-size="16" font-weight="600" fill="#94a3b8" text-anchor="middle">Backend Core</text>
+
+    <!-- LINES -->
+    <!-- Input to main -->
+    <path d="M 500 150 L 500 180" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
+    
+    <!-- main to pipeline -->
+    <path d="M 500 260 L 500 320" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
+    
+    <!-- pipeline to intent -->
+    <path d="M 400 360 L 320 360 L 320 400" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
+    
+    <!-- pipeline to data engine -->
+    <path d="M 500 400 L 500 440" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
+    
+    <!-- data engine to reasoning -->
+    <path d="M 500 520 L 500 560" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
+
+    <!-- reasoning to mapping -->
+    <path d="M 500 640 L 500 680" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
+
+    <!-- mapping back to main (Response) -->
+    <path d="M 660 720 L 850 720 L 850 220 L 660 220" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4,2" marker-end="url(#arrow)" />
+    <text x="860" y="480" font-family="'Inter', sans-serif" font-size="12" fill="#cbd5e1" text-anchor="start" transform="rotate(-90 850 480)">Streaming Response Delivery</text>
+
+    <!-- NODES -->
+    <!-- main.py -->
+    <g transform="translate(340, 180)" filter="url(#shadow)">
+        <rect width="320" height="80" rx="8" fill="url(#routerGrad)" />
+        <text x="160" y="35" font-family="'Inter', sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">main.py (Router)</text>
+        <text x="160" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#e2e8f0" text-anchor="middle">Accepts /api/chat &amp; Handles SSE Stream</text>
+    </g>
+
+    <!-- agent_pipeline.py -->
+    <g transform="translate(400, 320)" filter="url(#shadow)">
+        <rect width="200" height="80" rx="8" fill="url(#pipelineGrad)" />
+        <text x="100" y="35" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">agent_pipeline.py</text>
+        <text x="100" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#e2e8f0" text-anchor="middle">Orchestrates Execution</text>
+    </g>
+
+    <!-- intent_classifier.py -->
+    <g transform="translate(220, 400)" filter="url(#shadow)">
+        <rect width="200" height="80" rx="8" fill="#334155" stroke="#475569" stroke-width="2" />
+        <text x="100" y="35" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">intent_classifier.py</text>
+        <text x="100" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">Rule-based NLP matching</text>
+    </g>
+
+    <!-- data_engine.py -->
+    <g transform="translate(350, 440)" filter="url(#shadow)">
+        <rect width="300" height="80" rx="8" fill="url(#dataGrad)" />
+        <text x="150" y="35" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">data_engine.py</text>
+        <text x="150" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#e2e8f0" text-anchor="middle">Pandas Extract &amp; Filter (Local Excel)</text>
+    </g>
+
+    <!-- reasoning_engine.py -->
+    <g transform="translate(350, 560)" filter="url(#shadow)">
+        <rect width="300" height="80" rx="8" fill="url(#reasoningGrad)" />
+        <text x="150" y="35" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">reasoning_engine.py</text>
+        <text x="150" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#e2e8f0" text-anchor="middle">Builds Prompt &amp; Calls Local Ollama</text>
+    </g>
+
+    <!-- section_mapper.py -->
+    <g transform="translate(340, 680)" filter="url(#shadow)">
+        <rect width="320" height="80" rx="8" fill="#334155" stroke="#475569" stroke-width="2" />
+        <text x="160" y="35" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">section_mapper.py</text>
+        <text x="160" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#e2e8f0" text-anchor="middle">Formats response chunks for frontend UI</text>
+    </g>
+</svg>
