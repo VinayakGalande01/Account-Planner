@@ -58,6 +58,10 @@ export function parseResponseContract(content: string): ResponseContract {
         contract.headline = sectionContent;
         break;
 
+      case 'DIRECT_ANSWER':
+        contract.directAnswer = sectionContent;
+        break;
+
       case 'EXECUTIVE_SUMMARY':
         contract.executiveSummary = sectionContent;
         break;

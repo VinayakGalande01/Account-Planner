@@ -753,9 +753,15 @@ def curate_llm_context(
     account_id: Optional[str],
     synthesis: SynthesisResult,
     table_data: Optional[dict] = None,
+    query_scope: str = "Mixed",
 ) -> str:
     """
     Curate the context sent to the LLM.
+
+    Information Choreography:
+        Each context block is gated through eligibility rules based on
+        intent + query_scope. Non-eligible blocks are stripped so the LLM
+        never sees irrelevant context (preventing context contamination).
 
     When a ReasoningPackage is present on the synthesis result, it takes priority
     and provides the LLM with pre-computed recommendations, ranked contacts,
@@ -764,11 +770,16 @@ def curate_llm_context(
     The LLM NEVER receives raw CRM records or full contact/opportunity tables.
     It receives ONLY curated intelligence outputs from the reasoning layer.
     """
+    from response_blueprint import is_context_eligible
+
+    def _eligible(block_name: str) -> bool:
+        return is_context_eligible(block_name, intent, query_scope)
+
     sections = []
     pkg = synthesis.reasoning_package  # May be None for global/non-entity queries
 
     # ── Section 1: Business Decision Context ──────────────────────────────────
-    if pkg and pkg.decision_context:
+    if _eligible("business_decision_context") and pkg and pkg.decision_context:
         dc = pkg.decision_context
         sections.append("[Business Decision Context]")
         sections.append(f"  Decision: {dc.decision_label}")
@@ -778,27 +789,28 @@ def curate_llm_context(
         sections.append("")
 
     # ── Section 2: Situation (specific, data-backed) ──────────────────────────
-    if pkg and pkg.situation_summary:
-        sections.append("[Current Situation]")
-        sections.append(f"  {pkg.situation_summary}")
-        sections.append("")
-    else:
-        # Fallback: portfolio-level metrics when no entity is scoped
-        opps = engine.data.get('opportunity')
-        if opps is not None and not opps.empty:
-            open_opps = opps[~opps['Stage'].isin(['Closed Won', 'Closed Lost'])]
-            total = open_opps['Amount_USD'].sum() if not open_opps.empty else 0
-            weighted = (open_opps['Amount_USD'] * open_opps['Probability_Pct'] / 100.0).sum() if not open_opps.empty else 0
-            deal_count = len(open_opps)
-            sections.append("[Portfolio Metrics]")
-            sections.append(f"  Total Open Pipeline: {HumanizedPriority.format_currency(total)}")
-            sections.append(f"  Weighted Forecast: {HumanizedPriority.format_currency(weighted)}")
-            sections.append(f"  Active Deals: {deal_count}")
-            sections.append(f"  Execution Gap: {HumanizedPriority.format_currency(total - weighted)}")
+    if _eligible("current_situation"):
+        if pkg and pkg.situation_summary:
+            sections.append("[Current Situation]")
+            sections.append(f"  {pkg.situation_summary}")
             sections.append("")
+        elif _eligible("portfolio_metrics"):
+            # Fallback: portfolio-level metrics when no entity is scoped
+            opps = engine.data.get('opportunity')
+            if opps is not None and not opps.empty:
+                open_opps = opps[~opps['Stage'].isin(['Closed Won', 'Closed Lost'])]
+                total = open_opps['Amount_USD'].sum() if not open_opps.empty else 0
+                weighted = (open_opps['Amount_USD'] * open_opps['Probability_Pct'] / 100.0).sum() if not open_opps.empty else 0
+                deal_count = len(open_opps)
+                sections.append("[Portfolio Metrics]")
+                sections.append(f"  Total Open Pipeline: {HumanizedPriority.format_currency(total)}")
+                sections.append(f"  Weighted Forecast: {HumanizedPriority.format_currency(weighted)}")
+                sections.append(f"  Active Deals: {deal_count}")
+                sections.append(f"  Execution Gap: {HumanizedPriority.format_currency(total - weighted)}")
+                sections.append("")
 
     # ── Section 3: Stakeholder Recommendations ────────────────────────────────
-    if pkg and pkg.primary_recommendation:
+    if _eligible("stakeholder_recommendations") and pkg and pkg.primary_recommendation:
         pc = pkg.primary_recommendation
         sections.append("[Primary Contact Recommendation]")
         sections.append(f"  Name: {pc.name}")
@@ -822,7 +834,7 @@ def curate_llm_context(
             sections.append("")
 
     # ── Section 4: Next Best Actions ──────────────────────────────────────────
-    if pkg and pkg.next_best_actions:
+    if _eligible("next_best_actions") and pkg and pkg.next_best_actions:
         sections.append("[Next Best Actions — Evidence-Based]")
         for i, action in enumerate(pkg.next_best_actions, 1):
             sections.append(f"  {i}. [{action.urgency}] [{action.confidence} confidence] {action.text}")
@@ -832,7 +844,7 @@ def curate_llm_context(
         sections.append("")
 
     # ── Section 5: Consequences of Inaction (prominent, not buried) ───────────
-    if pkg and pkg.next_best_actions:
+    if _eligible("consequences_of_inaction") and pkg and pkg.next_best_actions:
         inaction_risks = [a.ignore_risk for a in pkg.next_best_actions if a.ignore_risk]
         if inaction_risks:
             sections.append("[⚠ CONSEQUENCES OF INACTION]")
@@ -841,27 +853,27 @@ def curate_llm_context(
             sections.append("")
 
     # ── Section 6: Risk Implications ──────────────────────────────────────────
-    if pkg and pkg.risk_implications:
+    if _eligible("risk_implications") and pkg and pkg.risk_implications:
         sections.append("[Risk Implications]")
         for r in pkg.risk_implications:
             sections.append(f"  • {r}")
         sections.append("")
 
     # ── Section 7: Business Impact ────────────────────────────────────────────
-    if pkg and pkg.business_impact:
+    if _eligible("business_impact") and pkg and pkg.business_impact:
         sections.append("[Business Impact]")
         sections.append(f"  {pkg.business_impact}")
         sections.append("")
 
     # ── Section 8: Reasoning Evidence ────────────────────────────────────────
-    if pkg and pkg.reasoning_evidence:
+    if _eligible("reasoning_evidence") and pkg and pkg.reasoning_evidence:
         sections.append("[Data Evidence Driving Recommendations]")
         for ev in pkg.reasoning_evidence:
             sections.append(f"  • {ev}")
         sections.append("")
 
     # ── Section 9: Portfolio State (global queries) ───────────────────────────
-    if pkg and pkg.portfolio_state:
+    if _eligible("portfolio_state") and pkg and pkg.portfolio_state:
         ps = pkg.portfolio_state
         sections.append("[Portfolio State]")
         if ps.get("total_pipeline"):
@@ -879,27 +891,27 @@ def curate_llm_context(
         sections.append("")
 
     # ── Section 10: Classified Intelligence Signals (from synthesis) ──────────
-    if synthesis.classified_signals:
+    if _eligible("portfolio_intelligence_signals") and synthesis.classified_signals:
         sections.append("[Portfolio Intelligence Signals]")
         for cs in synthesis.classified_signals:
             sections.append(f"  [{cs.signal_type.value}] {cs.text}")
         sections.append("")
 
     # ── Section 11: Table hint (LLM never re-generates the table) ────────────
-    if table_data and table_data.get('rows'):
+    if _eligible("table_hint") and table_data and table_data.get('rows'):
         rows = table_data['rows']
         sections.append(f"[Data Table: {len(rows)} records pre-rendered for the user]")
         sections.append("  (Do NOT re-generate this table. It is already displayed to the user.)")
         sections.append("")
 
     # ── Section 12: Strategic context (why this matters) ─────────────────────
-    if synthesis.why_this_matters:
+    if _eligible("strategic_context") and synthesis.why_this_matters:
         sections.append("[Strategic Context]")
         sections.append(f"  {synthesis.why_this_matters}")
         sections.append("")
 
     # ── Section 13: Confidence Assessment ────────────────────────────────────
-    if pkg and pkg.confidence:
+    if _eligible("confidence_assessment") and pkg and pkg.confidence:
         sections.append("[Confidence Assessment]")
         sections.append(f"  {pkg.confidence.to_summary()}")
         sections.append("")

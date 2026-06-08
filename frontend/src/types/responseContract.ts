@@ -52,6 +52,8 @@ export interface ResponseContract {
   confidence: ConfidenceData | null;
   /** Executive Why This Matters summary */
   whyThisMatters?: string;
+  /** Direct answer to the user's question (rendered first, before headline) */
+  directAnswer?: string;
   /** Raw text content for fallback rendering */
   rawContent: string;
   /** Whether the response contains structured __SECTION_*__ tags */
@@ -63,6 +65,7 @@ export interface ResponseContract {
 /** Section names as they appear in the streaming transport format */
 export type SectionName =
   | 'INTENT'
+  | 'DIRECT_ANSWER'
   | 'HEADLINE'
   | 'EXECUTIVE_SUMMARY'
   | 'SUMMARY'
@@ -80,6 +83,7 @@ export type SectionName =
  * Frontend renders sections in this order regardless of stream arrival order.
  */
 export const SECTION_RENDER_ORDER: SectionName[] = [
+  'DIRECT_ANSWER', // Level 0: Immediate factual answer (Question-First Policy)
   'HEADLINE',     // Level 1: Primary attention anchor
   'EXECUTIVE_SUMMARY', // Level 1.5: High-level overview
   'SUMMARY',      // Level 2: Context framing

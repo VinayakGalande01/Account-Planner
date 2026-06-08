@@ -12,6 +12,17 @@
 
 # testing
 /coverage
+# Ignore specific test directories
+__tests__/
+test/
+tests/
+
+# Ignore test files with specific extensions
+*.test.js
+*.spec.js
+*.test.ts
+*.spec.ts
+
 
 # next.js
 /.next/

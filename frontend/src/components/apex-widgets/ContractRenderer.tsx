@@ -20,6 +20,14 @@ import { ConfidenceWidget } from './ConfidenceWidget';
 type WidgetRenderer = (content: string) => React.ReactNode;
 
 const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
+  DIRECT_ANSWER: (content) => (
+    <div className="apex-direct-answer bg-zinc-900/60 border border-zinc-700/50 p-4 rounded-lg mb-1">
+      <p className="text-[14px] text-zinc-100 leading-relaxed font-medium">
+        {content}
+      </p>
+    </div>
+  ),
+
   HEADLINE: (content) => <HeadlineWidget content={content} />,
 
   EXECUTIVE_SUMMARY: (content) => {
@@ -257,6 +265,15 @@ export function FinalizedContractRenderer({ contract }: FinalizedRendererProps) 
 
   return (
     <div className="apex-contract-response space-y-3">
+      {contract.directAnswer && (
+        <div className="apex-section-block">
+          <div className="apex-direct-answer bg-zinc-900/60 border border-zinc-700/50 p-4 rounded-lg mb-1">
+            <p className="text-[14px] text-zinc-100 leading-relaxed font-medium">
+              {contract.directAnswer}
+            </p>
+          </div>
+        </div>
+      )}
       {contract.headline && (
         <div className="apex-section-block">
           <HeadlineWidget content={contract.headline} />

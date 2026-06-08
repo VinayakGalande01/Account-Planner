@@ -1384,3 +1384,1130 @@ def assemble_reasoning_package(
         account_id=account_id,
         account_name=account_name,
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# LAYER 2: MULTI-PERSPECTIVE REASONING ENGINE
+# ═══════════════════════════════════════════════════════════════
+
+import os
+import httpx
+import json
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+
+class PlaybookDay(BaseModel):
+    day: int
+    action: str
+    owner: str
+    expected_outcome: Optional[str] = None
+
+class AMPerspectiveOutput(BaseModel):
+    am_perspective: str
+    playbook_7day: List[PlaybookDay]
+    stakeholder_sequence: List[Dict[str, str]]
+    risks: List[str]
+    success_metrics: List[str]
+    resource_needs: List[str]
+    confidence: float = Field(ge=0.0, le=1.0)
+
+class VPPerspectiveOutput(BaseModel):
+    vp_perspective: str
+    pattern_detection: str
+    peer_comparison: Dict[str, Any]
+    market_hypothesis: str
+    portfolio_recommendation: str
+    resource_allocation: Dict[str, Any]
+    confidence: float = Field(ge=0.0, le=1.0)
+
+class SVPPerspectiveOutput(BaseModel):
+    svp_perspective: str
+    strategic_value: str
+    strategic_fit_score: float = Field(ge=0.0, le=1.0)
+    competitive_threat_level: str  # "low" | "medium" | "high"
+    market_positioning_insight: str
+    keep_vs_let_go_recommendation: str
+    rationale: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+class HistoricalPrecedent(BaseModel):
+    situation: str
+    outcome: str
+    success_rate: float = Field(ge=0.0, le=1.0)
+    match_confidence: float = Field(ge=0.0, le=1.0)
+
+class DataPerspectiveOutput(BaseModel):
+    data_perspective: str
+    key_metrics: Dict[str, Any]
+    data_quality: Dict[str, Any]
+    historical_precedents: List[HistoricalPrecedent]
+    intervention_success_probability: float = Field(ge=0.0, le=1.0)
+    confidence_intervals: Dict[str, List[float]]
+    overall_confidence: float = Field(ge=0.0, le=1.0)
+
+class DissentingView(BaseModel):
+    perspective: str  # "SVP", "VP", "Data"
+    dissent: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    rationale: str
+
+class ConsensusOutput(BaseModel):
+    consensus_recommendation: Dict[str, Any]
+    thread_agreement: Dict[str, float]
+    agreement_score: float = Field(ge=0.0, le=1.0)
+    dissenting_views: List[DissentingView]
+    confidence_limiting_factors: List[str]
+    final_confidence: float = Field(ge=0.0, le=1.0)
+
+
+def repair_json_string(text: str) -> str:
+    """Attempt to repair common JSON syntax issues from LLM outputs."""
+    repaired = text.strip()
+    # Remove markdown code fences
+    repaired = re.sub(r"^```(?:json)?\s*", "", repaired)
+    repaired = re.sub(r"\s*```$", "", repaired)
+    repaired = repaired.strip()
+    
+    # Find prefix (first { or [)
+    start_curly = repaired.find("{")
+    start_bracket = repaired.find("[")
+    if start_curly != -1 or start_bracket != -1:
+        start = start_curly if (start_curly != -1 and (start_bracket == -1 or start_curly < start_bracket)) else start_bracket
+        repaired = repaired[start:]
+        
+    # Strip suffix only if the JSON is NOT truncated (balanced or more closing than opening)
+    open_braces = repaired.count("{")
+    close_braces = repaired.count("}")
+    open_brackets = repaired.count("[")
+    close_brackets = repaired.count("]")
+    
+    if open_braces <= close_braces and open_brackets <= close_brackets:
+        end_curly = repaired.rfind("}")
+        end_bracket = repaired.rfind("]")
+        end = end_curly if (end_curly != -1 and (end_bracket == -1 or end_curly > end_bracket)) else end_bracket
+        if end != -1:
+            repaired = repaired[:end+1]
+        
+    # Convert single-quoted keys and string values to standard double quotes
+    # E.g. 'key': 'value' -> "key": "value"
+    repaired = re.sub(r"'\s*(\w+)\s*'\s*:", r'"\1":', repaired)
+    repaired = re.sub(r":\s*'([^']*)'", r': "\1"', repaired)
+    
+    # Fix invalid escaped single quotes in double-quoted strings
+    repaired = repaired.replace(r"\'", "'")
+    
+    # Escape unescaped control characters (newlines/tabs) inside double-quoted string literals
+    def escape_control_chars(match):
+        val = match.group(0)
+        return val.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+    
+    repaired = re.sub(r'"(?:[^"\\]|\\.)*"', escape_control_chars, repaired)
+    
+    # Replace Python unquoted literals
+    repaired = re.sub(r'\bNone\b', 'null', repaired)
+    repaired = re.sub(r'\bTrue\b', 'true', repaired)
+    repaired = re.sub(r'\bFalse\b', 'false', repaired)
+    
+    # Remove trailing commas before closing braces/brackets
+    repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+    
+    # Try to insert missing commas between adjacent elements like } { or ] [ or } "
+    repaired = re.sub(r'}\s*{', '}, {', repaired)
+    repaired = re.sub(r'\]\s*\[', '], [', repaired)
+    repaired = re.sub(r'}\s*\[', '}, [', repaired)
+    repaired = re.sub(r'\]\s*{', '], {', repaired)
+    repaired = re.sub(r'}\s*"', '}, "', repaired)
+    repaired = re.sub(r'"\s*{', '", {', repaired)
+    
+    # Try to insert missing commas between adjacent elements like "val" "key"
+    repaired = re.sub(r'("[\s\S]*?"|\d+(?:\.\d+)?|true|false|null)\s+(")', r'\1, \2', repaired)
+    
+    # Count unescaped double quotes to heal truncated string values
+    unescaped_quotes = len(re.findall(r'(?<!\\)"', repaired))
+    if unescaped_quotes % 2 != 0:
+        repaired += '"'
+    
+    # Add closing braces if they are unbalanced/truncated
+    open_braces = repaired.count("{")
+    close_braces = repaired.count("}")
+    if open_braces > close_braces:
+        repaired += "}" * (open_braces - close_braces)
+        
+    open_brackets = repaired.count("[")
+    close_brackets = repaired.count("]")
+    if open_brackets > close_brackets:
+        repaired += "]" * (open_brackets - close_brackets)
+        
+    return repaired
+
+
+def summarize_large_dataset(account_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Summarize raw details to keep context window small if data is too large."""
+    if not account_data or "opportunities" not in account_data:
+        return account_data
+        
+    opps = account_data["opportunities"]
+    if len(opps) <= 5:
+        return account_data
+        
+    # Summarize opportunities
+    total_count = len(opps)
+    total_val = sum((o.get("amount_usd", 0.0) or 0.0) for o in opps)
+    
+    # Sort by value descending and keep top 5
+    sorted_opps = sorted(
+        opps, 
+        key=lambda x: (x.get("amount_usd", 0.0) or 0.0), 
+        reverse=True
+    )
+    top_5 = sorted_opps[:5]
+    
+    # Create summarized copy
+    summarized = dict(account_data)
+    summarized["opportunities"] = top_5
+    summarized["total_opportunities_count"] = total_count
+    summarized["total_pipeline_value_usd"] = total_val
+    summarized["opportunities_summary_note"] = f"Showing top 5 opportunities out of {total_count} total by value to optimize context size."
+    
+    return summarized
+
+
+class ReasoningEngine:
+    def __init__(self, model: Optional[str] = None):
+        self.url = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
+        self.model = model or os.getenv("MODEL_NAME", "llama3.2:latest")
+        self.raw_reasoning_bucket = {}
+
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int) -> str:
+        # Enforce conciseness for resource-constrained systems
+        system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. Total JSON output must be under 200 tokens."
+        payload = {
+            "model": self.model,
+            "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON.",
+            "stream": False,
+            "options": {
+                "temperature": 0,
+                "num_predict": 400
+            }
+        }
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(self.url, json=payload)
+            if response.status_code == 200:
+                return response.json().get("response", "").strip()
+            else:
+                raise Exception(f"HTTP error {response.status_code}")
+
+    def _repair_json_string(self, text: str) -> str:
+        return repair_json_string(text)
+
+    def _extract_fallback_fields(self, text: str, thread_name: str) -> dict:
+        """Fallback regex extractor to salvage fields and match standard structures."""
+        # Grab base fallback structure first
+        salvaged = self._fallback_for_thread(thread_name, "JSON Parsing Error")
+        
+        # Regex search for perspective string
+        perspective_key = f"{thread_name}_perspective"
+        perspective_match = re.search(r'"' + re.escape(perspective_key) + r'"\s*:\s*"([^"]+)"', text)
+        if perspective_match:
+            salvaged[perspective_key] = perspective_match.group(1)
+            
+        # Regex search for confidence score
+        conf_match = re.search(r'"confidence"\s*:\s*(0\.\d+|\d+)', text)
+        if conf_match:
+            try:
+                salvaged["confidence"] = float(conf_match.group(1))
+            except:
+                pass
+                
+        # Salvage risks
+        risks_match = re.findall(r'"([^"]+)"', text)
+        if thread_name == 'am' and len(risks_match) > 10:
+            salvaged["risks"] = [r for r in risks_match if len(r) > 15 and r != perspective_key][:3]
+            
+        return salvaged
+
+    def _clean_and_parse(self, text: str, is_consensus: bool = False) -> dict:
+        try:
+            clean_text = text.strip()
+            clean_text = re.sub(r"^```(?:json)?\s*", "", clean_text)
+            clean_text = re.sub(r"\s*```$", "", clean_text)
+            clean_text = clean_text.strip()
+            
+            start = clean_text.find("{")
+            end = clean_text.rfind("}")
+            if start != -1 and end != -1:
+                clean_text = clean_text[start:end+1]
+            return json.loads(clean_text)
+        except Exception as e1:
+            try:
+                repaired = self._repair_json_string(text)
+                return json.loads(repaired)
+            except Exception as e2:
+                if is_consensus:
+                    raise Exception(f"Consensus JSON parsing failed: {e2}")
+                
+                thread_context = 'am'
+                for t in ['vp', 'svp', 'data']:
+                    if f'{t}_perspective' in text:
+                        thread_context = t
+                        break
+                try:
+                    return self._extract_fallback_fields(text, thread_context)
+                except Exception as e3:
+                    return self._fallback_for_thread(thread_context, f"Parsing exception: {e3}")
+
+    def run_reasoning_threads(
+        self,
+        account_data: Dict[str, Any],
+        market_context: Dict[str, Any],
+        timeout_per_thread: int = 15,
+        total_timeout: int = 30,
+        local: bool = True
+    ) -> ConsensusOutput:
+        """
+        Run 4 reasoning threads (AM, VP, SVP, Data).
+        If local=True, runs sequentially to avoid overwhelming single GPU.
+        If local=False, runs in parallel.
+        
+        Args:
+            account_data: Account/opportunity details from Layer 1
+            market_context: Market and competitive context
+            timeout_per_thread: Seconds per thread
+            total_timeout: Max seconds for all threads combined
+            local: True if running on local Ollama instance
+        
+        Returns:
+            ConsensusOutput with all 4 perspectives + consensus
+        """
+        
+        # Summarize large dataset to protect context windows
+        account_data = summarize_large_dataset(account_data)
+        
+        results = {}
+        
+        if local:
+            # Sequential execution for local models to prevent GPU crashing
+            # We use a shorter timeout since they run one after another
+            seq_timeout = max(timeout_per_thread, total_timeout // 4)
+            
+            try:
+                am_res = self._run_am_thread(account_data, seq_timeout)
+                results['am'] = am_res.model_dump() if hasattr(am_res, "model_dump") else am_res
+            except Exception as e:
+                print(f"[ReasoningEngine] Warning: AM thread failed: {e}")
+                results['am'] = self._fallback_for_thread('am', str(e))
+                
+            try:
+                vp_res = self._run_vp_thread(account_data, market_context, seq_timeout)
+                results['vp'] = vp_res.model_dump() if hasattr(vp_res, "model_dump") else vp_res
+            except Exception as e:
+                print(f"[ReasoningEngine] Warning: VP thread failed: {e}")
+                results['vp'] = self._fallback_for_thread('vp', str(e))
+                
+            try:
+                svp_res = self._run_svp_thread(account_data, market_context, seq_timeout)
+                results['svp'] = svp_res.model_dump() if hasattr(svp_res, "model_dump") else svp_res
+            except Exception as e:
+                print(f"[ReasoningEngine] Warning: SVP thread failed: {e}")
+                results['svp'] = self._fallback_for_thread('svp', str(e))
+                
+            try:
+                data_res = self._run_data_thread(account_data, seq_timeout)
+                results['data'] = data_res.model_dump() if hasattr(data_res, "model_dump") else data_res
+            except Exception as e:
+                print(f"[ReasoningEngine] Warning: Data thread failed: {e}")
+                results['data'] = self._fallback_for_thread('data', str(e))
+                
+        else:
+            # Parallel execution for cloud models
+            executor = ThreadPoolExecutor(max_workers=4)
+            futures = {}
+            
+            futures['am'] = executor.submit(self._run_am_thread, account_data, timeout_per_thread)
+            futures['vp'] = executor.submit(self._run_vp_thread, account_data, market_context, timeout_per_thread)
+            futures['svp'] = executor.submit(self._run_svp_thread, account_data, market_context, timeout_per_thread)
+            futures['data'] = executor.submit(self._run_data_thread, account_data, timeout_per_thread)
+            
+            start_time = time.time()
+            
+            for thread_name, future in futures.items():
+                elapsed = time.time() - start_time
+                remaining_timeout = max(0.5, total_timeout - elapsed)
+                
+                try:
+                    res_obj = future.result(timeout=remaining_timeout)
+                    results[thread_name] = res_obj.model_dump() if hasattr(res_obj, "model_dump") else res_obj
+                except Exception as e:
+                    print(f"[ReasoningEngine] Warning: Thread {thread_name} failed/timed out: {e}")
+                    results[thread_name] = self._fallback_for_thread(thread_name, str(e))
+        
+        # Build consensus from 4 threads
+        consensus = self._build_consensus(results, timeout_per_thread)
+        return consensus
+    
+    def _run_am_thread(self, account_data: Dict, timeout: int) -> AMPerspectiveOutput:
+        system_prompt = """You are a seasoned Account Manager responsible for executing deals and 
+maintaining client relationships.
+
+Your lens: Tactics, immediate actions, stakeholder engagement, deal execution.
+
+Given this account situation, answer:
+1. What is my 7-day playbook? (Specific, actionable steps)
+2. Which stakeholders do I need to engage and in what order?
+3. What objections or risks should I anticipate?
+4. What does success look like in the next 30 days?
+5. What resources do I need (marketing, product, exec sponsorship)?
+
+Reasoning Chain:
+- Start with: "The immediate risk/opportunity is..."
+- Then: "To execute, I need to..."
+- Then: "Success means..."
+- End with: Confidence (0-1) in your recommended approach"""
+
+        user_prompt = f"""Account Situation:
+{json.dumps(account_data, indent=2)}
+
+Respond with JSON only:
+{{
+  "am_perspective": "...",
+  "playbook_7day": [
+    {{"day": 1, "action": "...", "owner": "..."}},
+    {{"day": 2, "action": "...", "owner": "..."}}
+  ],
+  "stakeholder_sequence": [
+    {{"stakeholder": "...", "role": "...", "talking_point": "..."}}
+  ],
+  "risks": ["...", "..."],
+  "success_metrics": ["...", "..."],
+  "resource_needs": ["...", "..."],
+  "confidence": 0.X
+}}"""
+        
+        try:
+            raw_text = self._call_llm(system_prompt, user_prompt, timeout)
+            self.raw_reasoning_bucket['am'] = raw_text
+            res_dict = self._clean_and_parse(raw_text)
+            return AMPerspectiveOutput(**res_dict)
+        except Exception as e:
+            if 'am' not in self.raw_reasoning_bucket:
+                self.raw_reasoning_bucket['am'] = f"Error or timeout before response: {e}"
+            return AMPerspectiveOutput(**self._fallback_for_thread('am', str(e)))
+            
+    def _run_vp_thread(self, account_data: Dict, market_context: Dict, timeout: int) -> VPPerspectiveOutput:
+        system_prompt = """You are a VP of Sales responsible for portfolio health, resource allocation, 
+and market strategy.
+
+Your lens: Patterns across accounts, competitive threats, resource constraints, 
+market signals.
+
+Given this situation, answer:
+1. Is this account-specific or a symptom of a broader trend?
+2. How does this account's situation compare to peers?
+3. What portfolio-level action should we take?
+4. What market signal does this send (if any)?
+5. Should we fight for this account or reallocate resources?
+
+Reasoning Chain:
+- Pattern detection: "I see similar signals in X other accounts"
+- Market hypothesis: "This suggests..."
+- Resource implication: "To address this, we should..."
+- Confidence in portfolio assessment: 0-1"""
+
+        peer_accounts = market_context.get("peer_accounts", "No peer comparative data available.")
+        user_prompt = f"""Account Situation:
+{json.dumps(account_data, indent=2)}
+
+Market Context:
+{json.dumps(market_context, indent=2)}
+
+Comparative Data:
+{json.dumps(peer_accounts, indent=2)}
+
+Respond with JSON only:
+{{
+  "vp_perspective": "...",
+  "pattern_detection": "...",
+  "peer_comparison": {{
+    "similar_accounts": ["..."],
+    "health_percentile": 0.X
+  }},
+  "market_hypothesis": "...",
+  "portfolio_recommendation": "...",
+  "resource_allocation": {{
+    "investment_required": "...",
+    "teams_involved": ["..."]
+  }},
+  "confidence": 0.X
+}}"""
+
+        try:
+            raw_text = self._call_llm(system_prompt, user_prompt, timeout)
+            self.raw_reasoning_bucket['vp'] = raw_text
+            res_dict = self._clean_and_parse(raw_text)
+            return VPPerspectiveOutput(**res_dict)
+        except Exception as e:
+            if 'vp' not in self.raw_reasoning_bucket:
+                self.raw_reasoning_bucket['vp'] = f"Error or timeout before response: {e}"
+            return VPPerspectiveOutput(**self._fallback_for_thread('vp', str(e)))
+
+    def _run_svp_thread(self, account_data: Dict, market_context: Dict, timeout: int) -> SVPPerspectiveOutput:
+        system_prompt = """You are an SVP responsible for company strategy, long-term positioning, 
+and high-stakes decisions.
+
+Your lens: Strategic value, competitive positioning, market expansion, 
+relationship worth vs. effort.
+
+Given this situation, answer:
+1. What is the strategic value of this account/relationship?
+2. Is this a competitive threat or company-specific issue?
+3. Does this align with our 2026 strategy/OKRs?
+4. Should we invest in keeping this relationship or let it go?
+5. What does this tell us about our market position?
+
+Reasoning Chain:
+- Strategic fit: "This account is worth X because..."
+- Market signal: "This suggests our positioning is..."
+- Investment ROI: "Effort to retain vs. future value: ..."
+- Strategic confidence: 0-1"""
+
+        company_okrs = market_context.get("company_okrs", "No specific strategy/OKRs provided.")
+        competitive_context = market_context.get("competitive_context", "No specific competitive landscape context provided.")
+        
+        user_prompt = f"""Account Situation:
+{json.dumps(account_data, indent=2)}
+
+Company Strategy:
+{json.dumps(company_okrs, indent=2)}
+
+Competitive Landscape:
+{json.dumps(competitive_context, indent=2)}
+
+Respond with JSON only:
+{{
+  "svp_perspective": "...",
+  "strategic_value": "$X",
+  "strategic_fit_score": 0.X,
+  "competitive_threat_level": "low|medium|high",
+  "market_positioning_insight": "...",
+  "keep_vs_let_go_recommendation": "...",
+  "rationale": "...",
+  "confidence": 0.X
+}}"""
+
+        try:
+            raw_text = self._call_llm(system_prompt, user_prompt, timeout)
+            self.raw_reasoning_bucket['svp'] = raw_text
+            res_dict = self._clean_and_parse(raw_text)
+            return SVPPerspectiveOutput(**res_dict)
+        except Exception as e:
+            if 'svp' not in self.raw_reasoning_bucket:
+                self.raw_reasoning_bucket['svp'] = f"Error or timeout before response: {e}"
+            return SVPPerspectiveOutput(**self._fallback_for_thread('svp', str(e)))
+
+    def _run_data_thread(self, account_data: Dict, timeout: int) -> DataPerspectiveOutput:
+        system_prompt = """You are a data analyst providing quantified, evidence-based reasoning.
+
+CRITICAL JSON RULES:
+1. Every numeric value must be a raw float or integer, NOT a string and NOT containing a '%' sign (e.g., use 0.062 instead of 6.2% or "6.2%").
+2. Do NOT output 'N/A', 'null', or any placeholder text for numeric fields. If a probability/score is unavailable, use 0.0 or a valid float.
+
+Your lens: Numbers, confidence intervals, historical patterns, probabilistic 
+forecasting.
+
+Given this situation, answer:
+1. What are the key quantified metrics? (Health score, churn probability, etc.)
+2. How confident are we in these metrics? (Data quality assessment)
+3. What historical precedents does this resemble?
+4. What is the probability of success for proposed interventions?
+5. What are the confidence intervals around forecasts?
+
+Reasoning Chain:
+- Quantified signals: "The data shows X with Y% confidence"
+- Pattern matching: "This resembles Z past cases, which had outcome..."
+- Probability estimation: "Success rate for similar interventions: X%"
+- Confidence in data quality: 0-1"""
+
+        historical_data = account_data.get("historical_data", "No historical precedent outcomes available.")
+
+        user_prompt = f"""Account Data:
+{json.dumps(account_data, indent=2)}
+
+Historical Outcomes:
+{json.dumps(historical_data, indent=2)}
+
+Respond with JSON only:
+{{
+  "data_perspective": "...",
+  "key_metrics": {{
+    "health_score": 0.X,
+    "churn_probability": 0.X,
+    "engagement_trend": "..."
+  }},
+  "data_quality": {{
+    "metric": "...",
+    "confidence": 0.X,
+    "limitation": "..."
+  }},
+  "historical_precedents": [
+    {{
+      "situation": "...",
+      "outcome": "...",
+      "success_rate": 0.X,
+      "match_confidence": 0.X
+    }}
+  ],
+  "intervention_success_probability": 0.X,
+  "confidence_intervals": {{
+    "metric": [0.X, 0.X]
+  }},
+  "overall_confidence": 0.X
+}}"""
+
+        try:
+            raw_text = self._call_llm(system_prompt, user_prompt, timeout)
+            self.raw_reasoning_bucket['data'] = raw_text
+            res_dict = self._clean_and_parse(raw_text)
+            return DataPerspectiveOutput(**res_dict)
+        except Exception as e:
+            if 'data' not in self.raw_reasoning_bucket:
+                self.raw_reasoning_bucket['data'] = f"Error or timeout before response: {e}"
+            return DataPerspectiveOutput(**self._fallback_for_thread('data', str(e)))
+
+    def _fallback_for_thread(self, thread_name: str, error: str) -> Dict:
+        """Fallback if thread times out or fails."""
+        if thread_name == 'am':
+            return {
+                "am_perspective": f"Thread am timed out or failed: {error}",
+                "playbook_7day": [],
+                "stakeholder_sequence": [],
+                "risks": [f"Fallback mode active due to: {error}"],
+                "success_metrics": [],
+                "resource_needs": [],
+                "confidence": 0.3
+            }
+        elif thread_name == 'vp':
+            return {
+                "vp_perspective": f"Thread vp timed out or failed: {error}",
+                "pattern_detection": "Unable to run pattern detection.",
+                "peer_comparison": {"similar_accounts": [], "health_percentile": 0.0},
+                "market_hypothesis": "Data unavailable.",
+                "portfolio_recommendation": "Proceed with default operational plan.",
+                "resource_allocation": {"investment_required": "UNKNOWN", "teams_involved": []},
+                "confidence": 0.3
+            }
+        elif thread_name == 'svp':
+            return {
+                "svp_perspective": f"Thread svp timed out or failed: {error}",
+                "strategic_value": "UNKNOWN",
+                "strategic_fit_score": 0.0,
+                "competitive_threat_level": "medium",
+                "market_positioning_insight": "Strategic trace unavailable.",
+                "keep_vs_let_go_recommendation": "Investigate alignment.",
+                "rationale": f"Strategic reasoning failed: {error}",
+                "confidence": 0.3
+            }
+        elif thread_name == 'data':
+            return {
+                "data_perspective": f"Thread data timed out or failed: {error}",
+                "key_metrics": {"health_score": 0.0, "churn_probability": 0.0, "engagement_trend": "UNKNOWN"},
+                "data_quality": {"metric": "N/A", "confidence": 0.0, "limitation": "Thread execution failed"},
+                "historical_precedents": [],
+                "intervention_success_probability": 0.0,
+                "confidence_intervals": {},
+                "overall_confidence": 0.3
+            }
+        return {"confidence": 0.3}
+
+    def _build_consensus(self, results: Dict, timeout: int) -> ConsensusOutput:
+        """Synthesize 4 threads into consensus."""
+        
+        system_prompt = """You are a consensus-building analyst synthesizing four perspectives on an 
+account planning decision.
+
+Your job: Build consensus while surfacing disagreement.
+
+CONSENSUS BUILDING:
+- Where do 3+ threads agree? → High confidence recommendation
+- Where do 2 threads agree, 2 disagree? → Flag as contested
+- Where all 4 agree? → Very high confidence
+
+DISSENT SURFACING:
+- If SVP confidence is <0.5 but others are >0.7 → Include SVP caveat
+- If Data quality is <0.6 → Cap recommendation confidence
+- If threads have opposing recommendations → Include both views"""
+
+        user_prompt = f"""Four threading outputs:
+1. AM (Tactics): {json.dumps(results.get('am'), indent=2)}
+2. VP (Portfolio): {json.dumps(results.get('vp'), indent=2)}
+3. SVP (Strategy): {json.dumps(results.get('svp'), indent=2)}
+4. Data (Quantified): {json.dumps(results.get('data'), indent=2)}
+
+Build consensus while surfacing disagreement.
+
+Respond in JSON format only:
+{{
+  "consensus_recommendation": {{
+    "action": "...",
+    "confidence": 0.X,
+    "rationale": "..."
+  }},
+  "thread_agreement": {{
+    "am": 0.X,
+    "vp": 0.X,
+    "svp": 0.X,
+    "data": 0.X
+  }},
+  "agreement_score": 0.X,
+  "dissenting_views": [
+    {{
+      "perspective": "SVP|VP|Data",
+      "dissent": "...",
+      "confidence": 0.X,
+      "rationale": "..."
+    }}
+  ],
+  "confidence_limiting_factors": [
+    "..."
+  ],
+  "final_confidence": 0.X
+}}"""
+        
+        try:
+            raw_text = self._call_llm(system_prompt, user_prompt, timeout)
+            self.raw_reasoning_bucket['consensus'] = raw_text
+            res_dict = self._clean_and_parse(raw_text, is_consensus=True)
+            return ConsensusOutput(**res_dict)
+        except Exception as e:
+            if 'consensus' not in self.raw_reasoning_bucket:
+                self.raw_reasoning_bucket['consensus'] = f"Error or timeout before response: {e}"
+            fallback = {
+                "consensus_recommendation": {
+                    "action": "Proceed with default tactical AM account plan.",
+                    "confidence": 0.3,
+                    "rationale": f"Consensus synthesis timed out or failed: {str(e)}"
+                },
+                "thread_agreement": {
+                    "am": results.get('am', {}).get('confidence', 0.3) or 0.3,
+                    "vp": results.get('vp', {}).get('confidence', 0.3) or 0.3,
+                    "svp": results.get('svp', {}).get('confidence', 0.3) or 0.3,
+                    "data": results.get('data', {}).get('overall_confidence', 0.3) or 0.3
+                },
+                "agreement_score": 0.3,
+                "dissenting_views": [],
+                "confidence_limiting_factors": [f"Consensus generation failed: {str(e)}"],
+                "final_confidence": 0.3
+            }
+            return ConsensusOutput(**fallback)
+
+
+# ═══════════════════════════════════════════════════════════════
+# LAYER 3: RESPONSE GENERATION (Role-Specific)
+# ═══════════════════════════════════════════════════════════════
+
+from typing import Union
+
+class PlaybookAction(BaseModel):
+    day: int
+    action: str
+    owner: str
+    success_metric: str
+    template: Optional[str] = None
+
+class Stakeholder(BaseModel):
+    stakeholder: str
+    role: str
+    engagement_type: str  # "call" | "email" | "meeting"
+    talking_points: List[str]
+    success_indicator: str
+
+class RiskMitigation(BaseModel):
+    risk: str
+    mitigation: str
+
+class AMResponseOutput(BaseModel):
+    narrative: str
+    urgency: str  # "P1" | "P2" | "P3"
+    playbook_7day: List[PlaybookAction]
+    stakeholder_sequence: List[Stakeholder]
+    risks_and_mitigations: List[RiskMitigation]
+    confidence_in_playbook: float = Field(ge=0.0, le=1.0)
+    why_this_matters: str
+
+class PortfolioImpact(BaseModel):
+    accounts_affected: int
+    total_arr_at_risk: str
+    probability_of_churn: float = Field(ge=0.0, le=1.0)
+
+class MarketSignal(BaseModel):
+    is_market_wide: bool
+    competitor_threat: str
+    strategic_implication: str
+
+class ResourceRecommendation(BaseModel):
+    investment_required: str
+    teams_needed: List[str]
+    timeline: str
+
+class VPResponseOutput(BaseModel):
+    narrative: str
+    portfolio_impact: PortfolioImpact
+    market_signal: MarketSignal
+    resource_recommendation: ResourceRecommendation
+    strategic_action: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+class StrategicContext(BaseModel):
+    strategic_fit: str  # "KEEP" | "CAUTIOUS" | "LET_GO"
+    strategic_value: str
+    rationale: str
+
+class CompetitivePositioning(BaseModel):
+    threat_level: str  # "low" | "medium" | "high"
+    market_signal: str
+    response_strategy: str
+
+class DecisionScenario(BaseModel):
+    scenario: str
+    action: str
+    expected_outcome: str
+
+class SVPResponseOutput(BaseModel):
+    narrative: str
+    strategic_context: StrategicContext
+    competitive_positioning: CompetitivePositioning
+    board_narrative: str
+    decision_framework: List[DecisionScenario]
+    long_term_implication: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+class ResponseGenerator:
+    def __init__(self, model: Optional[str] = None):
+        self.url = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
+        self.model = model or os.getenv("MODEL_NAME", "llama3.2:latest")
+        self.raw_response_bucket = {}
+
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 180) -> str:
+        # Enforce conciseness for resource-constrained systems
+        system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. The narrative response must be under 150 words."
+        payload = {
+            "model": self.model,
+            "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON.",
+            "stream": False,
+            "options": {
+                "temperature": 0,
+                "num_predict": 512
+            }
+        }
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(self.url, json=payload)
+            if response.status_code == 200:
+                return response.json().get("response", "").strip()
+            else:
+                raise Exception(f"HTTP error {response.status_code}")
+
+    def _repair_json_string(self, text: str) -> str:
+        return repair_json_string(text)
+
+    def _extract_fallback_fields(self, text: str, role: str) -> dict:
+        """Extract narrative and other fields using regex from broken JSON."""
+        salvaged = {}
+        narrative_match = re.search(r'"narrative"\s*:\s*"([^"]+)"', text)
+        if narrative_match:
+            salvaged["narrative"] = narrative_match.group(1)
+        else:
+            salvaged["narrative"] = "Partial response salvaged from LLM output."
+            
+        why_match = re.search(r'"why_this_matters"\s*:\s*"([^"]+)"', text)
+        if why_match:
+            salvaged["why_this_matters"] = why_match.group(1)
+            
+        urgency_match = re.search(r'"urgency"\s*:\s*"([^"]+)"', text)
+        if urgency_match:
+            salvaged["urgency"] = urgency_match.group(1)
+            
+        # Add crucial defaults per role to ensure Pydantic doesn't fail
+        if role == 'am':
+            salvaged.setdefault("playbook_7day", [])
+            salvaged.setdefault("stakeholder_sequence", [])
+            salvaged.setdefault("risks_and_mitigations", [])
+            salvaged.setdefault("confidence_in_playbook", 0.5)
+            salvaged.setdefault("why_this_matters", "Playbook response.")
+        elif role == 'vp':
+            salvaged.setdefault("portfolio_impact", {"accounts_affected": 0, "total_arr_at_risk": "N/A", "probability_of_churn": 0.5})
+            salvaged.setdefault("market_signal", {"is_market_wide": False, "competitor_threat": "", "strategic_implication": ""})
+            salvaged.setdefault("resource_recommendation", {"investment_required": "", "teams_needed": [], "timeline": ""})
+            salvaged.setdefault("strategic_action", "Action needed.")
+            salvaged.setdefault("confidence", 0.5)
+        elif role == 'svp':
+            salvaged.setdefault("strategic_context", {"strategic_fit": "CAUTIOUS", "strategic_value": "", "rationale": ""})
+            salvaged.setdefault("competitive_positioning", {"threat_level": "medium", "market_signal": "", "response_strategy": ""})
+            salvaged.setdefault("board_narrative", "SVP strategic brief.")
+            salvaged.setdefault("decision_framework", [])
+            salvaged.setdefault("long_term_implication", "")
+            salvaged.setdefault("confidence", 0.5)
+            
+        return salvaged
+
+    def _clean_and_parse(self, text: str) -> dict:
+        role = 'am'
+        if 'portfolio_impact' in text or 'market_signal' in text:
+            role = 'vp'
+        elif 'strategic_context' in text or 'board_narrative' in text:
+            role = 'svp'
+            
+        try:
+            clean_text = text.strip()
+            clean_text = re.sub(r"^```(?:json)?\s*", "", clean_text)
+            clean_text = re.sub(r"\s*```$", "", clean_text)
+            clean_text = clean_text.strip()
+            start = clean_text.find("{")
+            end = clean_text.rfind("}")
+            if start != -1 and end != -1:
+                clean_text = clean_text[start:end+1]
+            return json.loads(clean_text)
+        except Exception as e1:
+            try:
+                repaired = self._repair_json_string(text)
+                return json.loads(repaired)
+            except Exception as e2:
+                try:
+                    return self._extract_fallback_fields(text, role)
+                except Exception:
+                    return self._extract_fallback_fields("", role)
+
+
+    def generate_response(
+        self,
+        consensus: ConsensusOutput,
+        recipient_role: str
+    ) -> Union[AMResponseOutput, VPResponseOutput, SVPResponseOutput]:
+        """
+        Generate role-specific response from consensus reasoning.
+        """
+        self.raw_response_bucket[recipient_role] = "Pending generation..."
+        
+        if recipient_role == "am":
+            return self._generate_am_response(consensus)
+        elif recipient_role == "vp":
+            return self._generate_vp_response(consensus)
+        elif recipient_role == "svp":
+            return self._generate_svp_response(consensus)
+        else:
+            raise ValueError(f"Unknown role: {recipient_role}")
+
+    def _generate_am_response(self, consensus: ConsensusOutput) -> AMResponseOutput:
+        system_prompt = """You are translating consensus reasoning into an Account Manager's playbook.
+
+Account Manager needs: Immediate tactics, stakeholder sequence, templates, 
+clear next steps.
+
+Your job: Create a 7-day playbook with:
+1. Specific, actionable steps (not general advice)
+2. Stakeholder engagement sequence
+3. Templates (email drafts, meeting agendas)
+4. Risk mitigations
+5. Success metrics"""
+
+        consensus_dict = consensus.model_dump() if hasattr(consensus, "model_dump") else consensus
+        user_prompt = f"""Consensus Output:
+{json.dumps(consensus_dict, indent=2)}
+
+Generate AM response JSON matching this structure:
+{{
+  "narrative": "...",
+  "urgency": "P1|P2|P3",
+  "playbook_7day": [
+    {{
+      "day": 1,
+      "action": "...",
+      "owner": "...",
+      "success_metric": "...",
+      "template": "EMAIL_DRAFT | MEETING_AGENDA | ..."
+    }}
+  ],
+  "stakeholder_sequence": [
+    {{
+      "stakeholder": "...",
+      "role": "...",
+      "engagement_type": "call|email|meeting",
+      "talking_points": ["...", "..."],
+      "success_indicator": "..."
+    }}
+  ],
+  "risks_and_mitigations": [
+    {{
+      "risk": "...",
+      "mitigation": "..."
+    }}
+  ],
+  "confidence_in_playbook": 0.X,
+  "why_this_matters": "..."
+}}"""
+        
+        try:
+            raw_text = self._call_llm(system_prompt, user_prompt)
+            self.raw_response_bucket['am'] = raw_text
+            res_dict = self._clean_and_parse(raw_text)
+            return AMResponseOutput(**res_dict)
+        except Exception as e:
+            if self.raw_response_bucket.get('am') == "Pending generation...":
+                self.raw_response_bucket['am'] = f"Error or timeout before response: {e}"
+            fallback = {
+                "narrative": f"AM Response Generation failed/timed out: {str(e)}",
+                "urgency": "P2",
+                "playbook_7day": [
+                    {
+                        "day": 1,
+                        "action": "Review consensus findings and manually verify CRM contact completeness.",
+                        "owner": "Account Manager",
+                        "success_metric": "Verified contacts",
+                        "template": "MEETING_AGENDA: Internal strategy alignment"
+                    }
+                ],
+                "stakeholder_sequence": [],
+                "risks_and_mitigations": [],
+                "confidence_in_playbook": 0.3,
+                "why_this_matters": "Fallback mode active due to API errors."
+            }
+            return AMResponseOutput(**fallback)
+
+    def _generate_vp_response(self, consensus: ConsensusOutput) -> VPResponseOutput:
+        system_prompt = """You are translating consensus reasoning into a VP's portfolio strategy.
+
+VP needs: Market patterns, portfolio impact, resource implications, 
+strategic recommendations.
+
+Your job: Create a portfolio-level analysis with:
+1. Is this account-specific or market signal?
+2. How many accounts affected?
+3. Resource allocation recommendation
+4. Market strategy implication
+5. Portfolio-level action"""
+
+        consensus_dict = consensus.model_dump() if hasattr(consensus, "model_dump") else consensus
+        user_prompt = f"""Consensus Output:
+{json.dumps(consensus_dict, indent=2)}
+
+Generate VP response JSON matching this structure:
+{{
+  "narrative": "...",
+  "portfolio_impact": {{
+    "accounts_affected": X,
+    "total_arr_at_risk": "$X",
+    "probability_of_churn": 0.X
+  }},
+  "market_signal": {{
+    "is_market_wide": true|false,
+    "competitor_threat": "...",
+    "strategic_implication": "..."
+  }},
+  "resource_recommendation": {{
+    "investment_required": "$X",
+    "teams_needed": ["Sales", "Product", "Marketing"],
+    "timeline": "...days"
+  }},
+  "strategic_action": "...",
+  "confidence": 0.X
+}}"""
+        
+        try:
+            raw_text = self._call_llm(system_prompt, user_prompt)
+            self.raw_response_bucket['vp'] = raw_text
+            res_dict = self._clean_and_parse(raw_text)
+            return VPResponseOutput(**res_dict)
+        except Exception as e:
+            if self.raw_response_bucket.get('vp') == "Pending generation...":
+                self.raw_response_bucket['vp'] = f"Error or timeout before response: {e}"
+            fallback = {
+                "narrative": f"VP Response Generation failed/timed out: {str(e)}",
+                "portfolio_impact": {
+                    "accounts_affected": 1,
+                    "total_arr_at_risk": "UNKNOWN",
+                    "probability_of_churn": 0.5
+                },
+                "market_signal": {
+                    "is_market_wide": False,
+                    "competitor_threat": "Unknown",
+                    "strategic_implication": "Verify competitive alignment"
+                },
+                "resource_recommendation": {
+                    "investment_required": "UNKNOWN",
+                    "teams_needed": ["Sales"],
+                    "timeline": "N/A"
+                },
+                "strategic_action": "Manually inspect target account pipeline health.",
+                "confidence": 0.3
+            }
+            return VPResponseOutput(**fallback)
+
+    def _generate_svp_response(self, consensus: ConsensusOutput) -> SVPResponseOutput:
+        system_prompt = """You are translating consensus reasoning into an SVP's strategic brief.
+
+SVP needs: Strategic context, board narrative, long-term implications, 
+high-level decision framework.
+
+Your job: Create a strategic brief with:
+1. Is this consistent with 2026 strategy?
+2. Competitive positioning insight
+3. Board-level narrative
+4. High-stakes decision framework
+5. Long-term market implications"""
+
+        consensus_dict = consensus.model_dump() if hasattr(consensus, "model_dump") else consensus
+        user_prompt = f"""Consensus Output:
+{json.dumps(consensus_dict, indent=2)}
+
+Generate SVP response JSON matching this structure:
+{{
+  "narrative": "...",
+  "strategic_context": {{
+    "strategic_fit": "KEEP | CAUTIOUS | LET_GO",
+    "strategic_value": "$X",
+    "rationale": "..."
+  }},
+  "competitive_positioning": {{
+    "threat_level": "low|medium|high",
+    "market_signal": "...",
+    "response_strategy": "..."
+  }},
+  "board_narrative": "...",
+  "decision_framework": [
+    {{
+      "scenario": "...",
+      "action": "...",
+      "expected_outcome": "..."
+    }}
+  ],
+  "long_term_implication": "...",
+  "confidence": 0.X
+}}"""
+        
+        try:
+            raw_text = self._call_llm(system_prompt, user_prompt)
+            self.raw_response_bucket['svp'] = raw_text
+            res_dict = self._clean_and_parse(raw_text)
+            return SVPResponseOutput(**res_dict)
+        except Exception as e:
+            if self.raw_response_bucket.get('svp') == "Pending generation...":
+                self.raw_response_bucket['svp'] = f"Error or timeout before response: {e}"
+            fallback = {
+                "narrative": f"SVP Response Generation failed/timed out: {str(e)}",
+                "strategic_context": {
+                    "strategic_fit": "CAUTIOUS",
+                    "strategic_value": "UNKNOWN",
+                    "rationale": "Fall back active due to API errors."
+                },
+                "competitive_positioning": {
+                    "threat_level": "medium",
+                    "market_signal": "Unknown",
+                    "response_strategy": "Examine account strategy alignment."
+                },
+                "board_narrative": "Consensus output analysis offline. Manual auditing active.",
+                "decision_framework": [],
+                "long_term_implication": "Long-term market trend tracking is degraded.",
+                "confidence": 0.3
+            }
+            return SVPResponseOutput(**fallback)
+

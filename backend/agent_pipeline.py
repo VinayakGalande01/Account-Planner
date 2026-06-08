@@ -134,6 +134,8 @@ CRITICAL DESIGN AND REASONING CONSTRAINTS:
 6. NO FAKE PRECISION: Do not invent expected revenue impact dollar amounts or risk reduction percentages. Use qualitative bands ("HIGH", "MEDIUM", "LOW") or reference the exact deterministic numbers calculated by the engine in the context.
 7. DUAL MODES (FACTUAL vs STRATEGIC): If `intent` is `CONTACT_QUERY`, run in Factual Mode: leave the `reasoning_trace` empty and only output the raw facts. For all other intents, run in Strategic Mode and fully execute the 5-step reasoning trace.
 8. CONTRADICTION & SUFFICIENCY INTEGRATION: Respect the deterministic sufficiency score and contradiction warning signals. Lower overall confidence if data is insufficient.
+9. EVIDENCE CITATION: Every recommendation in the `recommendations` array MUST include supporting evidence derived from the CRM data context. If no evidence exists for a recommendation, DO NOT include the recommendation. Unearned recommendations are forbidden.
+10. ROLE DEFINITION — You are an INTERPRETER, not a decision-maker. The deterministic intelligence layer has ALREADY decided what matters, what is risky, what actions are valid, and what actions are forbidden (via [HARD_CONSTRAINTS]). Your job is to EXPLAIN why it matters, why it is risky, and why the action is recommended. Do NOT override deterministic findings. Do NOT invent new actions beyond what the data supports.
 
 You must output a single, valid JSON object matching this exact architectural structure without any markdown wrappers or conversational text:
 {
@@ -242,40 +244,37 @@ You must output a single, valid JSON object matching this exact structure:
 }
 """
 
-PHASE4_NARRATIVE_PROMPT = """You are the APEX Strategic Narrative Layer.
-Generate a warm, professional strategic sales narrative based on the Structured Intelligence Package (SIP) JSON, matching the exact Response Contract format.
+# PHASE4_NARRATIVE_PROMPT is now dynamically built per-request by
+# response_blueprint.build_phase4_prompt(blueprint).
+# The static monolithic prompt has been replaced with mode-variant
+# identity prompts + section templates in response_blueprint.py.
+#
+# Legacy fallback (used when no blueprint is provided):
+PHASE4_NARRATIVE_PROMPT_FALLBACK = """You are the APEX Strategic Narrative Layer.
+Generate a warm, professional strategic sales narrative based on the Structured Intelligence Package (SIP) JSON.
 
 ## RESPONSE CONTRACT
 You MUST structure your response using these exact section headers:
 
 __SECTION_INTENT__
-[Intent from SIP, e.g. PIPELINE_QUERY]
+[Intent from SIP]
 
 __SECTION_HEADLINE__
 [headline from SIP]
 
 __SECTION_EXECUTIVE_SUMMARY__
-[CRITICAL: Maximum 3 bullet points. Provide a high-level executive summary of the most important findings and risks.]
+[Maximum 3 bullet points. High-level executive summary.]
 
 __SECTION_SUMMARY__
-[Based on situation, contact, and risks from SIP, write a human, professional overview in 3 clear sentences]
+[3 clear sentences: situation, contact context, risk.]
 
 __SECTION_SIGNALS__
-• [Formulate strategic Business Risk signal 1 based on SIP. Every signal MUST show concrete data evidence and relative portfolio context percentages. Place priority badges at the start if available (e.g. 'Priority: CRITICAL').]
-• [Business Risk Signal 2]
-• [Business Risk Signal 3]
-
-__SECTION_WHY_THIS_MATTERS__
-[A high-impact executive block. Summarize the revenue exposure, forecast impact, and macro importance of the signals. Explain exactly why this matters to the business in 2-3 compelling sentences, linking raw numbers to quarter-end forecast accuracy and concentration risks.]
+• [Signal 1 with data evidence]
+• [Signal 2]
 
 __SECTION_ACTIONS__
-• [Action 1 from SIP actions - MUST cite evidence from CRM. If LOW confidence, recommend validation. If HIGH confidence, recommend aggressive execution.]
+• [Evidence-backed action 1]
 • [Action 2]
-• [Action 3]
-
-__SECTION_CRM_HYGIENE__
-⚠️ [Data Quality Risk / Hygiene Gap 1]
-⚠️ [Data Quality Risk / Hygiene Gap 2]
 
 __SECTION_CONFIDENCE__
 {"score": "<confidence_pct>%", "status": "<confidence_pct>% Grounded (Direct facts from Excel)", "sources": ["Excel Database"]}
@@ -283,10 +282,10 @@ __SECTION_CONFIDENCE__
 __SECTION_END__
 
 STRICT RULES:
-1. Do not output any conversational preambles or postambles. Only output the section headers and content.
+1. Do not output any conversational preambles or postambles.
 2. Use the exact section headers.
-3. Be friendly and highly strategic, like a top sales co-pilot.
-4. Replace the "<confidence_pct>" placeholders in the __SECTION_CONFIDENCE__ section with the actual confidence percentage number from the SIP JSON (e.g., if pct is 80, output "80%").
+3. Replace "<confidence_pct>" with the actual confidence percentage from the SIP JSON.
+4. Every recommendation MUST cite supporting evidence.
 """
 
 
@@ -362,56 +361,90 @@ async def _get_active_llm_config(client: httpx.AsyncClient) -> tuple[str, str]:
 # ═══════════════════════════════════════════════════════════════
 
 async def run_phase1_planner(query: str, client: httpx.AsyncClient) -> dict:
-    """Phase 1: Parse user query into structured context JSON using local LLM."""
+    """Phase 1: Parse user query into structured context JSON using local LLM via Layer 1 IntentClassifier."""
     print(f"[PHASE 1] Analyzing query intent & parameters: '{query}'...")
     
-    max_attempts = 5
-    cooldown_seconds = 3.5
-    timeout_seconds = 1200.0 # 20 minutes
+    from intent_classifier import IntentClassifier, IntentEnum, UrgencyEnum, ScopeEnum, ExtractedEntities
     
-    for attempt in range(1, max_attempts + 1):
-        try:
-            active_url, active_model = await _get_active_llm_config(client)
-            payload = {
-                "model": active_model,
-                "prompt": f"System: {PHASE1_PLANNER_PROMPT}\n\nUser Query: {query}\nOutput ONLY valid JSON code block.",
-                "stream": False
-            }
-            custom_timeout = httpx.Timeout(timeout_seconds)
-            response = await client.post(active_url, json=payload, timeout=custom_timeout)
-            if response.status_code == 200:
-                raw_text = response.json().get("response", "")
-                return clean_and_parse_json(raw_text)
-            else:
-                raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
-        except Exception as e:
-            print(f"[PHASE 1 WARNING] Attempt {attempt}/{max_attempts} failed: {e.__class__.__name__} - {e}.")
-            if attempt < max_attempts:
-                print(f"[PHASE 1] Halting for {cooldown_seconds}s before next retry...")
-                await asyncio.sleep(cooldown_seconds)
-            else:
-                import traceback
-                traceback.print_exc()
-                print(f"[PHASE 1 ERROR] All {max_attempts} attempts failed. Activating deterministic fallback.")
+    try:
+        active_url, active_model = await _get_active_llm_config(client)
+        classifier = IntentClassifier(model=active_model)
+        classifier.url = active_url
+        
+        # Call synchronously in a thread pool to avoid blocking the async event loop
+        output = await asyncio.to_thread(classifier.classify, query, "Account Manager")
+    except Exception as e:
+        print(f"[PHASE 1 WARNING] IntentClassifier instantiation or call failed: {e}. Falling back to default.")
+        from intent_classifier import IntentClassificationOutput
+        output = IntentClassificationOutput(
+            primary_intent=IntentEnum.ACTION_RECOMMENDATION,
+            confidence_primary=0.5,
+            extracted_entities=ExtractedEntities(),
+            urgency=UrgencyEnum.MEDIUM,
+            scope=ScopeEnum.ENTITY,
+            context_summary=f"Classification failed: {str(e)}"
+        )
+
+    # Map primary intent enum to canonical pipeline intent name
+    primary_intent = output.primary_intent.value
+    has_account = bool(output.extracted_entities.account or (output.extracted_entities.account_list and len(output.extracted_entities.account_list) > 0))
+    
+    canonical_intent = "ACTION_RECOMMENDATION_QUERY"
+    if primary_intent == "risk_assessment":
+        canonical_intent = "RISK_ANALYSIS_QUERY"
+    elif primary_intent == "opportunity_expansion":
+        canonical_intent = "ACCOUNT_PLAN_QUERY" if has_account else "ACTION_RECOMMENDATION_QUERY"
+    elif primary_intent == "competitive_intelligence":
+        canonical_intent = "RISK_ANALYSIS_QUERY"
+    elif primary_intent == "relationship_analysis":
+        canonical_intent = "CONTACT_QUERY"
+    elif primary_intent == "action_recommendation":
+        canonical_intent = "ACCOUNT_PLAN_QUERY" if has_account else "ACTION_RECOMMENDATION_QUERY"
+    elif primary_intent == "pipeline_summary":
+        canonical_intent = "PIPELINE_SUMMARY_QUERY"
+        
+    # Map confidence to "HIGH", "MEDIUM", "LOW"
+    confidence_val = "HIGH"
+    if output.confidence_primary < 0.5:
+        confidence_val = "LOW"
+    elif output.confidence_primary < 0.8:
+        confidence_val = "MEDIUM"
+        
+    # Format target lists
+    accounts = []
+    if output.extracted_entities.account:
+        accounts.append(output.extracted_entities.account)
+    if output.extracted_entities.account_list:
+        for acc in output.extracted_entities.account_list:
+            if acc not in accounts:
+                accounts.append(acc)
                 
-    # Minimal robust fallback
+    opportunities = []
+    if output.extracted_entities.opportunity:
+        opportunities.append(output.extracted_entities.opportunity)
+        
+    contacts = []
+    if output.extracted_entities.contact:
+        contacts.append(output.extracted_entities.contact)
+        
+    # Return backward-compatible dict
     return {
-        "extracted_intent": "ACTION_RECOMMENDATION",
+        "extracted_intent": canonical_intent,
         "decision_context": {
-            "label": "Operational Overview",
-            "desired_outcome": "Address general portfolio inquiry"
+            "label": output.context_summary,
+            "desired_outcome": f"Process query with intent '{primary_intent}' and urgency '{output.urgency.value}'"
         },
         "query_parameters": {
-            "target_accounts": [],
-            "target_opportunities": [],
-            "target_contacts": [],
-            "time_window": None,
-            "stage_filter": None,
+            "target_accounts": accounts,
+            "target_opportunities": opportunities,
+            "target_contacts": contacts,
+            "time_window": output.extracted_entities.timeframe,
+            "stage_filter": output.extracted_entities.stage,
             "limit": 10,
             "sort_by": None
         },
-        "secondary_intents": [],
-        "confidence": "MEDIUM"
+        "secondary_intents": [si.intent.value for si in (output.secondary_intents or [])],
+        "confidence": confidence_val
     }
 
 
@@ -553,14 +586,30 @@ async def run_phase3_reasoner(retrieved_text: str, phase1_json: dict, client: ht
 async def run_phase4_narrative_stream(
     sip_json: dict,
     original_query: str,
-    client: httpx.AsyncClient
+    client: httpx.AsyncClient,
+    blueprint=None,
 ) -> AsyncGenerator[str, None]:
-    """Phase 4: Stream the strategic Response Contract formatted narrative to the client."""
+    """Phase 4: Stream the strategic Response Contract formatted narrative to the client.
+    
+    Information Choreography:
+        When a ResponseBlueprint is provided, the Phase 4 prompt is dynamically
+        assembled to include ONLY the sections relevant to the current query's
+        intent + scope + confidence. This ensures narrative variability across
+        different query types.
+    """
     print("[PHASE 4] Streaming narrative response contract...")
+    
+    # Build prompt dynamically from blueprint, or fall back to legacy
+    if blueprint is not None:
+        from response_blueprint import build_phase4_prompt
+        narrative_prompt = build_phase4_prompt(blueprint)
+        print(f"[PHASE 4] Blueprint mode: {blueprint.mode.value} | Sections: {blueprint.get_ordered_sections()}")
+    else:
+        narrative_prompt = PHASE4_NARRATIVE_PROMPT_FALLBACK
     
     try:
         active_url, active_model = await _get_active_llm_config(client)
-        prompt = f"System: {PHASE4_NARRATIVE_PROMPT}\n\nOriginal Query: {original_query}\nStructured Intelligence Package (SIP):\n{json.dumps(sip_json)}"
+        prompt = f"System: {narrative_prompt}\n\nOriginal Query: {original_query}\nStructured Intelligence Package (SIP):\n{json.dumps(sip_json)}"
         payload = {
             "model": active_model,
             "prompt": prompt,
@@ -584,9 +633,7 @@ async def run_phase4_narrative_stream(
         fallback_summary = sip_json.get("situation") or sip_json.get("situation_summary") or "Strategic overview trace loaded."
         yield f"__SECTION_SUMMARY__\nI have successfully retrieved the core data package, but experienced an issue compiling the natural language stream. Here is the direct situation overview: {fallback_summary}\n"
         yield f"__SECTION_SIGNALS__\n• [RISK] Reasoning trace fallback initialized.\n"
-        yield f"__SECTION_WHY_THIS_MATTERS__\nThe primary reasoner returned a fallback due to stream latency. Remotely hosted sales copilot nodes are currently offline or busy. Re-run your query or inspect remote logs.\n"
         yield f"__SECTION_ACTIONS__\n• [Action] Check the status of your remote GPU node.\n"
-        yield f"__SECTION_CRM_HYGIENE__\n⚠️ Database access functional. LLM Narrative node offline.\n"
         yield f"__SECTION_CONFIDENCE__\n{{\"score\": \"30%\", \"status\": \"Degraded\", \"sources\": [\"Excel Database\"]}}\n"
         yield "__SECTION_END__"
 

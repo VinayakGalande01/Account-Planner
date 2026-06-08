@@ -33,6 +33,9 @@ from agent_pipeline import (
     run_phase4_narrative_stream
 )
 import openai
+
+# Detect if running local or cloud
+IS_LOCAL_OLLAMA = os.getenv("LOCAL_OLLAMA", "true").lower() == "true"
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -1083,106 +1086,226 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
     async def generate_stream():
         start_time = asyncio.get_event_loop().time()
 
-        # Yield Phase 1 status
-        yield "sys_meta_log|[SYS_LOG] Initializing Orchestration Planner (Phase 1)...\n\n"
+        yield "sys_meta_log|[SYS_LOG] Initializing Account Planning Agent...\n\n"
         await asyncio.sleep(0.05)
         
-        # Execute Phase 1: Planner
+        # Instantiate agent at request time (or could be module level, but request time ensures fresh state)
+        from agent_orchestrator import AccountPlanningAgent
+        agent = AccountPlanningAgent(data_engine=engine, is_local=IS_LOCAL_OLLAMA)
+        
+        # Map response_mode to recipient_role
+        role_map = {
+            "analyst": "vp",
+            "operational": "am",
+            "executive": "svp"
+        }
+        
+        target_role = role_map.get(request.response_mode, "am")
+        
+        yield f"sys_meta_log|[SYS_LOG] Processing query for role: {target_role.upper()}...\n\n"
+        await asyncio.sleep(0.05)
+        
         try:
-            p1_json = await run_phase1_planner(request.query, http_client)
-            from data_retrieval_layer import Phase1Output
-            p1_parsed = Phase1Output.from_json(p1_json)
-            intent = p1_parsed.extracted_intent
-            # Normalize intent key (Suffix Normalization)
-            intent_map = {
-                "PIPELINE_QUERY": "PIPELINE_SUMMARY_QUERY",
-                "RISK_ANALYSIS": "RISK_ANALYSIS_QUERY",
-                "HEALTH_QUERY": "RISK_ANALYSIS_QUERY",
-                "ACCOUNT_PLAN": "ACCOUNT_PLAN_QUERY",
-                "ACTION_RECOMMENDATION": "ACTION_RECOMMENDATION_QUERY",
-            }
-            intent = intent_map.get(intent, intent)
-            yield f"sys_meta_log|[SYS_LOG] Intent identified: {intent}\n\n"
-        except Exception as e:
-            print(f"[API ERROR] Phase 1 failed: {e}")
-            p1_json = {
-                "extracted_intent": "ACTION_RECOMMENDATION_QUERY",
-                "query_parameters": {"target_accounts": []}
-            }
-            intent = "ACTION_RECOMMENDATION_QUERY"
-            yield "sys_meta_log|[SYS_LOG] Planner failed. Initializing baseline intent routing...\n\n"
-        await asyncio.sleep(0.05)
-
-        # Execute Phase 2: Data Retrieval
-        yield "sys_meta_log|[SYS_LOG] Querying CRM Database Engine (Phase 2)...\n\n"
-        await asyncio.sleep(0.05)
-        try:
-            retrieved_text = run_phase2_retrieval(engine, p1_json)
-            # Resolve accounts for telemetry / table context
-            from data_retrieval_layer import _resolve_account_ids, Phase1Output
-            p1_parsed = Phase1Output.from_json(p1_json)
-            target_accounts = p1_parsed.target_accounts or []
-            account_ids = _resolve_account_ids(engine, target_accounts)
-            account_id = account_ids[0] if account_ids else None
-            
-            if account_id:
-                yield f"sys_meta_log|[SYS_LOG] Extracted CRM records for Account: {account_id}\n\n"
-            else:
-                yield "sys_meta_log|[SYS_LOG] Extracted global portfolio telemetry.\n\n"
-        except Exception as e:
-            print(f"[API ERROR] Phase 2 failed: {e}")
-            retrieved_text = "[DATA_ERROR] Ingestion pipeline failure."
-            account_id = None
-        await asyncio.sleep(0.05)
-
-        # Pre-compute table data for UI
-        table_data = compute_table_for_intent(engine, intent, account_id, request.query, p1_json)
-
-        # Yield deterministic contract tags to UI before the narrative stream
-        yield f"__SECTION_INTENT__\n{intent}\n"
-        if table_data:
-            yield f"__SECTION_TABLE_DATA__\n{json.dumps(table_data)}\n"
-
-        # Execute Phase 3: Core Reasoning Engine
-        yield "sys_meta_log|[SYS_LOG] Launching Core Strategic Reasoner (Phase 3)...\n\n"
-        await asyncio.sleep(0.05)
-        try:
-            from intelligence_layer import generate_strategic_synthesis
-            synthesis = generate_strategic_synthesis(
-                engine,
-                intent=intent,
-                account_id=account_id,
-                mode="strategic",
-                query_scope=p1_parsed.query_scope
+            # Execute the 3-Layer pipeline
+            res = agent.process_query(
+                query=request.query,
+                user_role="sales", # Default
+                recipient_roles=[target_role]
             )
-            sip_json = await run_phase3_reasoner(retrieved_text, p1_json, http_client, synthesis.governance_directives)
-            overall_pct = sip_json.get("confidence", {}).get("overall_confidence") or 80
-            yield f"sys_meta_log|[SYS_LOG] Strategic trace generated. Confidence: {overall_pct}%\n\n"
+            
+            # # OLD LOW_CONFIDENCE PATH (Commented down)
+            # if res["status"] == "LOW_CONFIDENCE":
+            #     yield "__SECTION_HEADLINE__\nQuery Clarification Needed"
+            #     yield f"__SECTION_SUMMARY__\n{res['message']}"
+            #     yield "__SECTION_END__"
+            #     return
+
+            if res["status"] == "DATA_ONLY_LOCAL":
+                data = res["data"]
+                data_quality = res["data_quality"]
+                intent = res["intent"]
+                
+                print(f"DEBUG: Opportunities retrieved: {len(data.get('opportunities', []))}")
+                print(f"DEBUG: Intent extracted stage: {intent.extracted_entities.stage}")
+                print(f"DEBUG: Full data keys: {data.keys()}")
+                print(f"DEBUG: Opportunities: {data.get('opportunities', [])}")
+                
+                yield "[SYS_LOG] Running in local mode. Data summary below.\n"
+                
+                # 1. HEADLINE
+                account = data.get('account_name') or data.get('account', {}).get('name', 'Account')
+                stage = intent.extracted_entities.stage or "Negotiation"
+                yield f"__SECTION_HEADLINE__ Top 5 Opportunities in {stage}\n"
+                
+                # 2. DIRECT ANSWER
+                opps = data.get('opportunities', [])
+                # Map opportunities defensively to prevent KeyErrors
+                mapped_opps = []
+                for o in opps:
+                    raw_amt = o.get("amount_usd") or o.get("amount") or 0.0
+                    # Scale raw USD to Millions if it's large
+                    amt_in_m = raw_amt / 1e6 if raw_amt >= 1e5 else raw_amt
+                    mapped_opps.append({
+                        "id": o.get("opp_id") or o.get("id") or "N/A",
+                        "name": o.get("opp_name") or o.get("name") or "",
+                        "amount": round(amt_in_m, 1),
+                        "stage": o.get("stage") or "",
+                        "probability": o.get("probability") or 100
+                    })
+                    
+                if mapped_opps:
+                    opp_list = "\n".join([
+                        f"{i+1}. {o.get('name') or ('OPP-' + str(o.get('id')))} - ${o.get('amount', 0)}M ({o.get('probability', 0)}%)"
+                        for i, o in enumerate(mapped_opps[:5])
+                    ])
+                    yield f"__SECTION_DIRECT_ANSWER__ {len(opps)} opportunities found:\n{opp_list}\n"
+                else:
+                    yield "__SECTION_DIRECT_ANSWER__ No opportunities found.\n"
+                
+                # 3. TABLE DATA
+                if mapped_opps:
+                    table = "Opp ID | Name | Amount | Stage | Probability\n"
+                    table += "--------|-------|--------|-------|-------\n"
+                    for opp in mapped_opps[:5]:
+                        table += f"{opp.get('id', 'N/A')} | {opp.get('name', '')[:20]} | ${opp.get('amount', 0)}M | {opp.get('stage', '')} | {opp.get('probability', 0)}%\n"
+                    yield f"__SECTION_TABLE_DATA__ {table}\n"
+                
+                # 4. SIGNALS (Key metrics)
+                primary_intent_val = intent.primary_intent.value if hasattr(intent.primary_intent, "value") else str(intent.primary_intent)
+                urgency_val = intent.urgency.value if hasattr(intent.urgency, "value") else str(intent.urgency)
+                
+                signals = f"Total Opportunities: {len(opps)}\n"
+                signals += f"Data Quality: {int(data_quality.overall_sufficiency * 100)}%\n"
+                signals += f"Intent Detected: {primary_intent_val}\n"
+                signals += f"Urgency: {urgency_val}\n"
+                yield f"__SECTION_SIGNALS__ {signals}\n"
+                
+                # 5. ACTIONS (Recommendations)
+                actions = "RECOMMENDED ACTIONS:\n"
+                actions += "1. Review data quality gaps (see CRM Hygiene)\n"
+                actions += "2. Validate opportunity stages in CRM\n"
+                actions += "3. For full strategic analysis, use cloud deployment\n"
+                yield f"__SECTION_ACTIONS__ {actions}\n"
+                
+                # 6. CRM HYGIENE
+                if data_quality.limiting_factors:
+                    hygiene = "\n".join([f"• {f}" for f in data_quality.limiting_factors])
+                    yield f"__SECTION_CRM_HYGIENE__ Data Quality Issues:\n{hygiene}\n"
+                
+                # 7. CONFIDENCE
+                confidence_pct = int(data_quality.overall_sufficiency * 100)
+                yield f"__SECTION_CONFIDENCE__ Grounding: {confidence_pct}%\n"
+                
+                yield "__SECTION_END__\n"
+                return
+
+            if res["status"] == "INTENT_LOW_CONFIDENCE":
+                yield "sys_meta_log|[SYS_LOG] Intent confidence too low. Returning data summary only.\n\n"
+                await asyncio.sleep(0.05)
+                data = res["data"]
+                data_quality = res["data_quality"]
+                account_name = data.get("account_name") or data.get("account") or "Account"
+                yield f"__SECTION_HEADLINE__\n{account_name} Data Summary\n"
+                yield f"__SECTION_DIRECT_ANSWER__\n{len(data.get('opportunities', []))} opportunities found\n"
+                confidence_json = json.dumps({
+                    "score": f"{data_quality.overall_sufficiency * 100:.0f}%",
+                    "status": "Data-Only View",
+                    "sources": ["CRM Sufficiency Score"]
+                })
+                yield f"__SECTION_CONFIDENCE__\n{confidence_json}\n"
+                yield "__SECTION_END__\n"
+                return
+                
+            yield "sys_meta_log|[SYS_LOG] Layer 1: Intent classified ✓\n\n"
+            await asyncio.sleep(0.05)
+            yield "sys_meta_log|[SYS_LOG] Layer 2: Data retrieved + Reasoning running...\n\n"
+            await asyncio.sleep(0.05)
+            yield "sys_meta_log|[SYS_LOG] Layer 3: Generating response...\n\n"
+            await asyncio.sleep(0.05)
+
+            intent = res["intent"].primary_intent
+            yield f"sys_meta_log|[SYS_LOG] Intent Identified: {intent}\n\n"
+            await asyncio.sleep(0.05)
+            
+            # Format the output using SectionContractMapper
+            from section_mapper import SectionContractMapper
+            response_obj = res["responses"][target_role]
+            consensus = res["consensus"]
+            data_sufficiency_score = res["data_quality_score"]
+            
+            # Yield pre-computed table data if available
+            account_id = res.get("account_data", {}).get("account_id")
+            
+            # Use original table generator just to keep UI tables working
+            try:
+                # Need to synthesize p1_json structure for compute_table_for_intent
+                p1_json = {
+                    "extracted_intent": intent,
+                    "query_parameters": {
+                        "target_accounts": [res.get("account_data", {}).get("account_name", "")]
+                    }
+                }
+                table_data = compute_table_for_intent(engine, intent, account_id, request.query, p1_json)
+                if table_data:
+                    yield f"__SECTION_TABLE_DATA__\n{json.dumps(table_data)}\n"
+            except Exception as e:
+                print(f"[API Warning] Could not generate table data: {e}")
+                
+            yield f"sys_meta_log|[SYS_LOG] Reasoning completed. Confidence: {consensus.final_confidence * 100:.0f}%\n\n"
+            await asyncio.sleep(0.05)
+
+            mapped_content = SectionContractMapper.map_to_stream(
+                response_obj=response_obj,
+                consensus=consensus,
+                data_sufficiency_score=data_sufficiency_score,
+                intent=intent
+            )
+            
+            # Stream the complete mapped contract
+            yield mapped_content
+            
+            end_time = asyncio.get_event_loop().time()
+            latency_ms = (end_time - start_time) * 1000
+            print(f"[TELEMETRY] Account Planning Agent | Intent: {intent} | Role: {target_role} | Latency: {latency_ms:.2f}ms")
+            
         except Exception as e:
-            print(f"[API ERROR] Phase 3 failed: {e}")
-            sip_json = {
-                "headline": "Strategic trace unavailable",
-                "situation_summary": "Core reasoning trace defaulted due to processing error.",
-                "confidence": {"overall_pct": 50}
-            }
-            yield "sys_meta_log|[SYS_LOG] Reasoner trace defaulted.\n\n"
-        await asyncio.sleep(0.05)
-
-        # Execute Phase 4: Narrative Stream
-        yield "sys_meta_log|[SYS_LOG] Commencing Strategic Narrative delivery...\n\n"
-        await asyncio.sleep(0.05)
-        
-        async for token in run_phase4_narrative_stream(sip_json, request.query, http_client):
-            yield token
-
-        end_time = asyncio.get_event_loop().time()
-        latency_ms = (end_time - start_time) * 1000
-        print(f"[TELEMETRY] Four-Phase Agentic Route | Intent: {intent} | Latency: {latency_ms:.2f}ms")
+            print(f"[API ERROR] Agent processing failed: {e}")
+            import traceback
+            traceback.print_exc()
+            yield "__SECTION_HEADLINE__\nProcessing Error"
+            yield f"__SECTION_SUMMARY__\nAn error occurred while generating the response: {str(e)}"
+            yield "__SECTION_END__"
 
     return StreamingResponse(generate_stream(), media_type="text/event-stream")
 
 
 # ─── New Tactical Endpoints ───────────────────────────────────
+
+@app.get("/test/intent")
+def test_intent_classification(query: str):
+    """Test Layer 1 validation."""
+    from intent_classifier import IntentClassifier
+    classifier = IntentClassifier()
+    result = classifier.classify(query)
+    
+    primary_intent_val = result.primary_intent.value if hasattr(result.primary_intent, "value") else str(result.primary_intent)
+    urgency_val = result.urgency.value if hasattr(result.urgency, "value") else str(result.urgency)
+    scope_val = result.scope.value if hasattr(result.scope, "value") else str(result.scope)
+    
+    return {
+        "query": query,
+        "primary_intent": primary_intent_val,
+        "confidence": result.confidence_primary,
+        "entities": {
+            "account": result.extracted_entities.account,
+            "stage": result.extracted_entities.stage,
+            "metric": result.extracted_entities.metric,
+            "timeframe": result.extracted_entities.timeframe,
+            "competitor": getattr(result.extracted_entities, "competitor", None)
+        },
+        "urgency": urgency_val,
+        "scope": scope_val
+    }
 
 @app.get("/api/insights")
 async def get_insights(current_user: User = Depends(get_current_user)):
