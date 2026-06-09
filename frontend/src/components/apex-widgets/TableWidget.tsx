@@ -111,7 +111,7 @@ export function TableMarkdownWidget({ content }: TableMarkdownWidgetProps) {
   const lines = content.split('\n').filter((l) => l.trim());
   if (lines.length < 2) {
     return (
-      <div className="text-[13px] text-zinc-400 whitespace-pre-wrap font-[family-name:var(--font-mono)]">
+      <div className="text-[13px] text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap font-[family-name:var(--font-mono)]">
         {content}
       </div>
     );
@@ -123,7 +123,7 @@ export function TableMarkdownWidget({ content }: TableMarkdownWidgetProps) {
   // Verify this is actually a markdown table
   if (!separatorLine.includes('---')) {
     return (
-      <div className="text-[13px] text-zinc-400 whitespace-pre-wrap font-[family-name:var(--font-mono)]">
+      <div className="text-[13px] text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap font-[family-name:var(--font-mono)]">
         {content}
       </div>
     );

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import Sidebar from './Sidebar';
 import LandingPage from './LandingPage';
-import { Database, Zap, Globe, Lock, Sliders, Cpu, Bell, User, Sparkles, Sun, Moon } from 'lucide-react';
+import { Database, Zap, Globe, Lock, Sliders, Cpu, Bell, User, Sparkles, Sun, Moon, LogOut, Settings } from 'lucide-react';
 import PortfolioLedger from './PortfolioLedger';
 import PipelineView from './PipelineView';
 import ChatTerminal from './ChatTerminal';
@@ -95,6 +95,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const [systemStatus, setSystemStatus] = useState<'operational' | 'offline' | 'connecting'>('connecting');
   const [isLoading, setIsLoading] = useState(false);
@@ -379,18 +380,55 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-primary rounded-full" />
               </button>
               
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 relative">
                 <div className="text-right hidden sm:block">
                   <p className="text-[11px] font-black uppercase tracking-[0.05em] text-foreground leading-none">{user?.name}</p>
                   <p className="text-[9px] text-zinc-500 font-medium font-[family-name:var(--font-mono)] leading-none mt-1">{user?.email}</p>
                 </div>
                 <button
-                  onClick={logout}
-                  className="w-7 h-7 rounded-md bg-muted border border-border flex items-center justify-center cursor-pointer hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 text-zinc-500 transition-all"
-                  title="Logout Operator"
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="w-7 h-7 rounded-md bg-muted border border-border flex items-center justify-center cursor-pointer hover:bg-white/[0.02] text-zinc-500 transition-all"
+                  title="Profile Menu"
                 >
                   <User className="w-3.5 h-3.5" />
                 </button>
+                
+                <AnimatePresence>
+                  {userMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute top-10 right-0 w-48 glass-card border border-border shadow-xl rounded-md overflow-hidden z-50 flex flex-col"
+                      >
+                        <div className="p-3 border-b border-border bg-muted/30">
+                          <p className="text-[11px] font-black uppercase tracking-[0.05em] text-foreground leading-none mb-1">{user?.name}</p>
+                          <p className="text-[9px] text-zinc-500 font-medium font-[family-name:var(--font-mono)] leading-none">{user?.email}</p>
+                        </div>
+                        <div className="p-1 flex flex-col">
+                          <button className="w-full text-left px-3 py-2 text-[12px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-foreground hover:bg-muted dark:hover:bg-white/[0.03] rounded transition-colors flex items-center gap-2">
+                            <Settings className="w-3.5 h-3.5" />
+                            Settings
+                          </button>
+                          <div className="h-[1px] bg-border my-1" />
+                          <button
+                            onClick={() => {
+                              setUserMenuOpen(false);
+                              logout();
+                            }}
+                            className="w-full text-left px-3 py-2 text-[12px] font-bold text-red-500/80 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors flex items-center gap-2"
+                          >
+                            <LogOut className="w-3.5 h-3.5" />
+                            Log Out
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
 
             </div>

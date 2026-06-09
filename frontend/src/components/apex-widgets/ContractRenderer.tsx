@@ -22,7 +22,7 @@ type WidgetRenderer = (content: string) => React.ReactNode;
 const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
   DIRECT_ANSWER: (content) => (
     <div className="apex-direct-answer bg-zinc-900/60 border border-zinc-700/50 p-4 rounded-lg mb-1">
-      <p className="text-[14px] text-zinc-100 leading-relaxed font-medium">
+      <p className="text-[14px] text-zinc-900 dark:text-zinc-100 leading-relaxed font-medium">
         {content}
       </p>
     </div>
@@ -43,7 +43,7 @@ const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
         </div>
         <ul className="space-y-1.5">
           {points.map((point, i) => (
-            <li key={i} className="text-[13px] text-zinc-200 flex items-start">
+            <li key={i} className="text-[13px] text-zinc-800 dark:text-zinc-200 flex items-start">
               <span className="text-indigo-500 mr-2 mt-0.5">▪</span>
               <span>{point}</span>
             </li>
@@ -60,7 +60,7 @@ const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
       const data = JSON.parse(content);
       return <TableWidget data={data} />;
     } catch {
-      return <div className="text-[13px] text-zinc-400 font-[family-name:var(--font-mono)]">{content}</div>;
+      return <div className="text-[13px] text-zinc-600 dark:text-zinc-400 font-[family-name:var(--font-mono)]">{content}</div>;
     }
   },
 
@@ -80,7 +80,7 @@ const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
       <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 font-[family-name:var(--font-mono)]">
         Why This Matters
       </div>
-      <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold italic">
+      <p className="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-semibold italic">
         {content}
       </p>
     </div>
@@ -268,7 +268,7 @@ export function FinalizedContractRenderer({ contract }: FinalizedRendererProps) 
       {contract.directAnswer && (
         <div className="apex-section-block">
           <div className="apex-direct-answer bg-zinc-900/60 border border-zinc-700/50 p-4 rounded-lg mb-1">
-            <p className="text-[14px] text-zinc-100 leading-relaxed font-medium">
+            <p className="text-[14px] text-zinc-900 dark:text-zinc-100 leading-relaxed font-medium">
               {contract.directAnswer}
             </p>
           </div>
@@ -310,7 +310,7 @@ export function FinalizedContractRenderer({ contract }: FinalizedRendererProps) 
             <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 font-[family-name:var(--font-mono)]">
               Why This Matters
             </div>
-            <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold italic">
+            <p className="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-semibold italic">
               {contract.whyThisMatters}
             </p>
           </div>

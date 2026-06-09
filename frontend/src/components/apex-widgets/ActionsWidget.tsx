@@ -25,7 +25,7 @@ export function ActionsWidget({ actions }: ActionsWidgetProps) {
             <span className="apex-action-badge" aria-label={`Priority ${i + 1}`}>
               {i + 1}
             </span>
-            <span className="text-zinc-200 leading-relaxed font-[family-name:var(--font-mono)]">
+            <span className="text-zinc-800 dark:text-zinc-200 leading-relaxed font-[family-name:var(--font-mono)]">
               {action}
             </span>
           </li>

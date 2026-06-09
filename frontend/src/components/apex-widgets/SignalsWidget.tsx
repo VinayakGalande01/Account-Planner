@@ -54,7 +54,7 @@ export function SignalsWidget({ signals }: SignalsWidgetProps) {
           const style = type && SIGNAL_STYLES[type] ? SIGNAL_STYLES[type] : DEFAULT_STYLE;
 
           return (
-            <li key={i} className="flex items-start gap-2.5 text-[13px] text-zinc-300 font-[family-name:var(--font-mono)]">
+            <li key={i} className="flex items-start gap-2.5 text-[13px] text-zinc-700 dark:text-zinc-300 font-[family-name:var(--font-mono)]">
               <span className={`${style.color} mt-[3px] text-[8px] flex-shrink-0`}>{style.icon}</span>
               <span className="leading-relaxed">
                 {type && (

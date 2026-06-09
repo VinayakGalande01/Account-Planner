@@ -167,7 +167,7 @@ export default function ChatTerminal() {
       return <FinalizedContractRenderer contract={msg.contract} />;
     }
     return (
-      <div className="text-sm text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)]">
+      <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)]">
         <RenderMessageLines content={msg.content} />
       </div>
     );
@@ -270,7 +270,7 @@ export default function ChatTerminal() {
             <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
               <Bot className="w-3 h-3 text-primary" />
             </div>
-            <div className="text-sm text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)] max-w-[85%]">
+            <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)] max-w-[85%]">
               {renderStreamingResponse()}
             </div>
           </div>

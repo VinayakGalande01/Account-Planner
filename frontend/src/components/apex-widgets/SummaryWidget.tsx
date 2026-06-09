@@ -15,7 +15,7 @@ export function SummaryWidget({ content }: SummaryWidgetProps) {
 
   return (
     <div className="apex-widget-summary">
-      <p className="text-[13px] text-zinc-400 leading-relaxed font-[family-name:var(--font-mono)]">
+      <p className="text-[13px] text-zinc-700 dark:text-zinc-400 leading-relaxed font-[family-name:var(--font-mono)]">
         {content}
       </p>
     </div>
