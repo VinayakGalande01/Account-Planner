@@ -43,8 +43,7 @@ load_dotenv(override=True)
 
 app = FastAPI(title="Account Planner Agent API")
 
-from auth.router import router as auth_router
-app.include_router(auth_router)
+
 
 from auth.dependencies import get_current_user
 from models.user import User

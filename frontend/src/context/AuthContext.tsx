@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     localStorage.removeItem('token');
     try {
-      await fetch('http://127.0.0.1:8002/auth/logout', { 
+      await fetch('http://127.0.0.1:8001/auth/logout', { 
         method: 'POST',
         credentials: 'include'
       });
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Session refresh handler
   const refreshSession = useCallback(async (): Promise<string | null> => {
     try {
-      const res = await fetch('http://127.0.0.1:8002/auth/refresh', {
+      const res = await fetch('http://127.0.0.1:8001/auth/refresh', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('token', data.access_token);
 
           // Get current user using the new token
-          const userRes = await fetch('http://127.0.0.1:8002/auth/me', {
+          const userRes = await fetch('http://127.0.0.1:8001/auth/me', {
             headers: {
               'Authorization': `Bearer ${data.access_token}`,
               'Accept': 'application/json',
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const storedToken = localStorage.getItem('token');
       if (storedToken) {
         try {
-          const res = await fetch('http://127.0.0.1:8002/auth/me', {
+          const res = await fetch('http://127.0.0.1:8001/auth/me', {
             headers: {
               'Authorization': `Bearer ${storedToken}`,
               'Accept': 'application/json',
@@ -131,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8002/auth/login', {
+      const res = await fetch('http://127.0.0.1:8001/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('token', data.access_token);
         
         // Fetch profile details
-        const userRes = await fetch('http://127.0.0.1:8002/auth/me', {
+        const userRes = await fetch('http://127.0.0.1:8001/auth/me', {
           headers: {
             'Authorization': `Bearer ${data.access_token}`,
             'Accept': 'application/json',
@@ -175,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8002/auth/signup', {
+      const res = await fetch('http://127.0.0.1:8001/auth/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

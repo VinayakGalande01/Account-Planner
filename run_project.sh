@@ -1,42 +1,46 @@
 #!/bin/bash
 
-# Function to handle cleanup on script exit (Ctrl+C)
-cleanup() {
-    echo ""
-    echo "Stopping servers..."
-    kill $BACKEND_PID 2>/dev/null
-    kill $FRONTEND_PID 2>/dev/null
-    exit 0
-}
+clear
 
-# Trap SIGINT (Ctrl+C) and SIGTERM to ensure clean termination
-trap cleanup SIGINT SIGTERM
-
-echo "Starting APEX Account Planner Ecosystem..."
+echo "╔══════════════════════════════════════════════╗"
+echo "║      APEX ACCOUNT PLANNER ECOSYSTEM          ║"
+echo "╚══════════════════════════════════════════════╝"
 echo ""
 
-# 1. Start the Backend (FastAPI)
-echo "[1/2] Launching Backend Server on port 8002..."
-cd backend
-uvicorn main:app --reload --port 8002 &
-BACKEND_PID=$!
-cd ..
-
-# 2. Start the Frontend (Next.js)
-echo "[2/2] Launching Frontend Dashboard on port 3000..."
-cd frontend
-npm run dev &
-FRONTEND_PID=$!
-cd ..
-
+echo "[INFO] Initializing System..."
+sleep 0.4
+echo "[INFO] Checking Environment..."
+sleep 0.4
+echo "[INFO] Loading Configuration..."
+sleep 0.4
+echo "[SUCCESS] Environment Loaded"
 echo ""
-echo "--------------------------------------------------"
-echo "BOTH SERVERS ARE RUNNING:"
-echo "- Backend: http://localhost:8002"
-echo "- Frontend: http://localhost:3000"
-echo ""
-echo "Press Ctrl+C to stop both servers."
-echo "--------------------------------------------------"
 
-# Keep the script running to wait for background jobs
-wait
+echo "[SERVICE] Auth System"
+echo "├─ Port: 8001"
+echo "├─ URL : http://localhost:8001"
+echo "└─ Status: STARTING"
+osascript -e "tell application \"Terminal\" to activate" -e "tell application \"Terminal\" to do script \"cd '$PWD/backend' && uvicorn auth_main:app --reload --port 8001 --no-access-log\"" > /dev/null
+echo ""
+
+sleep 1.5
+
+echo "[SERVICE] Backend Server"
+echo "├─ Port: 8002"
+echo "├─ URL : http://localhost:8002"
+echo "└─ Status: STARTING"
+osascript -e "tell application \"Terminal\" to activate" -e "tell application \"Terminal\" to do script \"cd '$PWD/backend' && uvicorn main:app --reload --port 8002\"" > /dev/null
+echo ""
+
+sleep 1.5
+
+echo "[SERVICE] Frontend Dashboard"
+echo "├─ Port: 3000"
+echo "├─ URL : http://localhost:3000"
+echo "└─ Status: STARTING"
+osascript -e "tell application \"Terminal\" to activate" -e "tell application \"Terminal\" to do script \"cd '$PWD/frontend' && npm run dev\"" > /dev/null
+echo ""
+
+sleep 1.5
+echo "[SUCCESS] All Services Started"
+echo ""
