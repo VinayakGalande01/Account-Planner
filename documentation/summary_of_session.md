@@ -80,13 +80,18 @@ Slow CPU execution requires a balance between waiting time and output limits. We
    - *Why*: Allows CPU pre-fill and generation loops to finish naturally without premature connection drops.
 
 2. **Capping Generation Length (`num_predict`)**:
-   - Reasoning threads (Layer 2) are capped at `"num_predict": 400` tokens (originally unlimited or `256`).
-   - Response generation (Layer 3) is capped at `"num_predict": 512` tokens (originally unlimited or `350`).
-   - *Why*: Prevents models from entering long-winded hallucination loops, keeping execution times under 3 minutes.
+   - **Reasoning threads (Layer 2)**: Capped at `"num_predict": 400` tokens (originally unlimited or `256`).
+   - **Response generation (Layer 3)**: Capped at `"num_predict": 512` tokens (originally unlimited or `350`).
+   - *Understanding the 256 vs 512 Token Cap Issue*: 
+     - **The Truncation Problem**: In previous sessions, a lower token cap (e.g. `256` tokens) caused local models (like Llama 3.2 3B) to run out of generation budget mid-generation, cutting off JSON fields before they could output closing quotes `"` and braces `}` (e.g., leaving a key or value truncated).
+     - **The Repetitive Loop Problem**: Removing limits completely (or setting them too high without constraint) caused local models on CPUs to get caught in infinite repetitive loops, making execution take up to 5-10 minutes and timing out the client.
+     - **The Solution**: We raised the cap to `512` tokens for Layer 3 (and `400` for Layer 2) to provide sufficient generation "headroom" while pairing it with aggressive prompt directives (under `200` tokens) and a regex-based self-healing parser to repair any minor truncations.
+    - *Why*: Prevents models from entering long-winded hallucination loops, keeping execution times under 3 minutes.
 
 3. **Prompt Engineering Instructions**:
    - Appended strict prompt directives to enforce conciseness:
      `"\nCRITICAL: Keep output extremely concise. Total JSON output must be under 200 tokens."`
+     `"\nCRITICAL: Keep output extremely concise. The narrative response must be under 150 words."`
 
 ---
 

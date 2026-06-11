@@ -274,6 +274,52 @@ class AccountPlanningAgent:
             account_data = self.data_retrieval.expand_scope(account_data)
             print(f"[Layer 2 Input - Expanded Scope] Updated Account Data: {account_data}")
         
+        # Check if FACTUAL complexity
+        if intent.complexity == "FACTUAL":
+            print("[Governance] Resolving FACTUAL query directly in Python.")
+            factual_answer = ""
+            if intent.intent == "CONTACT_LOOKUP":
+                contacts = account_data.get("contacts", [])
+                if contacts:
+                    contact_lines = []
+                    for c in contacts[:5]:
+                        contact_lines.append(f"• {c.get('name')} - {c.get('role')} ({c.get('engagement_level')} engagement)")
+                    factual_answer = f"The following contacts were found for {account_data.get('account_name')}:\n" + "\n".join(contact_lines)
+                else:
+                    factual_answer = f"No contacts found for {account_data.get('account_name')} in the database."
+            elif intent.intent == "OPPORTUNITY_RANKING":
+                opps = account_data.get("opportunities", [])
+                if opps:
+                    opp_lines = []
+                    for i, o in enumerate(opps[:5]):
+                        opp_lines.append(f"{i+1}. {o.get('opp_name')} - ${o.get('amount_usd'):,.2f} ({o.get('stage')})")
+                    factual_answer = f"Top opportunities for {account_data.get('account_name')}:\n" + "\n".join(opp_lines)
+                else:
+                    factual_answer = f"No opportunities found for {account_data.get('account_name')}."
+            else:
+                factual_answer = f"Grounded data summary for {account_data.get('account_name')}: {len(account_data.get('opportunities', []))} active opportunities, {len(account_data.get('contacts', []))} contacts mapped."
+
+            # Bypass Layer 2 LLM and Layer 3 LLM
+            consensus = self.reasoning_engine.run_reasoning_threads(
+                account_data=account_data,
+                market_context={},
+                complexity="FACTUAL"
+            )
+            responses = {}
+            for role in recipient_roles:
+                responses[role] = {"narrative": factual_answer, "why_this_matters": "Factual query completed."}
+            
+            return {
+                "status": "SUCCESS",
+                "intent": intent,
+                "consensus": consensus,
+                "responses": responses,
+                "data_quality_score": data_quality_pct,
+                "confidence": 1.0,
+                "raw_reasoning_bucket": {},
+                "raw_response_bucket": {}
+            }
+
         # LAYER 2: Reasoning (Multi-perspective)
         print("[Layer 2] Running reasoning threads...")
         consensus = self.reasoning_engine.run_reasoning_threads(
@@ -281,7 +327,8 @@ class AccountPlanningAgent:
             market_context=market_context,
             timeout_per_thread=180,
             total_timeout=720,
-            local=self.is_local
+            local=self.is_local,
+            complexity=intent.complexity
         )
         
         # Cap reasoning confidence scores based on data sufficiency

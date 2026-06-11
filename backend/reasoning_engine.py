@@ -1411,7 +1411,7 @@ class AMPerspectiveOutput(BaseModel):
     risks: List[str]
     success_metrics: List[str]
     resource_needs: List[str]
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class VPPerspectiveOutput(BaseModel):
     vp_perspective: str
@@ -1420,46 +1420,46 @@ class VPPerspectiveOutput(BaseModel):
     market_hypothesis: str
     portfolio_recommendation: str
     resource_allocation: Dict[str, Any]
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class SVPPerspectiveOutput(BaseModel):
     svp_perspective: str
     strategic_value: str
-    strategic_fit_score: float = Field(ge=0.0, le=1.0)
+    strategic_fit_score: Optional[float] = Field(None, ge=0.0, le=1.0)
     competitive_threat_level: str  # "low" | "medium" | "high"
     market_positioning_insight: str
     keep_vs_let_go_recommendation: str
     rationale: str
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class HistoricalPrecedent(BaseModel):
     situation: str
     outcome: str
-    success_rate: float = Field(ge=0.0, le=1.0)
-    match_confidence: float = Field(ge=0.0, le=1.0)
+    success_rate: Optional[float] = Field(None, ge=0.0, le=1.0)
+    match_confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class DataPerspectiveOutput(BaseModel):
     data_perspective: str
     key_metrics: Dict[str, Any]
     data_quality: Dict[str, Any]
     historical_precedents: List[HistoricalPrecedent]
-    intervention_success_probability: float = Field(ge=0.0, le=1.0)
-    confidence_intervals: Dict[str, List[float]]
-    overall_confidence: float = Field(ge=0.0, le=1.0)
+    intervention_success_probability: Optional[float] = Field(None, ge=0.0, le=1.0)
+    confidence_intervals: Dict[str, List[Optional[float]]]
+    overall_confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class DissentingView(BaseModel):
     perspective: str  # "SVP", "VP", "Data"
     dissent: str
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
     rationale: str
 
 class ConsensusOutput(BaseModel):
     consensus_recommendation: Dict[str, Any]
-    thread_agreement: Dict[str, float]
-    agreement_score: float = Field(ge=0.0, le=1.0)
+    thread_agreement: Dict[str, Optional[float]]
+    agreement_score: Optional[float] = Field(None, ge=0.0, le=1.0)
     dissenting_views: List[DissentingView]
     confidence_limiting_factors: List[str]
-    final_confidence: float = Field(ge=0.0, le=1.0)
+    final_confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 
 def repair_json_string(text: str) -> str:
@@ -1664,71 +1664,95 @@ class ReasoningEngine:
         market_context: Dict[str, Any],
         timeout_per_thread: int = 15,
         total_timeout: int = 30,
-        local: bool = True
+        local: bool = True,
+        complexity: str = "EXECUTIVE"
     ) -> ConsensusOutput:
         """
-        Run 4 reasoning threads (AM, VP, SVP, Data).
+        Run reasoning threads dynamically based on complexity.
         If local=True, runs sequentially to avoid overwhelming single GPU.
         If local=False, runs in parallel.
-        
-        Args:
-            account_data: Account/opportunity details from Layer 1
-            market_context: Market and competitive context
-            timeout_per_thread: Seconds per thread
-            total_timeout: Max seconds for all threads combined
-            local: True if running on local Ollama instance
-        
-        Returns:
-            ConsensusOutput with all 4 perspectives + consensus
         """
-        
+        # 1. Handle FACTUAL complexity level
+        if complexity == "FACTUAL":
+            print("[Governance] FACTUAL complexity detected: Bypassing LLM reasoning threads.")
+            return ConsensusOutput(
+                consensus_recommendation={
+                    "action": "Displaying database records directly.",
+                    "confidence": 1.0,
+                    "rationale": "Direct factual query."
+                },
+                thread_agreement={},
+                agreement_score=1.0,
+                dissenting_views=[],
+                confidence_limiting_factors=[],
+                final_confidence=1.0
+            )
+
         # Summarize large dataset to protect context windows
         account_data = summarize_large_dataset(account_data)
         
         results = {}
         
+        # Determine active threads based on complexity
+        if complexity == "OPERATIONAL":
+            active_threads = ["data"]
+        elif complexity == "STRATEGIC":
+            active_threads = ["am", "data"]
+        else:
+            active_threads = ["am", "vp", "svp", "data"]
+            
+        print(f"[Governance] Complexity: {complexity}. Actively running threads: {active_threads}")
+
         if local:
             # Sequential execution for local models to prevent GPU crashing
             # We use a shorter timeout since they run one after another
-            seq_timeout = max(timeout_per_thread, total_timeout // 4)
+            seq_timeout = max(timeout_per_thread, total_timeout // len(active_threads) if active_threads else 1)
             
-            try:
-                am_res = self._run_am_thread(account_data, seq_timeout)
-                results['am'] = am_res.model_dump() if hasattr(am_res, "model_dump") else am_res
-            except Exception as e:
-                print(f"[ReasoningEngine] Warning: AM thread failed: {e}")
-                results['am'] = self._fallback_for_thread('am', str(e))
-                
-            try:
-                vp_res = self._run_vp_thread(account_data, market_context, seq_timeout)
-                results['vp'] = vp_res.model_dump() if hasattr(vp_res, "model_dump") else vp_res
-            except Exception as e:
-                print(f"[ReasoningEngine] Warning: VP thread failed: {e}")
-                results['vp'] = self._fallback_for_thread('vp', str(e))
-                
-            try:
-                svp_res = self._run_svp_thread(account_data, market_context, seq_timeout)
-                results['svp'] = svp_res.model_dump() if hasattr(svp_res, "model_dump") else svp_res
-            except Exception as e:
-                print(f"[ReasoningEngine] Warning: SVP thread failed: {e}")
-                results['svp'] = self._fallback_for_thread('svp', str(e))
-                
-            try:
-                data_res = self._run_data_thread(account_data, seq_timeout)
-                results['data'] = data_res.model_dump() if hasattr(data_res, "model_dump") else data_res
-            except Exception as e:
-                print(f"[ReasoningEngine] Warning: Data thread failed: {e}")
-                results['data'] = self._fallback_for_thread('data', str(e))
-                
+            if "am" in active_threads:
+                try:
+                    am_res = self._run_am_thread(account_data, seq_timeout)
+                    results['am'] = am_res.model_dump() if hasattr(am_res, "model_dump") else am_res
+                except Exception as e:
+                    print(f"[ReasoningEngine] Warning: AM thread failed: {e}")
+                    results['am'] = self._fallback_for_thread('am', str(e))
+                    
+            if "vp" in active_threads:
+                try:
+                    vp_res = self._run_vp_thread(account_data, market_context, seq_timeout)
+                    results['vp'] = vp_res.model_dump() if hasattr(vp_res, "model_dump") else vp_res
+                except Exception as e:
+                    print(f"[ReasoningEngine] Warning: VP thread failed: {e}")
+                    results['vp'] = self._fallback_for_thread('vp', str(e))
+                    
+            if "svp" in active_threads:
+                try:
+                    svp_res = self._run_svp_thread(account_data, market_context, seq_timeout)
+                    results['svp'] = svp_res.model_dump() if hasattr(svp_res, "model_dump") else svp_res
+                except Exception as e:
+                    print(f"[ReasoningEngine] Warning: SVP thread failed: {e}")
+                    results['svp'] = self._fallback_for_thread('svp', str(e))
+                    
+            if "data" in active_threads:
+                try:
+                    data_res = self._run_data_thread(account_data, seq_timeout)
+                    results['data'] = data_res.model_dump() if hasattr(data_res, "model_dump") else data_res
+                except Exception as e:
+                    print(f"[ReasoningEngine] Warning: Data thread failed: {e}")
+                    results['data'] = self._fallback_for_thread('data', str(e))
+                    
         else:
             # Parallel execution for cloud models
-            executor = ThreadPoolExecutor(max_workers=4)
+            executor = ThreadPoolExecutor(max_workers=len(active_threads))
             futures = {}
             
-            futures['am'] = executor.submit(self._run_am_thread, account_data, timeout_per_thread)
-            futures['vp'] = executor.submit(self._run_vp_thread, account_data, market_context, timeout_per_thread)
-            futures['svp'] = executor.submit(self._run_svp_thread, account_data, market_context, timeout_per_thread)
-            futures['data'] = executor.submit(self._run_data_thread, account_data, timeout_per_thread)
+            if "am" in active_threads:
+                futures['am'] = executor.submit(self._run_am_thread, account_data, timeout_per_thread)
+            if "vp" in active_threads:
+                futures['vp'] = executor.submit(self._run_vp_thread, account_data, market_context, timeout_per_thread)
+            if "svp" in active_threads:
+                futures['svp'] = executor.submit(self._run_svp_thread, account_data, market_context, timeout_per_thread)
+            if "data" in active_threads:
+                futures['data'] = executor.submit(self._run_data_thread, account_data, timeout_per_thread)
             
             start_time = time.time()
             
@@ -1743,7 +1767,24 @@ class ReasoningEngine:
                     print(f"[ReasoningEngine] Warning: Thread {thread_name} failed/timed out: {e}")
                     results[thread_name] = self._fallback_for_thread(thread_name, str(e))
         
-        # Build consensus from 4 threads
+        # 2. Handle OPERATIONAL complexity level (Bypass LLM consensus synthesis)
+        if complexity == "OPERATIONAL":
+            print("[Governance] OPERATIONAL complexity detected: Bypassing LLM consensus synthesis.")
+            data_res = results.get("data", {})
+            return ConsensusOutput(
+                consensus_recommendation={
+                    "action": "Displaying data quality and core metrics.",
+                    "confidence": data_res.get("overall_confidence", 0.8),
+                    "rationale": data_res.get("data_perspective", "Operational details retrieved.")
+                },
+                thread_agreement={"data": data_res.get("overall_confidence", 0.8)},
+                agreement_score=1.0,
+                dissenting_views=[],
+                confidence_limiting_factors=[],
+                final_confidence=data_res.get("overall_confidence", 0.8)
+            )
+        
+        # Build consensus from active threads
         consensus = self._build_consensus(results, timeout_per_thread)
         return consensus
     
@@ -2132,13 +2173,13 @@ class AMResponseOutput(BaseModel):
     playbook_7day: List[PlaybookAction]
     stakeholder_sequence: List[Stakeholder]
     risks_and_mitigations: List[RiskMitigation]
-    confidence_in_playbook: float = Field(ge=0.0, le=1.0)
+    confidence_in_playbook: Optional[float] = Field(None, ge=0.0, le=1.0)
     why_this_matters: str
 
 class PortfolioImpact(BaseModel):
     accounts_affected: int
     total_arr_at_risk: str
-    probability_of_churn: float = Field(ge=0.0, le=1.0)
+    probability_of_churn: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class MarketSignal(BaseModel):
     is_market_wide: bool
@@ -2156,7 +2197,7 @@ class VPResponseOutput(BaseModel):
     market_signal: MarketSignal
     resource_recommendation: ResourceRecommendation
     strategic_action: str
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class StrategicContext(BaseModel):
     strategic_fit: str  # "KEEP" | "CAUTIOUS" | "LET_GO"
@@ -2180,7 +2221,7 @@ class SVPResponseOutput(BaseModel):
     board_narrative: str
     decision_framework: List[DecisionScenario]
     long_term_implication: str
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class ResponseGenerator:
     def __init__(self, model: Optional[str] = None):

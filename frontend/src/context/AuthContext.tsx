@@ -127,6 +127,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [token, refreshSession]);
 
+  const getErrorMessage = (detail: any): string => {
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      // Extract the msg field from Pydantic validation error lists (e.g. "Value error, Password must contain...")
+      const firstError = detail[0];
+      if (firstError && firstError.msg) {
+        // Remove standard "Value error, " prefix from Pydantic ValueError if present
+        return firstError.msg.replace(/^Value error,\s*/, '');
+      }
+      return 'Validation failed';
+    }
+    if (detail && typeof detail === 'object') {
+      return detail.message || JSON.stringify(detail);
+    }
+    return '';
+  };
+
   const login = async (email: string, password: string): Promise<boolean> => {
     setError(null);
     setLoading(true);
@@ -161,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       
-      setError(data.detail || 'Invalid email or password');
+      setError(getErrorMessage(data.detail) || 'Invalid email or password');
       return false;
     } catch (err) {
       setError('Connection to auth server failed');
@@ -190,7 +207,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Automatically log in after successful signup
         return await login(email, password);
       } else {
-        setError(data.detail || 'Registration failed');
+        setError(getErrorMessage(data.detail) || 'Registration failed');
         return false;
       }
     } catch (err) {

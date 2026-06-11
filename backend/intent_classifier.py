@@ -27,44 +27,121 @@ class ExtractedEntities(BaseModel):
     competitor: Optional[str] = None
 
 
+from typing import List
+
 class IntentClassificationOutput(BaseModel):
     primary_intent: IntentEnum
     confidence_primary: float
     extracted_entities: ExtractedEntities
     urgency: str = "medium"
-    scope: str = "entity"
+    scope: str = "ENTITY"  # "ENTITY", "PORTFOLIO", "MIXED"
     context_summary: str = ""
+    
+    # New Skills Architecture fields
+    intent: str
+    complexity: str       # "FACTUAL", "OPERATIONAL", "STRATEGIC", "EXECUTIVE"
+    target_entities: List[str] = []
 
 class IntentClassifier:
     """Rule-based intent classifier using keyword matching."""
     
     def classify(self, query: str, user_role: str = "Account Manager") -> IntentClassificationOutput:
-        """Classify intent without LLM - pure rules."""
+        """Classify intent using robust Phase 1 regex patterns."""
         
         query_lower = query.lower()
         
-        # Intent detection (order matters - specific first)
-        intent = self._detect_intent(query_lower)
-        confidence = self._calculate_confidence(query_lower, intent)
+        # ═══════════════════════════════════════════════════════════════
+        # PHASE 1: Robust Regex and Pattern Matching (Active)
+        # ═══════════════════════════════════════════════════════════════
+        
+        # 1. Scope Detection
+        scope_val = "ENTITY"
+        if any(w in query_lower for w in ["all", "portfolio", "every", "each", "pipeline", "forecast", "weighted forecast", "top opportunities", "opportunities ranking", "active pipeline", "accounts"]):
+            scope_val = "PORTFOLIO"
+        elif any(w in query_lower for w in ["today", "priorities", "my priorities"]):
+            scope_val = "MIXED"
+            
+        # 2. Complexity Detection (Priority: Executive > Strategic > Operational > Factual)
+        complexity_val = "STRATEGIC"  # Default fallback
+        if re.search(r"\b(executive briefing|board review|board summary|board narrative|portfolio health|executive summary|portfolio overview)\b", query_lower):
+            complexity_val = "EXECUTIVE"
+        elif re.search(r"\b(strategic account plan|strategic review|strategic focus|playbook|strategy|mitigation|objections|action plan to align|align them|downgrade our reasoning confidence|stale activity notes)\b", query_lower):
+            complexity_val = "STRATEGIC"
+        elif re.search(r"\b(top \d+ opportunities|opportunities stalling|opportunities list|pipeline review|forecast summary|weighted forecast|pipeline summary|active cases|critical cases|deal velocity|risk reduction|priority actions|value-at-risk|accounts affected|total value-at-risk|highest risk accounts|critical open support cases|priority actions for today|priorities for today)\b", query_lower):
+            complexity_val = "OPERATIONAL"
+        elif re.search(r"\b(who is|who are|show contact|list contact|contacts of|contacts for|decision maker|decision makers|email of|phone of|owner of|last time we contacted|last contact)\b", query_lower):
+            complexity_val = "FACTUAL"
+            
+        # 3. Intent Detection
+        intent_val = "ACCOUNT_REVIEW"
+        if re.search(r"\b(contact|who is|who are|decision maker|decision makers|people|stakeholder|stakeholders|last time we contacted|last contact)\b", query_lower):
+            if re.search(r"\b(action plan|playbook|align|blockers)\b", query_lower):
+                intent_val = "ACCOUNT_PLAN"
+            else:
+                intent_val = "CONTACT_LOOKUP"
+        elif re.search(r"\b(top \d+ opportunities|ranking|largest deals|biggest|highest value)\b", query_lower):
+            intent_val = "OPPORTUNITY_RANKING"
+        elif re.search(r"\b(pipeline|forecast|pipeline review|weighted|deal velocity|value-at-risk|total value-at-risk|pipeline confidence)\b", query_lower):
+            intent_val = "PIPELINE_REVIEW"
+        elif re.search(r"\b(executive briefing|board review|board narrative)\b", query_lower):
+            intent_val = "EXECUTIVE_BRIEFING"
+        elif re.search(r"\b(portfolio analysis|portfolio health|portfolio review|highest risk accounts)\b", query_lower):
+            intent_val = "PORTFOLIO_ANALYSIS"
+        elif re.search(r"\b(risk|churn|at risk|danger|stalled|stuck|stalling|blockers|critical open support cases)\b", query_lower):
+            if re.search(r"\b(action plan|playbook|align)\b", query_lower):
+                intent_val = "ACCOUNT_PLAN"
+            else:
+                intent_val = "RISK_ANALYSIS"
+        elif re.search(r"\b(account plan|action plan|playbook|strategy|strategic review|strategic focus)\b", query_lower):
+            intent_val = "ACCOUNT_PLAN"
+            
+        # ═══════════════════════════════════════════════════════════════
+        # PHASE 2: Semantic Similarity (Commented Out for Future Phase)
+        # TODO: Compute local query embeddings and calculate cosine similarity
+        # against category centroids using a local model.
+        # ═══════════════════════════════════════════════════════════════
+        
+        # ═══════════════════════════════════════════════════════════════
+        # PHASE 3: Tiny LLM Classifier Fallback (Commented Out for Future Phase)
+        # TODO: Fallback to local LLM JSON classification if similarity score is low.
+        # ═══════════════════════════════════════════════════════════════
+
+        # Standard legacy intent mapping
+        legacy_intent = self._detect_intent(query_lower)
+        confidence = self._calculate_confidence(query_lower, legacy_intent)
         
         # Entity extraction
-        entities = self._extract_entities(query, intent)
+        entities = self._extract_entities(query, legacy_intent)
         
         # Urgency
         urgency = self._detect_urgency(query_lower)
         
-        # Scope
-        scope = self._detect_scope(query_lower)
+        # Extract target entities using contiguous capitalized word search
+        noise = {'Top', 'Show', 'Give', 'Get', 'Review', 'Evaluate', 'Provide', 'Who', 'What', 'Where', 'When', 'Why', 'How', 'Which', 'Are', 'Is', 'They', 'Them', 'Our', 'Your', 'Please', 'Traced'}
+        matches = re.findall(r'\b[A-Z][a-zA-Z0-9]*(?:\s+[A-Z][a-zA-Z0-9]*)*\b', query)
         
+        target_entities_val = []
+        for m in matches:
+            m_words = m.split()
+            filtered_words = [w for w in m_words if w not in noise]
+            if filtered_words:
+                target_entities_val.append(" ".join(filtered_words))
+        
+        # Backwards compatibility update
+        if target_entities_val:
+            entities.account = target_entities_val[0]
+            
         return IntentClassificationOutput(
-            primary_intent=intent,
+            primary_intent=legacy_intent,
             confidence_primary=confidence,
             extracted_entities=entities,
             urgency=urgency,
-            scope=scope,
-            context_summary=f"Rule-based classification: {intent.value}"
+            scope=scope_val,
+            intent=intent_val,
+            complexity=complexity_val,
+            target_entities=target_entities_val,
+            context_summary=f"Skills-based: {intent_val} ({complexity_val})"
         )
-    
     def _has_word(self, query: str, words: list) -> bool:
         """Helper to match whole words/phrases with word boundaries."""
         for w in words:

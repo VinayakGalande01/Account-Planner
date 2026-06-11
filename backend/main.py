@@ -43,7 +43,18 @@ load_dotenv(override=True)
 
 app = FastAPI(title="Account Planner Agent API")
 
+# Automatically create database tables for the auth service
+from database import Base, engine
+import models.user
+try:
+    Base.metadata.create_all(bind=engine)
+    print("  ✅ Database tables initialized successfully.")
+except Exception as db_err:
+    print(f"  ❌ Warning: Database table initialization failed: {db_err}")
+    print("     Ensure PostgreSQL is running and database 'account_planner' exists.")
 
+from auth.router import router as auth_router
+app.include_router(auth_router)
 
 from auth.dependencies import get_current_user
 from models.user import User
@@ -1257,7 +1268,8 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
                 response_obj=response_obj,
                 consensus=consensus,
                 data_sufficiency_score=data_sufficiency_score,
-                intent=intent
+                intent=res["intent"].intent,
+                complexity=res["intent"].complexity
             )
             
             # Stream the complete mapped contract
