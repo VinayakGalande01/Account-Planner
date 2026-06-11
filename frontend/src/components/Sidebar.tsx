@@ -37,9 +37,7 @@ export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleC
     >
       {/* Logo */}
       <div className="h-16 border-b border-border flex items-center gap-3 px-4 shrink-0">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center font-black text-white text-[12px] shrink-0 shadow-[0_0_20px_rgba(37,99,235,0.3)]">
-          AP
-        </div>
+        <img src="/apex-logo.png" alt="APEX Logo" className="w-8 h-8 object-contain shrink-0 drop-shadow-[0_0_10px_rgba(37,99,235,0.3)]" />
         {!isCollapsed && (
           <motion.span
             initial={{ opacity: 0 }}

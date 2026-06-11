@@ -86,9 +86,7 @@ export default function AuthPage({ onBack }: AuthPageProps) {
 
         {/* Logo and Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center font-black text-white text-base shadow-[0_0_30px_rgba(37,99,235,0.3)] mb-4">
-            AP
-          </div>
+          <img src="/apex-logo.png" alt="APEX Logo" className="w-16 h-16 object-contain mb-2 drop-shadow-[0_0_15px_rgba(37,99,235,0.5)]" />
           <h2 className="text-[15px] font-black tracking-[0.15em] text-primary uppercase font-[family-name:var(--font-mono)]">
             {isLogin ? 'Sign In' : 'Create Your Account'}
           </h2>
