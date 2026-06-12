@@ -1688,6 +1688,22 @@ class ReasoningEngine:
                 final_confidence=1.0
             )
 
+        # 1.5 Handle CONVERSATIONAL complexity level
+        if complexity == "CONVERSATIONAL":
+            print("[Governance] CONVERSATIONAL complexity detected: Bypassing LLM reasoning threads.")
+            return ConsensusOutput(
+                consensus_recommendation={
+                    "action": "Initiate natural conversation.",
+                    "confidence": 1.0,
+                    "rationale": "Conversational greeting query."
+                },
+                thread_agreement={},
+                agreement_score=1.0,
+                dissenting_views=[],
+                confidence_limiting_factors=[],
+                final_confidence=1.0
+            )
+
         # Summarize large dataset to protect context windows
         account_data = summarize_large_dataset(account_data)
         

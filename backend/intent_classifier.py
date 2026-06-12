@@ -45,6 +45,9 @@ class IntentClassificationOutput(BaseModel):
 class IntentClassifier:
     """Rule-based intent classifier using keyword matching."""
     
+    def __init__(self, known_accounts: Optional[List[str]] = None):
+        self.known_accounts = known_accounts or []
+    
     def classify(self, query: str, user_role: str = "Account Manager") -> IntentClassificationOutput:
         """Classify intent using robust Phase 1 regex patterns."""
         
@@ -94,6 +97,15 @@ class IntentClassifier:
                 intent_val = "RISK_ANALYSIS"
         elif re.search(r"\b(account plan|action plan|playbook|strategy|strategic review|strategic focus)\b", query_lower):
             intent_val = "ACCOUNT_PLAN"
+
+        # 4. Check for Conversational Greetings
+        GREETING_PATTERN = r"\b(hello|hi|hey|what's up|howdy|anyone there|how are you|can you help)\b"
+        if re.search(GREETING_PATTERN, query_lower):
+            domain_terms = ["opp", "opportunity", "opportunities", "forecast", "pipeline", "stalled", "stalling", "contact", "decision maker", "action plan", "playbook", "blocker", "cases", "risk", "deal"]
+            if not any(t in query_lower for t in domain_terms):
+                complexity_val = "CONVERSATIONAL"
+                intent_val = "GREETING"
+                scope_val = "MIXED"
             
         # ═══════════════════════════════════════════════════════════════
         # PHASE 2: Semantic Similarity (Commented Out for Future Phase)
@@ -116,16 +128,23 @@ class IntentClassifier:
         # Urgency
         urgency = self._detect_urgency(query_lower)
         
-        # Extract target entities using contiguous capitalized word search
-        noise = {'Top', 'Show', 'Give', 'Get', 'Review', 'Evaluate', 'Provide', 'Who', 'What', 'Where', 'When', 'Why', 'How', 'Which', 'Are', 'Is', 'They', 'Them', 'Our', 'Your', 'Please', 'Traced'}
-        matches = re.findall(r'\b[A-Z][a-zA-Z0-9]*(?:\s+[A-Z][a-zA-Z0-9]*)*\b', query)
-        
+        # Extract target entities using Case-Insensitive Database Matcher
         target_entities_val = []
-        for m in matches:
-            m_words = m.split()
-            filtered_words = [w for w in m_words if w not in noise]
-            if filtered_words:
-                target_entities_val.append(" ".join(filtered_words))
+        if self.known_accounts:
+            for acc in self.known_accounts:
+                pattern = r'\b' + re.escape(acc.lower()) + r'\b'
+                if re.search(pattern, query_lower):
+                    target_entities_val.append(acc)
+        
+        # Fallback to contiguous capitalized word search if database matcher has no results
+        if not target_entities_val:
+            noise = {'Top', 'Show', 'Give', 'Get', 'Review', 'Evaluate', 'Provide', 'Who', 'What', 'Where', 'When', 'Why', 'How', 'Which', 'Are', 'Is', 'They', 'Them', 'Our', 'Your', 'Please', 'Traced'}
+            matches = re.findall(r'\b[A-Z][a-zA-Z0-9]*(?:\s+[A-Z][a-zA-Z0-9]*)*\b', query)
+            for m in matches:
+                m_words = m.split()
+                filtered_words = [w for w in m_words if w not in noise]
+                if filtered_words:
+                    target_entities_val.append(" ".join(filtered_words))
         
         # Backwards compatibility update
         if target_entities_val:

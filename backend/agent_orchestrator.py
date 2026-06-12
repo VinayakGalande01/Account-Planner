@@ -188,7 +188,6 @@ class DataRetrieval:
 class AccountPlanningAgent:
     def __init__(self, data_engine: Optional[DataEngine] = None, is_local: bool = True):
         self.is_local = is_local
-        self.intent_classifier = IntentClassifier()
         
         # Resolve data engine exactly like main.py
         if data_engine is None:
@@ -197,6 +196,14 @@ class AccountPlanningAgent:
             self.data_engine = default_engine
         else:
             self.data_engine = data_engine
+
+        known_accounts = []
+        if self.data_engine and self.data_engine.data:
+            accounts_df = self.data_engine.data.get('account')
+            if accounts_df is not None and not accounts_df.empty and 'Account_Name' in accounts_df.columns:
+                known_accounts = accounts_df['Account_Name'].dropna().unique().tolist()
+        
+        self.intent_classifier = IntentClassifier(known_accounts=known_accounts)
             
         self.data_retrieval = DataRetrieval(self.data_engine)
         self.reasoning_engine = ReasoningEngine()
@@ -219,6 +226,61 @@ class AccountPlanningAgent:
         except AttributeError:
             intent_data = intent.dict()
         print(f"[Layer 1] Classified Intent Output: {intent_data}")
+        
+        # Fast path for conversational greetings
+        if intent.complexity == "CONVERSATIONAL":
+            print("[Governance] CONVERSATIONAL complexity detected: Bypassing normal layers for greeting.")
+            import httpx
+            
+            system_prompt = (
+                "You are a friendly, experienced Account Planning expert. Welcome the user, "
+                "introduce your capabilities (account planning, growth strategies, stakeholder maps, "
+                "pipeline reviews) naturally, and encourage them to share details about their accounts, "
+                "goals, or challenges. Keep the interaction lightweight, human, and conversational (under 60 words). "
+                "Do not mention fallback logic, routing layers, or system internals."
+            )
+            user_prompt = f"The user says: '{query}'. Respond to them naturally."
+            
+            welcome_text = ""
+            try:
+                payload = {
+                    "model": self.response_generator.model,
+                    "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}",
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.7,
+                        "num_predict": 150
+                    }
+                }
+                with httpx.Client(timeout=15) as client:
+                    response = client.post(self.response_generator.url, json=payload)
+                    if response.status_code == 200:
+                        welcome_text = response.json().get("response", "").strip()
+            except Exception as e:
+                print(f"[Warning] LLM call failed for conversational greeting: {e}")
+                
+            if not welcome_text:
+                welcome_text = "Hello! I am your Account Planning expert. How can I help you with your accounts or pipelines today?"
+            
+            consensus = self.reasoning_engine.run_reasoning_threads(
+                account_data={},
+                market_context={},
+                complexity="CONVERSATIONAL"
+            )
+            
+            responses = {role: {"narrative": welcome_text, "why_this_matters": "Conversational greeting."} for role in recipient_roles}
+            
+            return {
+                "status": "SUCCESS",
+                "intent": intent,
+                "consensus": consensus,
+                "responses": responses,
+                "data_quality_score": 100.0,
+                "confidence": 1.0,
+                "raw_reasoning_bucket": {},
+                "raw_response_bucket": {},
+                "account_data": {}
+            }
         
         # Intent Gatekeeper: Reject low confidence
         if intent.confidence_primary < 0.5:
@@ -317,7 +379,8 @@ class AccountPlanningAgent:
                 "data_quality_score": data_quality_pct,
                 "confidence": 1.0,
                 "raw_reasoning_bucket": {},
-                "raw_response_bucket": {}
+                "raw_response_bucket": {},
+                "account_data": account_data
             }
 
         # LAYER 2: Reasoning (Multi-perspective)
@@ -377,7 +440,8 @@ class AccountPlanningAgent:
             "data_quality_score": data_quality_pct,
             "confidence": consensus.final_confidence,
             "raw_reasoning_bucket": self.reasoning_engine.raw_reasoning_bucket,
-            "raw_response_bucket": self.response_generator.raw_response_bucket
+            "raw_response_bucket": self.response_generator.raw_response_bucket,
+            "account_data": account_data
         }
 
     def _get_market_context(self):

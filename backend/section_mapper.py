@@ -35,6 +35,11 @@ class SectionContractMapper:
             direct_answer = narrative or why_this_matters or "Factual data retrieved successfully."
             parts.append(f"__SECTION_DIRECT_ANSWER__\n{direct_answer}")
 
+        # 1.5 CONVERSATIONAL Blueprint: [Direct Answer, Confidence]
+        elif complexity == "CONVERSATIONAL":
+            direct_answer = narrative or why_this_matters or "Hello! How can I help you today?"
+            parts.append(f"__SECTION_DIRECT_ANSWER__\n{direct_answer}")
+
         # 2. OPERATIONAL Blueprint: [Headline, Table, Signals, Actions]
         elif complexity == "OPERATIONAL":
             headline = f"Operational Metrics Overview"
