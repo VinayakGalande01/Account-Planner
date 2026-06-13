@@ -103,7 +103,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   // Health check
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8002/api/health', { signal: AbortSignal.timeout(3000) });
+      const res = await fetch('/api/health', { signal: AbortSignal.timeout(3000) });
       setSystemStatus(res.ok ? 'operational' : 'offline');
     } catch {
       setSystemStatus('offline');

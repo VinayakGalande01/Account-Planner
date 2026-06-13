@@ -38,12 +38,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
     setLoading(true);
     try {
-      const res = await authFetch('http://127.0.0.1:8002/api/accounts/enriched');
+      const res = await authFetch('/api/accounts/enriched');
       const data = await res.json();
       setAccounts(Array.isArray(data) ? data : []);
     } catch {
       try {
-        const res = await authFetch('http://127.0.0.1:8002/api/accounts');
+        const res = await authFetch('/api/accounts');
         const data = await res.json();
         setAccounts(data || []);
       } catch {

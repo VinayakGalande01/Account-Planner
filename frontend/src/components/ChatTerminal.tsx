@@ -100,7 +100,7 @@ export default function ChatTerminal() {
     setProcessingStage('running');
 
     try {
-      const response = await authFetch('http://127.0.0.1:8002/api/chat', {
+      const response = await authFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: textToSend }),

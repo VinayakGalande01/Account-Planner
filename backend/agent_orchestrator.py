@@ -85,9 +85,10 @@ class DataRetrieval:
             for _, r in matching_contacts.iterrows():
                 contacts_list.append({
                     "contact_id": str(r.get('Contact_ID', '')),
-                    "name": str(r.get('Name', '')),
+                    "name": f"{r.get('First_Name', '')} {r.get('Last_Name', '')}".strip(),
                     "role": str(r.get('Role', '')),
-                    "engagement_level": str(r.get('Engagement_Level', ''))
+                    "engagement_level": str(r.get('Engagement_Level', '')),
+                    "last_contact_date": str(r.get('Last_Contact_Date', ''))[:10] if pd.notna(r.get('Last_Contact_Date')) else "Never"
                 })
                 
         # Cases
@@ -345,7 +346,7 @@ class AccountPlanningAgent:
                 if contacts:
                     contact_lines = []
                     for c in contacts[:5]:
-                        contact_lines.append(f"• {c.get('name')} - {c.get('role')} ({c.get('engagement_level')} engagement)")
+                        contact_lines.append(f"• {c.get('name')} - {c.get('role')} (Engagement: {c.get('engagement_level')}, Last Contacted: {c.get('last_contact_date')})")
                     factual_answer = f"The following contacts were found for {account_data.get('account_name')}:\n" + "\n".join(contact_lines)
                 else:
                     factual_answer = f"No contacts found for {account_data.get('account_name')} in the database."

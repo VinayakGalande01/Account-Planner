@@ -20,7 +20,7 @@ echo [SERVICE] Auth System
 echo ├─ Port: 8001
 echo ├─ URL : http://localhost:8001
 echo └─ Status: STARTING
-start "APEX Auth (8001)" cmd /k "cd backend && uvicorn auth_main:app --reload --port 8001 --no-access-log"
+start "APEX Auth (8001)" cmd /k "cd backend && uvicorn auth_main:app --reload --reload-exclude "llm_cache.json" --port 8001 --no-access-log"
 echo.
 
 timeout /t 1 >nul
@@ -29,7 +29,7 @@ echo [SERVICE] Backend Server
 echo ├─ Port: 8002
 echo ├─ URL : http://localhost:8002
 echo └─ Status: STARTING
-start "APEX Backend (8002)" cmd /k "cd backend && uvicorn main:app --reload --port 8002"
+start "APEX Backend (8002)" cmd /k "cd backend && uvicorn main:app --reload --reload-exclude "llm_cache.json" --port 8002"
 echo.
 
 timeout /t 1 >nul

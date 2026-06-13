@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     localStorage.removeItem('token');
     try {
-      await fetch('http://127.0.0.1:8001/auth/logout', { 
+      await fetch('/auth/logout', { 
         method: 'POST',
         credentials: 'include'
       });
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Session refresh handler
   const refreshSession = useCallback(async (): Promise<string | null> => {
     try {
-      const res = await fetch('http://127.0.0.1:8001/auth/refresh', {
+      const res = await fetch('/auth/refresh', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('token', data.access_token);
 
           // Get current user using the new token
-          const userRes = await fetch('http://127.0.0.1:8001/auth/me', {
+          const userRes = await fetch('/auth/me', {
             headers: {
               'Authorization': `Bearer ${data.access_token}`,
               'Accept': 'application/json',
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const storedToken = localStorage.getItem('token');
       if (storedToken) {
         try {
-          const res = await fetch('http://127.0.0.1:8001/auth/me', {
+          const res = await fetch('/auth/me', {
             headers: {
               'Authorization': `Bearer ${storedToken}`,
               'Accept': 'application/json',
@@ -148,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8001/auth/login', {
+      const res = await fetch('/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -165,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('token', data.access_token);
         
         // Fetch profile details
-        const userRes = await fetch('http://127.0.0.1:8001/auth/me', {
+        const userRes = await fetch('/auth/me', {
           headers: {
             'Authorization': `Bearer ${data.access_token}`,
             'Accept': 'application/json',
@@ -192,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8001/auth/signup', {
+      const res = await fetch('/auth/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -219,18 +219,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const authFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
-    const currentToken = token || localStorage.getItem('token');
+    let currentToken = token || localStorage.getItem('token');
     const headers = new Headers(options.headers || {});
 
     if (currentToken) {
       headers.set('Authorization', `Bearer ${currentToken}`);
     }
 
-    return fetch(url, {
+    let res = await fetch(url, {
       ...options,
       headers,
     });
-  }, [token]);
+
+    if (res.status === 401) {
+      console.log('Access token expired, attempting silent refresh...');
+      const newToken = await refreshSession();
+      if (newToken) {
+        headers.set('Authorization', `Bearer ${newToken}`);
+        res = await fetch(url, {
+          ...options,
+          headers,
+        });
+      } else {
+        logout();
+      }
+    }
+
+    return res;
+  }, [token, refreshSession, logout]);
 
   return (
     <AuthContext.Provider value={{

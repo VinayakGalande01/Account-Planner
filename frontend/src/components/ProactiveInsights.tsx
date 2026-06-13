@@ -37,7 +37,7 @@ export default function ProactiveInsights({ isOpen, onClose }: ProactiveInsights
   const fetchInsights = async () => {
     setLoading(true);
     try {
-      const res = await authFetch('http://localhost:8002/api/insights');
+      const res = await authFetch('/api/insights');
       const json = await res.json();
       setData(json);
 

@@ -415,6 +415,23 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
     Returns dict with 'columns' and 'rows', or None if no table applicable.
     Backend is the single source of truth for ranking/priority/truncation."""
 
+    # Map primary_intent / IntentEnum value to legacy table query types
+    intent_str = intent.value if hasattr(intent, "value") else str(intent)
+    intent_map = {
+        "risk_assessment": "RISK_ANALYSIS_QUERY",
+        "relationship_analysis": "CONTACT_QUERY",
+        "pipeline_summary": "PIPELINE_SUMMARY_QUERY",
+        "opportunity_expansion": "GLOBAL_LIST_QUERY",
+        "action_recommendation": "GLOBAL_LIST_QUERY",
+        "opportunity_ranking": "GLOBAL_LIST_QUERY",
+        "pipeline_review": "PIPELINE_SUMMARY_QUERY",
+        "executive_briefing": "GLOBAL_LIST_QUERY",
+        "portfolio_analysis": "RISK_ANALYSIS_QUERY",
+        "account_plan": "ACCOUNT_PLAN_QUERY",
+        "contact_lookup": "CONTACT_QUERY"
+    }
+    intent = intent_map.get(intent_str, intent_str)
+
     from data_retrieval_layer import Phase1Output, _resolve_account_ids, normalize_stage_name
     p1 = Phase1Output.from_json(p1_json) if p1_json else None
 
@@ -1116,8 +1133,9 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
         await asyncio.sleep(0.05)
         
         try:
-            # Execute the 3-Layer pipeline
-            res = agent.process_query(
+            # Execute the 3-Layer pipeline in a separate thread to keep the event loop responsive
+            res = await asyncio.to_thread(
+                agent.process_query,
                 query=request.query,
                 user_role="sales", # Default
                 recipient_roles=[target_role]

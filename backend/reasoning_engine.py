@@ -1628,6 +1628,28 @@ class ReasoningEngine:
             
         return salvaged
 
+    def _normalize_parsed_dict(self, parsed: dict) -> dict:
+        """Helper to normalize percentages (>1.0) to ratio decimals (<=1.0)."""
+        if not isinstance(parsed, dict):
+            return parsed
+        
+        # Normalize historical precedents success_rate and match_confidence
+        if "historical_precedents" in parsed and isinstance(parsed["historical_precedents"], list):
+            for item in parsed["historical_precedents"]:
+                if isinstance(item, dict):
+                    for key in ["success_rate", "match_confidence"]:
+                        val = item.get(key)
+                        if isinstance(val, (int, float)) and val > 1.0:
+                            item[key] = val / 100.0
+                            
+        # Normalize intervention_success_probability and overall_confidence
+        for key in ["intervention_success_probability", "overall_confidence", "confidence"]:
+            val = parsed.get(key)
+            if isinstance(val, (int, float)) and val > 1.0:
+                parsed[key] = val / 100.0
+                
+        return parsed
+
     def _clean_and_parse(self, text: str, is_consensus: bool = False) -> dict:
         try:
             clean_text = text.strip()
@@ -1639,11 +1661,13 @@ class ReasoningEngine:
             end = clean_text.rfind("}")
             if start != -1 and end != -1:
                 clean_text = clean_text[start:end+1]
-            return json.loads(clean_text)
+            parsed = json.loads(clean_text)
+            return self._normalize_parsed_dict(parsed)
         except Exception as e1:
             try:
                 repaired = self._repair_json_string(text)
-                return json.loads(repaired)
+                parsed = json.loads(repaired)
+                return self._normalize_parsed_dict(parsed)
             except Exception as e2:
                 if is_consensus:
                     raise Exception(f"Consensus JSON parsing failed: {e2}")
@@ -1654,9 +1678,11 @@ class ReasoningEngine:
                         thread_context = t
                         break
                 try:
-                    return self._extract_fallback_fields(text, thread_context)
+                    parsed = self._extract_fallback_fields(text, thread_context)
+                    return self._normalize_parsed_dict(parsed)
                 except Exception as e3:
-                    return self._fallback_for_thread(thread_context, f"Parsing exception: {e3}")
+                    parsed = self._fallback_for_thread(thread_context, f"Parsing exception: {e3}")
+                    return self._normalize_parsed_dict(parsed)
 
     def run_reasoning_threads(
         self,

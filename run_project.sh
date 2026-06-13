@@ -20,7 +20,7 @@ echo "[SERVICE] Auth System"
 echo "├─ Port: 8001"
 echo "├─ URL : http://localhost:8001"
 echo "└─ Status: STARTING"
-osascript -e "tell application \"Terminal\" to activate" -e "tell application \"Terminal\" to do script \"cd '$PWD/backend' && uvicorn auth_main:app --reload --port 8001 --no-access-log\"" > /dev/null
+osascript -e "tell application \"Terminal\" to activate" -e "tell application \"Terminal\" to do script \"cd '$PWD/backend' && uvicorn auth_main:app --reload --reload-exclude \\\"llm_cache.json\\\" --port 8001 --no-access-log\"" > /dev/null
 echo ""
 
 sleep 1.5
@@ -29,7 +29,7 @@ echo "[SERVICE] Backend Server"
 echo "├─ Port: 8002"
 echo "├─ URL : http://localhost:8002"
 echo "└─ Status: STARTING"
-osascript -e "tell application \"Terminal\" to activate" -e "tell application \"Terminal\" to do script \"cd '$PWD/backend' && uvicorn main:app --reload --port 8002\"" > /dev/null
+osascript -e "tell application \"Terminal\" to activate" -e "tell application \"Terminal\" to do script \"cd '$PWD/backend' && uvicorn main:app --reload --reload-exclude \\\"llm_cache.json\\\" --port 8002\"" > /dev/null
 echo ""
 
 sleep 1.5
