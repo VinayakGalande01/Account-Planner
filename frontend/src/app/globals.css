@@ -560,10 +560,10 @@
 /* ── Table Widget ─────────────────────────────────────────── */
 
 .apex-widget-table {
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.01);
+  background: var(--card);
 }
 
 .apex-data-grid {
@@ -575,20 +575,20 @@
 
 .apex-data-grid thead th {
   background: rgba(37, 99, 235, 0.06);
-  color: #71717a;
+  color: var(--muted-foreground);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 8px 12px;
   text-align: left;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
   white-space: nowrap;
   font-family: var(--font-mono);
 }
 
 .apex-data-grid tbody tr {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
   transition: background-color 0.15s ease;
 }
 
@@ -598,19 +598,19 @@
 
 .apex-data-grid tbody td {
   padding: 7px 12px;
-  color: #d4d4d8;
+  color: var(--foreground);
   white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 11px;
 }
 
 .apex-data-grid tbody tr:nth-child(even) {
-  background-color: rgba(255, 255, 255, 0.01);
+  background-color: color-mix(in srgb, var(--muted) 30%, transparent);
 }
 
 .apex-table-footer {
   padding: 6px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  border-top: 1px solid var(--border);
   text-align: right;
 }
 
