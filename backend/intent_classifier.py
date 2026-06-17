@@ -48,7 +48,7 @@ class IntentClassifier:
     def __init__(self, known_accounts: Optional[List[str]] = None):
         self.known_accounts = known_accounts or []
     
-    def classify(self, query: str, user_role: str = "Account Manager") -> IntentClassificationOutput:
+    def classify(self, query: str, history: Optional[List[Dict[str, str]]] = None, user_role: str = "Account Manager") -> IntentClassificationOutput:
         """Classify intent using robust Phase 1 regex patterns."""
         
         query_lower = query.lower()
@@ -145,6 +145,24 @@ class IntentClassifier:
                 filtered_words = [w for w in m_words if w not in noise]
                 if filtered_words:
                     target_entities_val.append(" ".join(filtered_words))
+
+        # Carry over active account from history if query uses pronouns
+        if not target_entities_val and history:
+            pronouns = ["he", "she", "they", "them", "their", "that account", "it", "him", "her"]
+            if any(re.search(r'\b' + re.escape(p) + r'\b', query_lower) for p in pronouns):
+                # Search backwards in history
+                for msg in reversed(history):
+                    msg_text = msg.get("text", "").lower()
+                    found_acc = None
+                    if self.known_accounts:
+                        for acc in self.known_accounts:
+                            pattern = r'\b' + re.escape(acc.lower()) + r'\b'
+                            if re.search(pattern, msg_text):
+                                found_acc = acc
+                                break
+                    if found_acc:
+                        target_entities_val.append(found_acc)
+                        break
         
         # Backwards compatibility update
         if target_entities_val:

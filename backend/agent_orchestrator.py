@@ -214,14 +214,15 @@ class AccountPlanningAgent:
         self,
         query: str,
         user_role: str,
-        recipient_roles: List[str] = ["am"]
+        recipient_roles: List[str] = ["am"],
+        history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
         End-to-end account planning query processing.
         """
         # LAYER 1: Intent Classification
         print("[Layer 1] Classifying intent...")
-        intent = self.intent_classifier.classify(query, user_role)
+        intent = self.intent_classifier.classify(query, history, user_role)
         try:
             intent_data = intent.model_dump()
         except AttributeError:
@@ -309,6 +310,17 @@ class AccountPlanningAgent:
         # LAYER 2: Data Retrieval
         print("[Layer 2] Retrieving data...")
         account_data, data_quality = self.data_retrieval.fetch_with_quality_check(intent)
+        
+        # Local RAG Semantic Retrieval
+        try:
+            from vector_store import vector_store
+            acc_id = account_data.get("account_id")
+            semantic_matches = vector_store.search_activities(query, account_id=acc_id, limit=3)
+            if semantic_matches:
+                account_data["semantic_activities"] = [m["text"] for m in semantic_matches]
+                print(f"[RAG] Appended {len(semantic_matches)} semantically relevant activities to context.")
+        except Exception as rag_err:
+            print(f"⚠️ Warning: Local RAG semantic search failed: {rag_err}")
         
         # Enabled reasoning on local (run sequential threads)
         # if self.is_local:

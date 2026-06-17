@@ -13,3 +13,5 @@ passlib[bcrypt]
 python-jose[cryptography]
 email-validator
 python-multipart
+chromadb
+sentence-transformers

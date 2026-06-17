@@ -44,11 +44,27 @@ load_dotenv(override=True)
 app = FastAPI(title="Account Planner Agent API")
 
 # Automatically create database tables for the auth service
-from database import Base, engine
+from database import Base, engine as db_engine
 import models.user
+import models.crm_models
 try:
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=db_engine)
     print("  ✅ Database tables initialized successfully.")
+    
+    # Run sync if database is empty
+    from sqlalchemy.orm import sessionmaker
+    SessionLocal = sessionmaker(bind=db_engine)
+    session = SessionLocal()
+    try:
+        from models.crm_models import Account
+        if session.query(Account).count() == 0:
+            print("🔄 SQLite database is empty. Triggering initial sync...")
+            from sync_daemon import sync_crm_to_sqlite
+            sync_crm_to_sqlite()
+    except Exception as sync_err:
+        print(f"⚠️ Error running initial sync: {sync_err}")
+    finally:
+        session.close()
 except Exception as db_err:
     print(f"  ❌ Warning: Database table initialization failed: {db_err}")
     print("     Ensure PostgreSQL is running and database 'account_planner' exists.")
@@ -116,6 +132,7 @@ print("=============================================\n")
 
 class ChatRequest(BaseModel):
     query: str
+    session_id: Optional[str] = "default_session"
     response_format: Optional[str] = "markdown"  # "markdown" or "json"
     response_mode: Optional[str] = "operational"  # "executive", "operational", "analyst"
 
@@ -1110,6 +1127,31 @@ def generate_deterministic_pipeline(engine, mode: str, format: str, query: str =
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest, current_user: User = Depends(get_current_user)):
+    from database import SessionLocal
+    from models.crm_models import ChatSession, ChatMessage
+    
+    session_id = request.session_id or "default_session"
+    db_sess = SessionLocal()
+    chat_history = []
+    try:
+        chat_session = db_sess.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if not chat_session:
+            chat_session = ChatSession(id=session_id)
+            db_sess.add(chat_session)
+            db_sess.commit()
+            db_sess.refresh(chat_session)
+        
+        db_history = db_sess.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.timestamp.desc()).limit(2).all()
+        for msg in reversed(db_history):
+            chat_history.append({
+                "sender": msg.sender,
+                "text": msg.text
+            })
+    except Exception as e:
+        print(f"⚠️ Warning: Database error retrieving chat history: {e}")
+    finally:
+        db_sess.close()
+
     async def generate_stream():
         start_time = asyncio.get_event_loop().time()
 
@@ -1138,8 +1180,39 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
                 agent.process_query,
                 query=request.query,
                 user_role="sales", # Default
-                recipient_roles=[target_role]
+                recipient_roles=[target_role],
+                history=chat_history
             )
+            
+            # Save chat history to database
+            db_save = SessionLocal()
+            try:
+                user_msg = ChatMessage(session_id=session_id, sender="user", text=request.query)
+                db_save.add(user_msg)
+                
+                # Determine narrative reply text
+                narrative_reply = ""
+                if res.get("status") == "SUCCESS":
+                    resp_role = res.get("responses", {}).get(target_role)
+                    if resp_role:
+                        narrative_reply = resp_role.get("narrative", "") if isinstance(resp_role, dict) else getattr(resp_role, "narrative", "")
+                elif res.get("status") == "DATA_ONLY_LOCAL":
+                    opps_count = len(res.get("data", {}).get("opportunities", []))
+                    narrative_reply = f"Data summary: {opps_count} opportunities retrieved locally."
+                elif res.get("status") == "INTENT_LOW_CONFIDENCE":
+                    opps_count = len(res.get("data", {}).get("opportunities", []))
+                    narrative_reply = f"Intent confidence low: showing {opps_count} opportunities."
+                
+                if narrative_reply:
+                    assistant_msg = ChatMessage(session_id=session_id, sender="assistant", text=narrative_reply)
+                    db_save.add(assistant_msg)
+                
+                db_save.commit()
+            except Exception as save_err:
+                print(f"⚠️ Failed to save chat history: {save_err}")
+                db_save.rollback()
+            finally:
+                db_save.close()
             
             # # OLD LOW_CONFIDENCE PATH (Commented down)
             # if res["status"] == "LOW_CONFIDENCE":
@@ -1584,6 +1657,37 @@ async def get_accounts(current_user: User = Depends(get_current_user)):
     if 'account' not in engine.data:
         return []
     return engine.data['account'][['Account_ID', 'Account_Name', 'Account_Tier']].to_dict('records')
+
+@app.post("/api/sync")
+async def sync_data(current_user: User = Depends(get_current_user)):
+    """API endpoint to manually trigger the sync daemon."""
+    from sync_daemon import sync_crm_to_sqlite
+    success = sync_crm_to_sqlite()
+    if not success:
+        raise HTTPException(status_code=500, detail="Database sync failed")
+    
+    # Also reload memory-based Excel data representation
+    try:
+        engine.load_data()
+    except Exception as e:
+        print(f"⚠️ Warning: Failed to reload DataEngine memory data: {e}")
+        
+    return {"status": "SUCCESS", "message": "Database successfully synced from CRM dataset"}
+
+@app.get("/api/dashboard/hygiene")
+async def get_hygiene_warnings(current_user: User = Depends(get_current_user)):
+    """API endpoint to retrieve CRM data hygiene alerts."""
+    from database import SessionLocal
+    from hygiene_checker import check_data_hygiene
+    
+    db = SessionLocal()
+    try:
+        warnings = check_data_hygiene(db)
+        return {"warnings": warnings}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     import uvicorn
