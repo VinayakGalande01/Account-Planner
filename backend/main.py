@@ -1175,6 +1175,7 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
         await asyncio.sleep(0.05)
         
         try:
+
             # Execute the 3-Layer pipeline in a separate thread to keep the event loop responsive
             res = await asyncio.to_thread(
                 agent.process_query,
@@ -1213,6 +1214,25 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
                 db_save.rollback()
             finally:
                 db_save.close()
+            # Run the 3-Layer pipeline in a task so we can stream keep-alive heartbeats in the meantime
+            query_task = asyncio.create_task(
+                asyncio.to_thread(
+                    agent.process_query,
+                    query=request.query,
+                    user_role="sales", # Default
+                    recipient_roles=[target_role]
+                )
+            )
+            
+            while not query_task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(query_task), timeout=5.0)
+                except asyncio.TimeoutError:
+                    # Yield a keep-alive log chunk to reset the browser idle timer
+                    yield "sys_meta_log|[SYS_LOG] Processing... Reasoning engine is active.\n\n"
+            
+            res = await query_task
+
             
             # # OLD LOW_CONFIDENCE PATH (Commented down)
             # if res["status"] == "LOW_CONFIDENCE":

@@ -1543,35 +1543,91 @@ def repair_json_string(text: str) -> str:
     return repaired
 
 
-def summarize_large_dataset(account_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Summarize raw details to keep context window small if data is too large."""
-    if not account_data or "opportunities" not in account_data:
+def summarize_large_dataset(account_data: Dict[str, Any], requested_count: int = 5) -> Dict[str, Any]:
+    """Summarize raw details to keep context window small and clean up empty/null fields."""
+    if not account_data:
         return account_data
         
-    opps = account_data["opportunities"]
-    if len(opps) <= 5:
-        return account_data
+    # 1. Clean empty/null/zero fields from account_data to save space
+    cleaned_data = {}
+    for k, v in account_data.items():
+        if v is None:
+            continue
+        if isinstance(v, list) and len(v) == 0:
+            continue
+        if isinstance(v, dict) and len(v) == 0:
+            continue
+        cleaned_data[k] = v
+
+    if "opportunities" not in cleaned_data:
+        return cleaned_data
         
-    # Summarize opportunities
+    opps = cleaned_data["opportunities"]
+    
+    # 2. Filter opportunities count dynamically
     total_count = len(opps)
     total_val = sum((o.get("amount_usd", 0.0) or 0.0) for o in opps)
     
-    # Sort by value descending and keep top 5
+    # Sort by value descending and keep requested_count
     sorted_opps = sorted(
         opps, 
         key=lambda x: (x.get("amount_usd", 0.0) or 0.0), 
         reverse=True
     )
-    top_5 = sorted_opps[:5]
     
-    # Create summarized copy
-    summarized = dict(account_data)
-    summarized["opportunities"] = top_5
-    summarized["total_opportunities_count"] = total_count
-    summarized["total_pipeline_value_usd"] = total_val
-    summarized["opportunities_summary_note"] = f"Showing top 5 opportunities out of {total_count} total by value to optimize context size."
+    # Clean up empty/null fields inside each opportunity to save more tokens
+    cleaned_opps = []
+    for opp in sorted_opps[:requested_count]:
+        cleaned_opp = {}
+        for ok, ov in opp.items():
+            if ov is None:
+                continue
+            if isinstance(ov, list) and len(ov) == 0:
+                continue
+            if isinstance(ov, dict) and len(ov) == 0:
+                continue
+            cleaned_opp[ok] = ov
+        cleaned_opps.append(cleaned_opp)
+        
+    cleaned_data["opportunities"] = cleaned_opps
+    cleaned_data["total_opportunities_count"] = total_count
+    cleaned_data["total_pipeline_value_usd"] = total_val
+    cleaned_data["opportunities_summary_note"] = (
+        f"Showing top {len(cleaned_opps)} opportunities out of {total_count} total by value to optimize context size."
+    )
     
-    return summarized
+    return cleaned_data
+
+
+def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_tokens: int = 400, timeout: int = 30) -> str:
+    """Fallback router to Gemini API when key is configured."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    
+    # Format prompts nicely
+    full_prompt = f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON."
+    
+    payload = {
+        "contents": [{
+            "parts": [{"text": full_prompt}]
+        }],
+        "generationConfig": {
+            "temperature": 0.0,
+            "maxOutputTokens": max_tokens,
+            "responseMimeType": "application/json"
+        }
+    }
+    
+    with httpx.Client(timeout=timeout) as client:
+        headers = {"Content-Type": "application/json"}
+        response = client.post(url, json=payload, headers=headers)
+        if response.status_code == 200:
+            res_json = response.json()
+            try:
+                return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+            except (KeyError, IndexError):
+                raise Exception(f"Unexpected Gemini API response structure: {res_json}")
+        else:
+            raise Exception(f"Gemini API error {response.status_code}: {response.text}")
 
 
 class ReasoningEngine:
@@ -1580,7 +1636,16 @@ class ReasoningEngine:
         self.model = model or os.getenv("MODEL_NAME", "llama3.2:latest")
         self.raw_reasoning_bucket = {}
 
-    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int) -> str:
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 300) -> str:
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
+                # Use a reasonable timeout for Gemini (usually responds in seconds) but allow up to passed timeout
+                return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=400, timeout=min(timeout, 60))
+            except Exception as e:
+                print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
+
         # Enforce conciseness for resource-constrained systems
         system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. Total JSON output must be under 200 tokens."
         payload = {
@@ -1688,10 +1753,11 @@ class ReasoningEngine:
         self,
         account_data: Dict[str, Any],
         market_context: Dict[str, Any],
-        timeout_per_thread: int = 15,
-        total_timeout: int = 30,
+        timeout_per_thread: int = 300,
+        total_timeout: int = 600,
         local: bool = True,
-        complexity: str = "EXECUTIVE"
+        complexity: str = "EXECUTIVE",
+        requested_count: int = 5
     ) -> ConsensusOutput:
         """
         Run reasoning threads dynamically based on complexity.
@@ -1731,7 +1797,7 @@ class ReasoningEngine:
             )
 
         # Summarize large dataset to protect context windows
-        account_data = summarize_large_dataset(account_data)
+        account_data = summarize_large_dataset(account_data, requested_count)
         
         results = {}
         
@@ -2271,7 +2337,15 @@ class ResponseGenerator:
         self.model = model or os.getenv("MODEL_NAME", "llama3.2:latest")
         self.raw_response_bucket = {}
 
-    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 180) -> str:
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 300) -> str:
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
+                return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=512, timeout=min(timeout, 60))
+            except Exception as e:
+                print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
+
         # Enforce conciseness for resource-constrained systems
         system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. The narrative response must be under 150 words."
         payload = {

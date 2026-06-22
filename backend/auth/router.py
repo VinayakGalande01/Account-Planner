@@ -11,6 +11,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Check if secure cookies are required (default to False for localhost development)
 SECURE_COOKIE = os.getenv("SECURE_COOKIE", "False").lower() in ("true", "1")
+SAMESITE_COOKIE = os.getenv("SAMESITE_COOKIE", "lax")
 
 def log_auth_event(action: str, email: str, status_msg: str, jwt_issued: bool, response_time_ms: int):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -62,7 +63,7 @@ def login(response: Response, credentials: UserLogin, service: AuthService = Dep
             value=refresh_token,
             httponly=True,
             secure=SECURE_COOKIE,
-            samesite="lax",
+            samesite=SAMESITE_COOKIE,
             max_age=7 * 24 * 3600,  # 7 days in seconds
         )
         
@@ -124,7 +125,7 @@ def refresh(request: Request, response: Response, service: AuthService = Depends
         value=new_refresh_token,
         httponly=True,
         secure=SECURE_COOKIE,
-        samesite="lax",
+        samesite=SAMESITE_COOKIE,
         max_age=7 * 24 * 3600,
     )
     

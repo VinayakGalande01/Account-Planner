@@ -398,13 +398,34 @@ class AccountPlanningAgent:
 
         # LAYER 2: Reasoning (Multi-perspective)
         print("[Layer 2] Running reasoning threads...")
+        
+        # Extract requested opportunity count if specified
+        requested_count = 5
+        metric_str = ""
+        try:
+            if hasattr(intent, "extracted_entities") and intent.extracted_entities:
+                metric_str = intent.extracted_entities.get("metric") or ""
+        except Exception:
+            pass
+        
+        import re
+        digits = re.findall(r"\b\d+\b", f"{metric_str} {query}")
+        if digits:
+            try:
+                parsed_num = int(digits[0])
+                if 1 <= parsed_num <= 10:
+                    requested_count = parsed_num
+            except Exception:
+                pass
+        
         consensus = self.reasoning_engine.run_reasoning_threads(
             account_data=account_data,
             market_context=market_context,
-            timeout_per_thread=180,
-            total_timeout=720,
+            timeout_per_thread=300,
+            total_timeout=600,
             local=self.is_local,
-            complexity=intent.complexity
+            complexity=intent.complexity,
+            requested_count=requested_count
         )
         
         # Cap reasoning confidence scores based on data sufficiency

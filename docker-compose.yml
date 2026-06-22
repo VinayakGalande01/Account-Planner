@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: apex-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: account_planner
+    ports:
+      - "5433:5432" # Maps to 5433 locally to avoid collision with any local Postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d account_planner"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: apex-backend
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password123@db:5432/account_planner
+      - SECRET_KEY=dev-secret-key-change-me-in-production
+      - SECURE_COOKIE=false
+      - SAMESITE_COOKIE=lax
+      - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LOCAL_OLLAMA=false # Set to false to force Gemini API usage if key is provided
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - chroma_data:/app/chroma_db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: apex-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND_URL=http://backend:8002
+      - AUTH_URL=http://backend:8002
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  chroma_data:

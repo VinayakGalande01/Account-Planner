@@ -4,6 +4,10 @@ import os
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local_planner.db")
 
+# Normalize postgres:// to postgresql:// for SQLAlchemy
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:

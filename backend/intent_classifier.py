@@ -27,7 +27,7 @@ class ExtractedEntities(BaseModel):
     competitor: Optional[str] = None
 
 
-from typing import List
+from typing import List, Dict
 
 class IntentClassificationOutput(BaseModel):
     primary_intent: IntentEnum
