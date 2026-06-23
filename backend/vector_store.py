@@ -32,8 +32,8 @@ class LocalVectorStore:
                     name=self.collection_name
                 )
                 print(f"✅ ChromaDB initialized at {self.db_path} with collection: {self.collection_name}")
-            except Exception as e:
-                print(f"⚠️ Failed to initialize ChromaDB, falling back to memory keyword search: {e}")
+            except BaseException as e:
+                print(f"Warning: Failed to initialize ChromaDB, falling back to memory keyword search: {e}")
                 self.chroma_client = None
 
     def index_activities(self, activities: list):
