@@ -1175,15 +1175,25 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
         await asyncio.sleep(0.05)
         
         try:
-
-            # Execute the 3-Layer pipeline in a separate thread to keep the event loop responsive
-            res = await asyncio.to_thread(
-                agent.process_query,
-                query=request.query,
-                user_role="sales", # Default
-                recipient_roles=[target_role],
-                history=chat_history
+            # Run the 3-Layer pipeline in a task so we can stream keep-alive heartbeats in the meantime
+            query_task = asyncio.create_task(
+                asyncio.to_thread(
+                    agent.process_query,
+                    query=request.query,
+                    user_role="sales", # Default
+                    recipient_roles=[target_role],
+                    history=chat_history
+                )
             )
+            
+            while not query_task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(query_task), timeout=5.0)
+                except asyncio.TimeoutError:
+                    # Yield a keep-alive log chunk to reset the browser idle timer
+                    yield "sys_meta_log|[SYS_LOG] Processing... Reasoning engine is active.\n\n"
+            
+            res = query_task.result()
             
             # Save chat history to database
             db_save = SessionLocal()
@@ -1214,24 +1224,6 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
                 db_save.rollback()
             finally:
                 db_save.close()
-            # Run the 3-Layer pipeline in a task so we can stream keep-alive heartbeats in the meantime
-            query_task = asyncio.create_task(
-                asyncio.to_thread(
-                    agent.process_query,
-                    query=request.query,
-                    user_role="sales", # Default
-                    recipient_roles=[target_role]
-                )
-            )
-            
-            while not query_task.done():
-                try:
-                    await asyncio.wait_for(asyncio.shield(query_task), timeout=5.0)
-                except asyncio.TimeoutError:
-                    # Yield a keep-alive log chunk to reset the browser idle timer
-                    yield "sys_meta_log|[SYS_LOG] Processing... Reasoning engine is active.\n\n"
-            
-            res = await query_task
 
             
             # # OLD LOW_CONFIDENCE PATH (Commented down)
@@ -1317,6 +1309,19 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
                 confidence_pct = int(data_quality.overall_sufficiency * 100)
                 yield f"__SECTION_CONFIDENCE__ Grounding: {confidence_pct}%\n"
                 
+                # 8. RECOMMENDED ACTIONS (Copilot chips)
+                try:
+                    from recommended_actions import generate_recommended_actions, serialize_recommended_actions
+                    rec_actions = generate_recommended_actions(
+                        intent=res.get("intent"),
+                        query=request.query,
+                        account_data=data,
+                    )
+                    if rec_actions:
+                        yield f"__SECTION_RECOMMENDED_ACTIONS__\n{serialize_recommended_actions(rec_actions)}\n"
+                except Exception as ra_err:
+                    print(f"[API Warning] Could not generate recommended actions: {ra_err}")
+                
                 yield "__SECTION_END__\n"
                 return
 
@@ -1334,6 +1339,20 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
                     "sources": ["CRM Sufficiency Score"]
                 })
                 yield f"__SECTION_CONFIDENCE__\n{confidence_json}\n"
+                
+                # RECOMMENDED ACTIONS (Copilot chips)
+                try:
+                    from recommended_actions import generate_recommended_actions, serialize_recommended_actions
+                    rec_actions = generate_recommended_actions(
+                        intent=res.get("intent"),
+                        query=request.query,
+                        account_data=data,
+                    )
+                    if rec_actions:
+                        yield f"__SECTION_RECOMMENDED_ACTIONS__\n{serialize_recommended_actions(rec_actions)}\n"
+                except Exception as ra_err:
+                    print(f"[API Warning] Could not generate recommended actions: {ra_err}")
+                
                 yield "__SECTION_END__\n"
                 return
                 
@@ -1385,6 +1404,21 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
             
             # Stream the complete mapped contract
             yield mapped_content
+            
+            # Stream recommended actions (Copilot chips)
+            try:
+                from recommended_actions import generate_recommended_actions, serialize_recommended_actions
+                rec_actions = generate_recommended_actions(
+                    intent=res.get("intent"),
+                    query=request.query,
+                    account_data=res.get("account_data"),
+                    consensus=consensus,
+                    response_obj=response_obj,
+                )
+                if rec_actions:
+                    yield f"\n__SECTION_RECOMMENDED_ACTIONS__\n{serialize_recommended_actions(rec_actions)}"
+            except Exception as ra_err:
+                print(f"[API Warning] Could not generate recommended actions: {ra_err}")
             
             end_time = asyncio.get_event_loop().time()
             latency_ms = (end_time - start_time) * 1000
