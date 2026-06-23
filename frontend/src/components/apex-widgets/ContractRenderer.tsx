@@ -4,6 +4,7 @@ import React, { useMemo } from 'react';
 import type { ResponseContract, SectionName } from '../../types/responseContract';
 import { SECTION_RENDER_ORDER } from '../../types/responseContract';
 import { parseStreamingSections, parseResponseContract } from '../../utils/contractParser';
+import { renderInlineMarkdown } from '../../utils/inlineMarkdown';
 import { HeadlineWidget } from './HeadlineWidget';
 import { SummaryWidget } from './SummaryWidget';
 import { TableWidget, TableSkeleton, TableMarkdownWidget } from './TableWidget';
@@ -21,9 +22,9 @@ type WidgetRenderer = (content: string) => React.ReactNode;
 
 const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
   DIRECT_ANSWER: (content) => (
-    <div className="apex-direct-answer bg-zinc-900/60 border border-zinc-700/50 p-4 rounded-lg mb-1">
-      <p className="text-[14px] text-zinc-900 dark:text-zinc-100 leading-relaxed font-medium">
-        {content}
+    <div className="apex-direct-answer bg-primary/[0.04] border border-primary/10 p-4 rounded-xl mb-1">
+      <p className="text-[14px] text-zinc-800 dark:text-zinc-200 leading-[1.7] font-[family-name:var(--font-inter)]">
+        {renderInlineMarkdown(content)}
       </p>
     </div>
   ),
@@ -37,15 +38,15 @@ const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
       .map((l) => l.replace(/^[•\-*\d.)+\s]+/, '').trim())
       .filter(Boolean);
     return (
-      <div className="apex-executive-summary border-l-2 border-indigo-500 bg-indigo-950/10 pl-4 pr-3 py-3 rounded-r my-2">
-        <div className="text-[11px] font-bold text-indigo-400 uppercase tracking-widest mb-2 font-[family-name:var(--font-mono)]">
+      <div className="apex-executive-summary border-l-2 border-indigo-500/60 bg-indigo-950/8 pl-4 pr-3 py-3.5 rounded-r my-2">
+        <div className="text-[11px] font-semibold text-indigo-400 uppercase tracking-widest mb-2.5 font-[family-name:var(--font-mono)]">
           Executive Summary
         </div>
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {points.map((point, i) => (
-            <li key={i} className="text-[13px] text-zinc-800 dark:text-zinc-200 flex items-start">
-              <span className="text-indigo-500 mr-2 mt-0.5">▪</span>
-              <span>{point}</span>
+            <li key={i} className="text-[13px] text-zinc-700 dark:text-zinc-300 flex items-start leading-relaxed font-[family-name:var(--font-inter)]">
+              <span className="text-indigo-400 mr-2.5 mt-0.5 text-[8px]">●</span>
+              <span>{renderInlineMarkdown(point)}</span>
             </li>
           ))}
         </ul>
@@ -76,12 +77,12 @@ const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
   },
 
   WHY_THIS_MATTERS: (content) => (
-    <div className="apex-why-this-matters border border-zinc-800 bg-zinc-950/40 p-4 rounded-lg my-2">
-      <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 font-[family-name:var(--font-mono)]">
-        Why This Matters
+    <div className="apex-why-this-matters border border-violet-500/10 bg-violet-950/8 p-4 rounded-xl my-2">
+      <div className="text-[11px] font-semibold text-violet-400 uppercase tracking-widest mb-2 font-[family-name:var(--font-mono)] flex items-center gap-1.5">
+        <span className="text-[12px]">💡</span> Why This Matters
       </div>
-      <p className="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-semibold italic">
-        {content}
+      <p className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-[1.7] font-[family-name:var(--font-inter)]">
+        {renderInlineMarkdown(content)}
       </p>
     </div>
   ),
@@ -264,12 +265,12 @@ export function FinalizedContractRenderer({ contract }: FinalizedRendererProps) 
   if (!contract.isStructured) return null;
 
   return (
-    <div className="apex-contract-response space-y-3">
+    <div className="apex-contract-response space-y-4">
       {contract.directAnswer && (
         <div className="apex-section-block">
-          <div className="apex-direct-answer bg-zinc-900/60 border border-zinc-700/50 p-4 rounded-lg mb-1">
-            <p className="text-[14px] text-zinc-900 dark:text-zinc-100 leading-relaxed font-medium">
-              {contract.directAnswer}
+          <div className="apex-direct-answer bg-primary/[0.04] border border-primary/10 p-4 rounded-xl mb-1">
+            <p className="text-[14px] text-zinc-800 dark:text-zinc-200 leading-[1.7] font-[family-name:var(--font-inter)]">
+              {renderInlineMarkdown(contract.directAnswer)}
             </p>
           </div>
         </div>
@@ -306,12 +307,12 @@ export function FinalizedContractRenderer({ contract }: FinalizedRendererProps) 
       )}
       {contract.whyThisMatters && (
         <div className="apex-section-block">
-          <div className="apex-why-this-matters border border-zinc-800 bg-zinc-950/40 p-4 rounded-lg my-2">
-            <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 font-[family-name:var(--font-mono)]">
-              Why This Matters
+          <div className="apex-why-this-matters border border-violet-500/10 bg-violet-950/8 p-4 rounded-xl my-2">
+            <div className="text-[11px] font-semibold text-violet-400 uppercase tracking-widest mb-2 font-[family-name:var(--font-mono)] flex items-center gap-1.5">
+              <span className="text-[12px]">💡</span> Why This Matters
             </div>
-            <p className="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-semibold italic">
-              {contract.whyThisMatters}
+            <p className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-[1.7] font-[family-name:var(--font-inter)]">
+              {renderInlineMarkdown(contract.whyThisMatters)}
             </p>
           </div>
         </div>

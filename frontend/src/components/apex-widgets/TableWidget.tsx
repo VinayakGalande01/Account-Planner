@@ -36,7 +36,7 @@ export function TableWidget({ data }: TableWidgetProps) {
               <tr
                 key={idx}
                 className="animate-fade-row"
-                style={{ animationDelay: `${idx * 25}ms` }}
+                style={{ animationDelay: `${idx * 40}ms` }}
               >
                 {data.columns.map((col) => (
                   <td
@@ -52,8 +52,8 @@ export function TableWidget({ data }: TableWidgetProps) {
         </table>
       </div>
       <div className="apex-table-footer">
-        <span className="text-[10px] text-zinc-600 font-[family-name:var(--font-mono)] tracking-wider uppercase">
-          {data.rows.length} record{data.rows.length !== 1 ? 's' : ''} · Backend-ranked
+        <span className="text-[10px] text-zinc-500 font-[family-name:var(--font-inter)] tracking-wide">
+          {data.rows.length} record{data.rows.length !== 1 ? 's' : ''} · Ranked by priority
         </span>
       </div>
     </div>

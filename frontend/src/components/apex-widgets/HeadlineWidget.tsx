@@ -8,7 +8,8 @@ interface HeadlineWidgetProps {
 
 /**
  * Level 1: Primary attention anchor.
- * Renders the dominant operational headline with a cobalt gradient accent bar.
+ * Renders the dominant headline with modern sans-serif typography
+ * and a cobalt gradient accent bar.
  */
 export function HeadlineWidget({ content }: HeadlineWidgetProps) {
   if (!content) return null;
@@ -16,7 +17,7 @@ export function HeadlineWidget({ content }: HeadlineWidgetProps) {
   return (
     <div className="apex-widget-headline">
       <div className="apex-headline-accent" aria-hidden="true" />
-      <h2 className="text-[15px] font-black tracking-wide text-foreground leading-snug font-[family-name:var(--font-mono)]">
+      <h2 className="text-[16px] font-bold tracking-normal text-foreground leading-snug font-[family-name:var(--font-inter)]">
         {content}
       </h2>
     </div>

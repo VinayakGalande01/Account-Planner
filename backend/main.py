@@ -1398,10 +1398,103 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
             yield f"__SECTION_SUMMARY__\nAn error occurred while generating the response: {str(e)}"
             yield "__SECTION_END__"
 
-    return StreamingResponse(generate_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
 
 
 # ─── New Tactical Endpoints ───────────────────────────────────
+
+@app.get("/api/prompts")
+def get_prompts(current_user: User = Depends(get_current_user)):
+    return [
+        {
+            "id": "negotiation_stalled",
+            "text": "Give me the top 5 opportunities stalling in the negotiation stage.",
+            "category": "Pipeline & Opportunities",
+            "icon": "📊"
+        },
+        {
+            "id": "accenture_decision_makers",
+            "text": "Who are the key decision makers at Accenture and when was the last time we contacted them?",
+            "category": "Stakeholders & Engagement",
+            "icon": "👥"
+        },
+        {
+            "id": "high_risk_cases",
+            "text": "Show me the highest risk accounts with critical open support cases",
+            "category": "Risk & Support",
+            "icon": "⚠️"
+        },
+        {
+            "id": "weighted_forecast_30d",
+            "text": "What opportunities are closing in the next 30 days and what is our weighted forecast?",
+            "category": "Pipeline & Opportunities",
+            "icon": "📈"
+        },
+        {
+            "id": "accenture_strategic_plan",
+            "text": "Give me a strategic account plan for Accenture.",
+            "category": "Strategic Accounts",
+            "icon": "🎯"
+        },
+        {
+            "id": "priority_actions_today",
+            "text": "What are my top priority actions for today?",
+            "category": "Daily Action Plan",
+            "icon": "⚡"
+        },
+        {
+            "id": "servicenow_decision_makers",
+            "text": "Who is the primary decision maker at ServiceNow and are there any unmapped key influencers we need to engage?",
+            "category": "Stakeholders & Engagement",
+            "icon": "🔎"
+        },
+        {
+            "id": "accenture_blockers_plan",
+            "text": "Which stakeholders at Accenture are acting as blockers, and what is our action plan to align them?",
+            "category": "Stakeholders & Engagement",
+            "icon": "🛡️"
+        },
+        {
+            "id": "perception_stalled_var",
+            "text": "What is our total value-at-risk for opportunities stalling in the perception stage, and what is the expected revenue impact of resolving them?",
+            "category": "Risk & Support",
+            "icon": "💸"
+        },
+        {
+            "id": "pipeline_deal_velocity",
+            "text": "Show me the deal velocity and estimated risk reduction percentage for our active pipeline.",
+            "category": "Pipeline & Opportunities",
+            "icon": "⚙️"
+        },
+        {
+            "id": "grab_holdings_review",
+            "text": "Provide a complete strategic review of our opportunity with Grab Holdings, tracing our key observations to next recommended steps.",
+            "category": "Strategic Accounts",
+            "icon": "📋"
+        },
+        {
+            "id": "deloitte_india_focus",
+            "text": "What is the strategic focus for Deloitte India, and what observations from the raw cases database support this?",
+            "category": "Strategic Accounts",
+            "icon": "💡"
+        },
+        {
+            "id": "pipeline_confidence_stale_notes",
+            "text": "Evaluate our pipeline confidence. Are there accounts with stale activity notes (>30 days) where we need to downgrade our reasoning confidence?",
+            "category": "Risk & Support",
+            "icon": "🔍"
+        }
+    ]
+
 
 @app.get("/test/intent")
 def test_intent_classification(query: str):

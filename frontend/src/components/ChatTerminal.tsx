@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Terminal, Bot, User } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Bot, User, Sparkles, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
@@ -29,11 +29,75 @@ const initialMessages: Message[] = [
   },
 ];
 
-const stageConfig: Record<string, { label: string; className: string }> = {
-  idle: { label: '', className: '' },
-  running: { label: 'THINKING...', className: 'text-amber-500 border-amber-500/20 bg-amber-500/10' },
-  complete: { label: 'FINISHED!', className: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/10' },
-};
+/**
+ * Thinking animation — ChatGPT-style animated dots with contextual stage messages.
+ */
+function ThinkingIndicator({ stage }: { stage: 'running' | 'complete' }) {
+  const messages = [
+    'Analyzing your query',
+    'Retrieving account data',
+    'Generating insights',
+  ];
+  const [msgIndex, setMsgIndex] = useState(0);
+
+  useEffect(() => {
+    if (stage !== 'running') return;
+    const timer = setInterval(() => {
+      setMsgIndex((prev) => (prev + 1) % messages.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [stage]);
+
+  if (stage === 'complete') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center gap-2 text-emerald-400 text-[12px] font-[family-name:var(--font-inter)] font-medium"
+      >
+        <Sparkles className="w-3 h-3" />
+        <span>Response ready</span>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Animated bouncing dots */}
+      <div className="flex items-center gap-1">
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className="w-1.5 h-1.5 rounded-full bg-primary"
+            animate={{
+              scale: [1, 1.4, 1],
+              opacity: [0.4, 1, 0.4],
+            }}
+            transition={{
+              duration: 1,
+              repeat: Infinity,
+              delay: i * 0.2,
+              ease: 'easeInOut',
+            }}
+          />
+        ))}
+      </div>
+      {/* Contextual stage message with crossfade */}
+      <AnimatePresence mode="wait">
+        <motion.span
+          key={msgIndex}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.3 }}
+          className="text-[12px] text-zinc-500 font-[family-name:var(--font-inter)]"
+        >
+          {messages[msgIndex]}...
+        </motion.span>
+      </AnimatePresence>
+    </div>
+  );
+}
 
 /**
  * Fallback renderer for unstructured text content.
@@ -72,6 +136,15 @@ export default function ChatTerminal() {
   const [displayedResponse, setDisplayedResponse] = useState<string | null>(null);
   const [processingStage, setProcessingStage] = useState<'idle' | 'running' | 'complete'>('idle');
 
+  // Prompt Library states
+  const [showPromptLibrary, setShowPromptLibrary] = useState(false);
+  const [libraryPrompts, setLibraryPrompts] = useState<any[]>([]);
+
+  // Typewriter state
+  const fullResponseRef = useRef<string>('');
+  const typewriterTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const revealIndexRef = useRef<number>(0);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -87,6 +160,65 @@ export default function ChatTerminal() {
     }
   }, [aiCommand, setAiCommand]);
 
+  // Cleanup typewriter timer on unmount
+  useEffect(() => {
+    return () => {
+      if (typewriterTimerRef.current) {
+        clearInterval(typewriterTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Fetch prompts list on mount
+  useEffect(() => {
+    const fetchPrompts = async () => {
+      try {
+        const response = await authFetch('/api/prompts');
+        if (response.ok) {
+          const data = await response.json();
+          setLibraryPrompts(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch prompts', err);
+      }
+    };
+    fetchPrompts();
+  }, [authFetch]);
+
+  /**
+   * Typewriter reveal — smoothly reveals characters from the buffer.
+   * Runs at ~20ms per character for a ChatGPT-like streaming feel.
+   * Catches up faster if buffer is far ahead (prevents lag).
+   */
+  const startTypewriter = useCallback(() => {
+    if (typewriterTimerRef.current) return; // Already running
+
+    typewriterTimerRef.current = setInterval(() => {
+      const fullText = fullResponseRef.current;
+      const currentIdx = revealIndexRef.current;
+
+      if (currentIdx >= fullText.length) {
+        // Nothing new to reveal yet — wait for more stream data
+        return;
+      }
+
+      // Reveal characters in chunks for speed — larger chunks when far behind
+      const gap = fullText.length - currentIdx;
+      const chunkSize = gap > 200 ? Math.min(gap, 40) : gap > 50 ? 8 : 2;
+      const newIdx = Math.min(currentIdx + chunkSize, fullText.length);
+
+      revealIndexRef.current = newIdx;
+      setDisplayedResponse(fullText.slice(0, newIdx));
+    }, 18);
+  }, []);
+
+  const stopTypewriter = useCallback(() => {
+    if (typewriterTimerRef.current) {
+      clearInterval(typewriterTimerRef.current);
+      typewriterTimerRef.current = null;
+    }
+  }, []);
+
 
   const handleSend = async (overrideInput?: string) => {
     const textToSend = overrideInput || input;
@@ -99,6 +231,10 @@ export default function ChatTerminal() {
     setDisplayedResponse('');
     setProcessingStage('running');
 
+    // Reset typewriter state
+    fullResponseRef.current = '';
+    revealIndexRef.current = 0;
+
     try {
       const response = await authFetch('/api/chat', {
         method: 'POST',
@@ -108,41 +244,61 @@ export default function ChatTerminal() {
 
       if (!response.body) throw new Error('No stream body');
 
-
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
-      let accumulateStr = '';
+
+      // Start typewriter reveal
+      startTypewriter();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
-        accumulateStr += chunk;
-        setDisplayedResponse(accumulateStr);
+        fullResponseRef.current += chunk;
       }
 
-      setProcessingStage('complete');
-      
-      setTimeout(() => {
-        // Normalize streamed content into structured ResponseContract
-        // __SECTION_*__ is strictly a transport format — we normalize to application state here
-        const contract = parseResponseContract(accumulateStr);
+      // Stream complete — flush remaining characters quickly
+      const flushRemaining = () => {
+        const fullText = fullResponseRef.current;
+        if (revealIndexRef.current < fullText.length) {
+          const gap = fullText.length - revealIndexRef.current;
+          const chunkSize = Math.max(Math.floor(gap / 5), 10);
+          revealIndexRef.current = Math.min(revealIndexRef.current + chunkSize, fullText.length);
+          setDisplayedResponse(fullText.slice(0, revealIndexRef.current));
 
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'assistant',
-            type: 'text',
-            content: accumulateStr.trim(),
-            contract: contract.isStructured ? contract : undefined,
-          },
-        ]);
-        setDisplayedResponse(null);
-        setIsTyping(false);
-        setProcessingStage('idle');
-      }, 500);
+          if (revealIndexRef.current < fullText.length) {
+            requestAnimationFrame(flushRemaining);
+            return;
+          }
+        }
+
+        // All characters revealed — finalize
+        stopTypewriter();
+        setDisplayedResponse(fullText);
+        setProcessingStage('complete');
+
+        setTimeout(() => {
+          const contract = parseResponseContract(fullText);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              type: 'text',
+              content: fullText.trim(),
+              contract: contract.isStructured ? contract : undefined,
+            },
+          ]);
+          setDisplayedResponse(null);
+          setIsTyping(false);
+          setProcessingStage('idle');
+        }, 600);
+      };
+
+      stopTypewriter();
+      flushRemaining();
 
     } catch (err) {
+      stopTypewriter();
       setProcessingStage('idle');
       setMessages((prev) => [
         ...prev,
@@ -167,7 +323,7 @@ export default function ChatTerminal() {
       return <FinalizedContractRenderer contract={msg.contract} />;
     }
     return (
-      <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)]">
+      <div className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed font-[family-name:var(--font-inter)]">
         <RenderMessageLines content={msg.content} />
       </div>
     );
@@ -179,8 +335,8 @@ export default function ChatTerminal() {
    * falls back to RenderMessageLines for unstructured streams.
    */
   const renderStreamingResponse = () => {
-    if (displayedResponse === null) {
-      return <span className="inline-block w-2 h-4 bg-primary animate-blink-cursor" />;
+    if (displayedResponse === null || displayedResponse === '') {
+      return null;
     }
 
     // Check if the stream contains structured __SECTION_*__ tags
@@ -194,7 +350,7 @@ export default function ChatTerminal() {
     return (
       <>
         <RenderMessageLines content={displayedResponse} />
-        <span className="inline-block w-2 h-4 bg-primary ml-0.5 animate-blink-cursor align-middle" />
+        <span className="inline-block w-[2px] h-4 bg-primary ml-0.5 animate-blink-cursor align-middle rounded-full" />
       </>
     );
   };
@@ -204,8 +360,10 @@ export default function ChatTerminal() {
       {/* Header */}
       <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between shrink-0 relative z-10">
         <div className="flex items-center gap-3">
-          <Terminal className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[13px] font-black uppercase tracking-[0.15em] text-foreground font-[family-name:var(--font-mono)]">
+          <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Sparkles className="w-3 h-3 text-primary" />
+          </div>
+          <span className="text-[13px] font-bold uppercase tracking-[0.12em] text-foreground font-[family-name:var(--font-mono)]">
             APEX v2.1
           </span>
           <span className="text-[12px] text-zinc-500 dark:text-zinc-600 font-[family-name:var(--font-mono)]">// CONNECTED</span>
@@ -218,37 +376,40 @@ export default function ChatTerminal() {
         </div>
       </div>
 
-      {/* Processing Stage Indicator */}
+      {/* Processing Stage Indicator — ChatGPT-style thinking animation */}
       <AnimatePresence>
         {processingStage !== 'idle' && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="px-4 py-2 border-b border-border bg-muted/30 relative z-10"
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="px-4 py-2.5 border-b border-border bg-muted/20 relative z-10"
           >
-            <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded text-[12px] font-black uppercase tracking-[0.12em] font-[family-name:var(--font-mono)] border border-border ${stageConfig[processingStage].className}`}>
-              <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-              {stageConfig[processingStage].label}
-            </span>
+            <ThinkingIndicator stage={processingStage} />
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scroll-smooth scrollbar-tactical relative z-10">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 space-y-5 scroll-smooth scrollbar-tactical relative z-10">
         {messages.map((msg, i) => (
-          <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <motion.div
+            key={i}
+            initial={i > 0 ? { opacity: 0, y: 12 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
             {msg.role === 'assistant' && (
-              <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                <Bot className="w-3 h-3 text-primary" />
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center shrink-0 mt-0.5 border border-primary/10">
+                <Bot className="w-3.5 h-3.5 text-primary" />
               </div>
             )}
 
             <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-first' : ''}`}>
               {msg.role === 'user' ? (
-                <div className="px-3 py-2 rounded-md bg-primary/10 border border-primary/20 text-sm font-bold text-foreground font-[family-name:var(--font-mono)]">
-                  <span className="text-primary mr-2">&gt;</span>
+                <div className="px-4 py-2.5 rounded-2xl rounded-tr-sm bg-primary/10 border border-primary/15 text-sm font-medium text-foreground font-[family-name:var(--font-inter)]">
                   {msg.content}
                 </div>
               ) : (
@@ -257,34 +418,98 @@ export default function ChatTerminal() {
             </div>
 
             {msg.role === 'user' && (
-              <div className="w-6 h-6 rounded bg-muted flex items-center justify-center shrink-0 mt-0.5">
-                <User className="w-3 h-3 text-zinc-500" />
+              <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5 border border-border">
+                <User className="w-3.5 h-3.5 text-zinc-500" />
               </div>
             )}
-          </div>
+          </motion.div>
         ))}
 
         {/* Typing / Reveal State */}
         {isTyping && (
-          <div className="flex gap-3">
-            <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-              <Bot className="w-3 h-3 text-primary" />
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex gap-3"
+          >
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center shrink-0 mt-0.5 border border-primary/10">
+              <Bot className="w-3.5 h-3.5 text-primary" />
             </div>
-            <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed font-[family-name:var(--font-mono)] max-w-[85%]">
+            <div className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed font-[family-name:var(--font-inter)] max-w-[85%]">
               {renderStreamingResponse()}
+              {/* Show blinking cursor when no content yet */}
+              {(displayedResponse === null || displayedResponse === '') && processingStage === 'running' && (
+                <span className="inline-block w-[2px] h-4 bg-primary animate-blink-cursor rounded-full" />
+              )}
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
 
       {/* Input */}
       <div className="px-4 pb-4 pt-2 bg-transparent relative z-10 shrink-0">
+        <AnimatePresence>
+          {showPromptLibrary && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="absolute bottom-16 left-4 right-4 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl z-20 max-h-[320px] overflow-y-auto p-4 space-y-3 scrollbar-tactical mb-2"
+            >
+              <div className="flex justify-between items-center pb-2 border-b border-zinc-800">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest font-[family-name:var(--font-mono)] flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-primary" /> Prompt Library
+                </span>
+                <button
+                  onClick={() => setShowPromptLibrary(false)}
+                  className="text-[10px] text-zinc-500 hover:text-zinc-300 uppercase font-bold tracking-wider font-[family-name:var(--font-mono)]"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {libraryPrompts.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setInput(p.text);
+                      setShowPromptLibrary(false);
+                    }}
+                    className="text-left p-3 rounded-lg border border-zinc-800 hover:border-primary/40 bg-zinc-900/40 hover:bg-primary/5 transition-all flex items-start gap-2.5 group cursor-pointer"
+                  >
+                    <span className="text-base shrink-0 select-none">{p.icon || '💬'}</span>
+                    <div className="space-y-0.5">
+                      <div className="text-[12.5px] font-semibold text-zinc-200 group-hover:text-primary transition-colors leading-snug">
+                        {p.text}
+                      </div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-zinc-600 group-hover:text-primary/50 transition-colors font-[family-name:var(--font-mono)]">
+                        {p.category}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="chatbox-glow-ring p-3 flex items-center gap-2">
+          <button
+            onClick={() => setShowPromptLibrary((prev) => !prev)}
+            className={`p-1.5 rounded transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+              showPromptLibrary ? 'text-primary bg-primary/10' : 'text-zinc-500 hover:text-primary hover:bg-zinc-800/40'
+            }`}
+            title="Prompt Library"
+          >
+            <BookOpen className="w-4 h-4" />
+          </button>
           <span className="text-primary text-sm font-[family-name:var(--font-mono)] font-bold shrink-0">&gt;_</span>
           <input
             type="text"
             placeholder="Ask a question about your accounts..."
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-zinc-500 focus:outline-none font-[family-name:var(--font-mono)] font-medium"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-zinc-500 focus:outline-none font-[family-name:var(--font-inter)] font-medium"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}

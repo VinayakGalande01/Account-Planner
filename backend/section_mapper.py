@@ -25,94 +25,95 @@ class SectionContractMapper:
         # 0. Intent (Common to all)
         parts.append(f"__SECTION_INTENT__\n{intent}")
 
-        is_dict = isinstance(response_obj, dict)
-        narrative = response_obj.get("narrative", "") if is_dict else getattr(response_obj, "narrative", "")
-        why_this_matters = response_obj.get("why_this_matters", "") if is_dict else getattr(response_obj, "why_this_matters", "")
-        urgency = response_obj.get("urgency", "P2") if is_dict else getattr(response_obj, "urgency", "P2")
+        def safe_get(item, key, default=None):
+            if item is None:
+                return default
+            if isinstance(item, dict):
+                return item.get(key, default)
+            return getattr(item, key, default)
 
-        # 1. FACTUAL Blueprint: [Direct Answer, Confidence]
-        if complexity == "FACTUAL":
-            direct_answer = narrative or why_this_matters or "Factual data retrieved successfully."
-            parts.append(f"__SECTION_DIRECT_ANSWER__\n{direct_answer}")
+        is_am = isinstance(response_obj, AMResponseOutput) or (isinstance(response_obj, dict) and "playbook_7day" in response_obj)
+        is_vp = isinstance(response_obj, VPResponseOutput) or (isinstance(response_obj, dict) and "portfolio_impact" in response_obj)
+        is_svp = isinstance(response_obj, SVPResponseOutput) or (isinstance(response_obj, dict) and "board_narrative" in response_obj)
 
-        # 1.5 CONVERSATIONAL Blueprint: [Direct Answer, Confidence]
-        elif complexity == "CONVERSATIONAL":
-            direct_answer = narrative or why_this_matters or "Hello! How can I help you today?"
-            parts.append(f"__SECTION_DIRECT_ANSWER__\n{direct_answer}")
+        is_role_specific = is_am or is_vp or is_svp
 
-        # 2. OPERATIONAL Blueprint: [Headline, Table, Signals, Actions]
-        elif complexity == "OPERATIONAL":
-            headline = f"Operational Metrics Overview"
-            parts.append(f"__SECTION_HEADLINE__\n{headline}")
-            
-            signals = []
-            if is_dict:
-                signals.append(f"• QUANTIFIED SUMMARY: {response_obj.get('data_perspective', 'Operational metrics loaded.')}")
-            else:
-                signals.append("• STATUS: Active pipeline metrics and quality audits are current.")
-            parts.append(f"__SECTION_SIGNALS__\n" + "\n".join(signals))
-            
-            actions = ["• Action: Review operational metrics table shown below."]
-            parts.append(f"__SECTION_ACTIONS__\n" + "\n".join(actions))
+        narrative = safe_get(response_obj, "narrative", "")
+        why_this_matters = safe_get(response_obj, "why_this_matters", "")
+        urgency = safe_get(response_obj, "urgency", "P2")
 
-        # 3. STRATEGIC / EXECUTIVE Blueprint: [Summary, Signals, Risks, Actions]
-        else:
+        if is_role_specific:
             # Headline
             headline = ""
-            if isinstance(response_obj, AMResponseOutput):
+            if is_am:
                 headline = f"Urgency {urgency}: {narrative}"
-            elif isinstance(response_obj, VPResponseOutput):
+            elif is_vp:
                 headline = f"Portfolio Impact: {narrative}"
-            elif isinstance(response_obj, SVPResponseOutput):
+            elif is_svp:
                 headline = f"Strategic Brief: {narrative}"
-            elif is_dict:
-                headline = response_obj.get("headline", "Strategic Synthesis")
             parts.append(f"__SECTION_HEADLINE__\n{headline}")
 
             # Summary
             summary = ""
-            if isinstance(response_obj, AMResponseOutput):
+            if is_am:
                 summary = why_this_matters
-            elif isinstance(response_obj, VPResponseOutput):
-                summary = f"Strategic Action: {response_obj.strategic_action}"
-            elif isinstance(response_obj, SVPResponseOutput):
-                summary = f"Board Narrative: {response_obj.board_narrative}"
-            elif is_dict:
-                summary = response_obj.get("summary", "")
+            elif is_vp:
+                summary = f"Strategic Action: {safe_get(response_obj, 'strategic_action', '')}"
+            elif is_svp:
+                summary = f"Board Narrative: {safe_get(response_obj, 'board_narrative', '')}"
             parts.append(f"__SECTION_SUMMARY__\n{summary}")
 
-            # Signals (Risks / Positioning / Market)
+            # Signals
             signals = []
-            if isinstance(response_obj, AMResponseOutput):
-                for rm in response_obj.risks_and_mitigations:
-                    signals.append(f"• RISK: {rm.risk} -> MITIGATION: {rm.mitigation}")
-            elif isinstance(response_obj, VPResponseOutput):
-                ms = response_obj.market_signal
-                signals.append(f"• MARKET THREAT: {ms.competitor_threat}")
-                signals.append(f"• IMPLICATION: {ms.strategic_implication}")
-            elif isinstance(response_obj, SVPResponseOutput):
-                cp = response_obj.competitive_positioning
-                signals.append(f"• THREAT LEVEL: {cp.threat_level.upper()}")
-                signals.append(f"• MARKET SIGNAL: {cp.market_signal}")
-            
+            if is_am:
+                risks = safe_get(response_obj, "risks_and_mitigations", [])
+                for rm in risks:
+                    r = safe_get(rm, "risk", "")
+                    m = safe_get(rm, "mitigation", "")
+                    signals.append(f"• RISK: {r} -> MITIGATION: {m}")
+            elif is_vp:
+                ms = safe_get(response_obj, "market_signal")
+                comp = safe_get(ms, "competitor_threat", "")
+                imp = safe_get(ms, "strategic_implication", "")
+                signals.append(f"• MARKET THREAT: {comp}")
+                signals.append(f"• IMPLICATION: {imp}")
+            elif is_svp:
+                cp = safe_get(response_obj, "competitive_positioning")
+                tl = safe_get(cp, "threat_level", "")
+                ms = safe_get(cp, "market_signal", "")
+                signals.append(f"• THREAT LEVEL: {tl.upper()}")
+                signals.append(f"• MARKET SIGNAL: {ms}")
             if signals:
                 parts.append(f"__SECTION_SIGNALS__\n" + "\n".join(signals))
 
-            # Actions (Playbooks / Sequences)
+            # Actions
             actions = []
-            if isinstance(response_obj, AMResponseOutput):
-                for action in response_obj.playbook_7day:
-                    actions.append(f"• Day {action.day} [{action.owner}]: {action.action}")
-                for sh in response_obj.stakeholder_sequence:
-                    actions.append(f"• ENGAGE {sh.role} ({sh.stakeholder}) via {sh.engagement_type}")
-            elif isinstance(response_obj, VPResponseOutput):
-                rr = response_obj.resource_recommendation
-                actions.append(f"• ALLOCATE: {rr.investment_required}")
-                actions.append(f"• MOBILIZE TEAMS: {', '.join(rr.teams_needed)} (Timeline: {rr.timeline})")
-            elif isinstance(response_obj, SVPResponseOutput):
-                for df in response_obj.decision_framework:
-                    actions.append(f"• SCENARIO ({df.scenario}): {df.action}")
-                    
+            if is_am:
+                pb = safe_get(response_obj, "playbook_7day", [])
+                for act in pb:
+                    day = safe_get(act, "day", 1)
+                    owner = safe_get(act, "owner", "")
+                    txt = safe_get(act, "action", "")
+                    actions.append(f"• Day {day} [{owner}]: {txt}")
+                sh_seq = safe_get(response_obj, "stakeholder_sequence", [])
+                for sh in sh_seq:
+                    sh_role = safe_get(sh, "role", "")
+                    sh_name = safe_get(sh, "stakeholder", "")
+                    et = safe_get(sh, "engagement_type", "")
+                    actions.append(f"• ENGAGE {sh_role} ({sh_name}) via {et}")
+            elif is_vp:
+                rr = safe_get(response_obj, "resource_recommendation")
+                inv = safe_get(rr, "investment_required", "")
+                teams = safe_get(rr, "teams_needed", [])
+                timeline = safe_get(rr, "timeline", "")
+                actions.append(f"• ALLOCATE: {inv}")
+                actions.append(f"• MOBILIZE TEAMS: {', '.join(teams)} (Timeline: {timeline})")
+            elif is_svp:
+                df = safe_get(response_obj, "decision_framework", [])
+                for item in df:
+                    sc = safe_get(item, "scenario", "")
+                    txt = safe_get(item, "action", "")
+                    actions.append(f"• SCENARIO ({sc}): {txt}")
             if actions:
                 parts.append(f"__SECTION_ACTIONS__\n" + "\n".join(actions))
 
@@ -121,6 +122,122 @@ class SectionContractMapper:
             if dissenting:
                 dissent_texts = [f"• {d.perspective} VIEW: {d.dissent} (Rationale: {d.rationale})" for d in dissenting]
                 parts.append(f"__SECTION_DISSENT__\n" + "\n".join(dissent_texts))
+
+        else:
+            # 1. FACTUAL Blueprint: [Direct Answer, Confidence]
+            if complexity == "FACTUAL":
+                direct_answer = narrative or why_this_matters or "Factual data retrieved successfully."
+                parts.append(f"__SECTION_DIRECT_ANSWER__\n{direct_answer}")
+
+            # 1.5 CONVERSATIONAL Blueprint: [Direct Answer, Confidence]
+            elif complexity == "CONVERSATIONAL":
+                direct_answer = narrative or why_this_matters or "Hello! How can I help you today?"
+                parts.append(f"__SECTION_DIRECT_ANSWER__\n{direct_answer}")
+
+            # 2. OPERATIONAL Blueprint: [Headline, Summary, Table, Signals, Actions]
+            elif complexity == "OPERATIONAL":
+                # --- Contextual Headline ---
+                data_perspective = safe_get(response_obj, "data_perspective", "")
+                headline = data_perspective if data_perspective else "Pipeline Analysis"
+                parts.append(f"__SECTION_HEADLINE__\n📊 {headline}")
+
+                # --- Contextual Summary (warm framing above the table) ---
+                summary_parts = []
+                km = safe_get(response_obj, "key_metrics", {})
+                health = safe_get(km, "health_score")
+                churn = safe_get(km, "churn_probability")
+                trend = safe_get(km, "engagement_trend", "")
+                if health is not None:
+                    summary_parts.append(f"Portfolio health score is **{health}%**")
+                if churn is not None:
+                    summary_parts.append(f"churn probability at **{churn * 100 if churn < 1 else churn}%**")
+                if trend:
+                    summary_parts.append(f"with a **{trend.lower()}** engagement trend")
+                dq = safe_get(response_obj, "data_quality", {})
+                dq_confidence = safe_get(dq, "confidence")
+                if dq_confidence is not None:
+                    summary_parts.append(f"Data quality confidence: **{dq_confidence * 100 if dq_confidence < 1 else dq_confidence}%**")
+                if summary_parts:
+                    parts.append(f"__SECTION_SUMMARY__\n" + ". ".join(summary_parts) + ".")
+                else:
+                    parts.append(f"__SECTION_SUMMARY__\nHere's the ranked operational view based on your current CRM data.")
+
+                # --- Contextual Signals ---
+                signals = []
+                km = safe_get(response_obj, "key_metrics", {})
+                health = safe_get(km, "health_score")
+                if health is not None:
+                    if health >= 80:
+                        signals.append("• [PIPELINE] Portfolio health is strong — maintain current engagement cadence")
+                    elif health >= 60:
+                        signals.append(f"• [PIPELINE] Portfolio health at {health}% — moderate attention needed on at-risk deals")
+                    else:
+                        signals.append(f"• [RISK] Portfolio health at {health}% — immediate intervention recommended")
+                
+                intervention = safe_get(response_obj, "intervention_success_probability")
+                if intervention is not None:
+                    pct = int(intervention * 100) if intervention < 1 else int(intervention)
+                    signals.append(f"• [STRATEGIC] Intervention success probability: {pct}%")
+                
+                # Historical context
+                precedents = safe_get(response_obj, "historical_precedents", [])
+                for p in precedents[:1]:
+                    situation = safe_get(p, "situation", "")
+                    success_rate = safe_get(p, "success_rate")
+                    if situation and success_rate is not None:
+                        signals.append(f"• [TEMPORAL] Historical pattern: {situation} (success rate: {int(success_rate * 100)}%)")
+                
+                dq = safe_get(response_obj, "data_quality", {})
+                dq_metric = safe_get(dq, "metric", "")
+                if dq_metric:
+                    signals.append(f"• [CRM] Data quality check: {dq_metric}")
+                
+                if not signals:
+                    signals.append("• [PIPELINE] Active pipeline metrics and quality audits are current")
+                
+                parts.append(f"__SECTION_SIGNALS__\n" + "\n".join(signals))
+                
+                # --- Contextual Actions ---
+                actions = []
+                km = safe_get(response_obj, "key_metrics", {})
+                health = safe_get(km, "health_score")
+                intervention = safe_get(response_obj, "intervention_success_probability")
+                
+                if health is not None and health < 70:
+                    actions.append("• **Priority**: Review the deals flagged below and schedule executive check-ins for the top 3 by value")
+                elif health is not None:
+                    actions.append("• Review the ranked opportunities below and validate close dates for deals in the current quarter")
+                
+                if intervention is not None and intervention < 0.5:
+                    actions.append("• Consider re-engaging with champions on stalled deals — success probability is below 50%")
+                
+                dq = safe_get(response_obj, "data_quality", {})
+                limitation = safe_get(dq, "limitation", "")
+                if limitation:
+                    actions.append(f"• Data gap to address: {limitation}")
+                
+                if not actions:
+                    actions.append("• Review the ranked data table and prioritize follow-up on top opportunities")
+                
+                parts.append(f"__SECTION_ACTIONS__\n" + "\n".join(actions))
+
+            # 3. STRATEGIC / EXECUTIVE Blueprint: [Summary, Signals, Risks, Actions]
+            else:
+                # Headline
+                headline = safe_get(response_obj, "headline", "Strategic Synthesis")
+                parts.append(f"__SECTION_HEADLINE__\n{headline}")
+
+                # Summary
+                summary = safe_get(response_obj, "summary", "")
+                parts.append(f"__SECTION_SUMMARY__\n{summary}")
+
+                # Signals (Risks / Positioning / Market)
+                signals = []
+                parts.append(f"__SECTION_SIGNALS__\n" + "\n".join(signals))
+
+                # Actions (Playbooks / Sequences)
+                actions = []
+                parts.append(f"__SECTION_ACTIONS__\n" + "\n".join(actions))
 
         # 6. CRM Hygiene (Common validation check)
         hygiene = []

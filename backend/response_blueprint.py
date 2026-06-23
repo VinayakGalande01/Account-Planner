@@ -134,8 +134,8 @@ _BLUEPRINT_TEMPLATES: Dict[ReasoningMode, dict] = {
 
     ReasoningMode.OPERATIONAL: {
         "required_sections":    ["HEADLINE", "DIRECT_ANSWER", "TABLE_DATA"],
-        "optional_sections":    ["SIGNALS", "ACTIONS", "CONFIDENCE"],
-        "suppressed_sections":  ["EXECUTIVE_SUMMARY", "WHY_THIS_MATTERS", "CRM_HYGIENE", "SUMMARY"],
+        "optional_sections":    ["SUMMARY", "SIGNALS", "ACTIONS", "CONFIDENCE"],
+        "suppressed_sections":  ["EXECUTIVE_SUMMARY", "WHY_THIS_MATTERS", "CRM_HYGIENE"],
         "max_signals":          3,
         "max_actions":          3,
         "narrative_depth":      "standard",

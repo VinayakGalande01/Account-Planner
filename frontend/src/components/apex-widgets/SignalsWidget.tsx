@@ -1,27 +1,31 @@
 'use client';
 
 import React from 'react';
+import { renderInlineMarkdown } from '../../utils/inlineMarkdown';
 
 interface SignalsWidgetProps {
   signals: string[];
 }
 
 /**
- * Signal type → visual style mapping.
+ * Signal type → visual style mapping with emoji icons.
  * Backend sends optional [TYPE] prefix (e.g., "[REVENUE] 3 deals close within 30 days").
- * Frontend parses the prefix for subtle color coding. Falls back to default if no prefix found.
+ * Frontend parses the prefix for visual styling. Falls back to default if no prefix found.
  */
-const SIGNAL_STYLES: Record<string, { color: string; icon: string }> = {
-  REVENUE:    { color: 'text-emerald-400', icon: '◆' },
-  PIPELINE:   { color: 'text-blue-400',    icon: '◆' },
-  STRATEGIC:  { color: 'text-violet-400',  icon: '◆' },
-  RISK:       { color: 'text-amber-400',   icon: '◆' },
-  ENGAGEMENT: { color: 'text-cyan-400',    icon: '◆' },
-  TEMPORAL:   { color: 'text-orange-400',  icon: '◆' },
-  CRM:        { color: 'text-zinc-500',    icon: '◆' },
+const SIGNAL_STYLES: Record<string, { color: string; bgColor: string; icon: string }> = {
+  REVENUE:    { color: 'text-emerald-400', bgColor: 'bg-emerald-500/8', icon: '💰' },
+  PIPELINE:   { color: 'text-blue-400',    bgColor: 'bg-blue-500/8',    icon: '📊' },
+  STRATEGIC:  { color: 'text-violet-400',  bgColor: 'bg-violet-500/8',  icon: '🎯' },
+  RISK:       { color: 'text-amber-400',   bgColor: 'bg-amber-500/8',   icon: '⚠️' },
+  ENGAGEMENT: { color: 'text-cyan-400',    bgColor: 'bg-cyan-500/8',    icon: '🤝' },
+  TEMPORAL:   { color: 'text-orange-400',  bgColor: 'bg-orange-500/8',  icon: '⏱️' },
+  CRM:        { color: 'text-zinc-400',    bgColor: 'bg-zinc-500/8',    icon: '📋' },
+  MARKET:     { color: 'text-rose-400',    bgColor: 'bg-rose-500/8',    icon: '📈' },
+  QUANTIFIED: { color: 'text-blue-400',    bgColor: 'bg-blue-500/8',    icon: '📊' },
+  STATUS:     { color: 'text-emerald-400', bgColor: 'bg-emerald-500/8', icon: '✅' },
 };
 
-const DEFAULT_STYLE = { color: 'text-primary', icon: '◆' };
+const DEFAULT_STYLE = { color: 'text-primary', bgColor: 'bg-primary/8', icon: '◆' };
 
 /**
  * Parse an optional [TYPE] prefix from a signal string.
@@ -37,7 +41,8 @@ function parseSignalType(signal: string): { type: string | null; text: string } 
 
 /**
  * Level 4: Key intelligence signals.
- * Renders backend-ranked, typed trend signals with color-coded type indicators.
+ * Renders backend-ranked, typed trend signals with emoji icons and card backgrounds.
+ * Uses sans-serif for natural readability.
  *
  * Design Rule: Signal order/priority is determined by the backend.
  *              Frontend only handles rendering — no client-side re-ranking.
@@ -48,26 +53,29 @@ export function SignalsWidget({ signals }: SignalsWidgetProps) {
   return (
     <div className="apex-widget-signals">
       <div className="apex-section-label">KEY SIGNALS</div>
-      <ul className="space-y-1.5">
+      <div className="space-y-2">
         {signals.map((signal, i) => {
           const { type, text } = parseSignalType(signal);
           const style = type && SIGNAL_STYLES[type] ? SIGNAL_STYLES[type] : DEFAULT_STYLE;
 
           return (
-            <li key={i} className="flex items-start gap-2.5 text-[13px] text-zinc-700 dark:text-zinc-300 font-[family-name:var(--font-mono)]">
-              <span className={`${style.color} mt-[3px] text-[8px] flex-shrink-0`}>{style.icon}</span>
-              <span className="leading-relaxed">
+            <div
+              key={i}
+              className={`apex-signal-card ${style.bgColor} border border-white/[0.04] rounded-lg px-3.5 py-2.5 flex items-start gap-3 transition-colors duration-200 hover:border-white/[0.08]`}
+            >
+              <span className="text-[14px] mt-[1px] flex-shrink-0">{style.icon}</span>
+              <span className="text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-[family-name:var(--font-inter)]">
                 {type && (
-                  <span className={`${style.color} text-[10px] font-black tracking-wider mr-1.5 uppercase`}>
+                  <span className={`${style.color} text-[10px] font-bold tracking-wider mr-1.5 uppercase font-[family-name:var(--font-mono)]`}>
                     {type}
                   </span>
                 )}
-                {text}
+                {renderInlineMarkdown(text)}
               </span>
-            </li>
+            </div>
           );
         })}
-      </ul>
+      </div>
     </div>
   );
 }

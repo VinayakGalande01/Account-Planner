@@ -5,9 +5,8 @@ Fast, reliable, deterministic.
 
 # from models import IntentClassificationOutput, IntentEnum, ExtractedEntities
 from enum import Enum
-from typing import Optional
+from typing import Optional, Dict
 from pydantic import BaseModel
-from typing import Optional
 import re
 
 class IntentEnum(str, Enum):
