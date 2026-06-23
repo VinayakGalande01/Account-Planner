@@ -1,14 +1,20 @@
 import os
 import re
 
+# Support disabling ChromaDB to save RAM on free-tier hosting (e.g. Render 512MB limit)
+DISABLE_CHROMA = os.getenv("DISABLE_CHROMA", "false").lower() in ("true", "1")
+
 # Defensively handle imports to support graceful degradation
 CHROMA_AVAILABLE = False
-try:
-    import chromadb
-    from sentence_transformers import SentenceTransformer
-    CHROMA_AVAILABLE = True
-except ImportError:
-    print("⚠️ Warning: chromadb or sentence-transformers not found. Local RAG will fall back to keyword matching.")
+if not DISABLE_CHROMA:
+    try:
+        import chromadb
+        from sentence_transformers import SentenceTransformer
+        CHROMA_AVAILABLE = True
+    except ImportError:
+        print("⚠️ Warning: chromadb or sentence-transformers not found. Local RAG will fall back to keyword matching.")
+else:
+    print("ℹ️ Info: ChromaDB and Sentence-Transformers disabled via DISABLE_CHROMA. Using keyword-matching fallback.")
 
 class LocalVectorStore:
     def __init__(self, db_path: str = "./chroma_db"):
