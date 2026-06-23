@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { parseResponseContract } from '../utils/contractParser';
 
 import { ContractRenderer, FinalizedContractRenderer } from './apex-widgets';
-import type { ResponseContract } from '../types/responseContract';
+import type { ResponseContract, RecommendedAction } from '../types/responseContract';
 
 type MessageType = 'text' | 'data' | 'system';
 
@@ -320,7 +320,7 @@ export default function ChatTerminal() {
    */
   const renderAssistantMessage = (msg: Message) => {
     if (msg.contract) {
-      return <FinalizedContractRenderer contract={msg.contract} />;
+      return <FinalizedContractRenderer contract={msg.contract} onActionClick={handleActionClick} />;
     }
     return (
       <div className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed font-[family-name:var(--font-inter)]">
@@ -343,7 +343,7 @@ export default function ChatTerminal() {
     const hasStructuredContent = displayedResponse.includes('__SECTION_');
 
     if (hasStructuredContent) {
-      return <ContractRenderer content={displayedResponse} isStreaming={true} />;
+      return <ContractRenderer content={displayedResponse} isStreaming={true} onActionClick={handleActionClick} />;
     }
 
     // Fallback: render as raw text with cursor
@@ -354,6 +354,16 @@ export default function ChatTerminal() {
       </>
     );
   };
+
+  /**
+   * Handles click on a recommended action chip.
+   * Sends the action's title as a new user query.
+   */
+  const handleActionClick = useCallback((action: RecommendedAction) => {
+    if (!isTyping) {
+      handleSend(action.title);
+    }
+  }, [isTyping]);
 
   return (
     <div className="corner-brackets flex flex-col h-full bg-background rounded-md overflow-hidden relative">

@@ -1,4 +1,4 @@
-import type { ResponseContract, SectionName, ConfidenceData, TableData } from '../types/responseContract';
+import type { ResponseContract, SectionName, ConfidenceData, TableData, RecommendedAction } from '../types/responseContract';
 
 /**
  * Creates an empty ResponseContract with default values.
@@ -14,6 +14,7 @@ export function createEmptyContract(rawContent: string = ''): ResponseContract {
     actions: [],
     crmWarnings: [],
     confidence: null,
+    recommendedActions: [],
     rawContent,
     isStructured: false,
   };
@@ -115,6 +116,15 @@ export function parseResponseContract(content: string): ResponseContract {
             status: sectionContent,
             sources: [],
           };
+        }
+        break;
+
+      case 'RECOMMENDED_ACTIONS':
+        try {
+          contract.recommendedActions = JSON.parse(sectionContent) as RecommendedAction[];
+        } catch {
+          // If JSON parsing fails, ignore silently
+          contract.recommendedActions = [];
         }
         break;
 

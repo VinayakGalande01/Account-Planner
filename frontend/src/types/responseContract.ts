@@ -27,6 +27,18 @@ export interface ConfidenceData {
   sources: string[];
 }
 
+/** A single recommended next-step action for the copilot UI */
+export interface RecommendedAction {
+  /** Display label for the action chip */
+  title: string;
+  /** Machine-readable action key (for future workflow routing) */
+  action: string;
+  /** Optional tooltip description */
+  description?: string;
+  /** Priority level — affects chip styling */
+  priority?: 'high' | 'medium' | 'low';
+}
+
 // ── Response Contract (Normalized Application State) ────────
 
 export interface ResponseContract {
@@ -54,6 +66,8 @@ export interface ResponseContract {
   whyThisMatters?: string;
   /** Direct answer to the user's question (rendered first, before headline) */
   directAnswer?: string;
+  /** Contextual recommended next-step actions (copilot chips) */
+  recommendedActions: RecommendedAction[];
   /** Raw text content for fallback rendering */
   rawContent: string;
   /** Whether the response contains structured __SECTION_*__ tags */
@@ -76,6 +90,7 @@ export type SectionName =
   | 'ACTIONS'
   | 'CRM_HYGIENE'
   | 'CONFIDENCE'
+  | 'RECOMMENDED_ACTIONS'
   | 'END';
 
 /**
@@ -94,6 +109,7 @@ export const SECTION_RENDER_ORDER: SectionName[] = [
   'ACTIONS',      // Level 5: Operational directives
   'CRM_HYGIENE',  // Level 6: Secondary governance (collapsible)
   'CONFIDENCE',   // Level 6: Secondary governance (collapsible)
+  'RECOMMENDED_ACTIONS', // Level 7: Copilot next-step suggestions (interactive)
 ];
 
 /** Sections that render as collapsible secondary governance (not primary intelligence) */

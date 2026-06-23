@@ -8,4 +8,5 @@ export { SignalsWidget } from './SignalsWidget';
 export { ActionsWidget } from './ActionsWidget';
 export { CrmHygieneWidget } from './CrmHygieneWidget';
 export { ConfidenceWidget } from './ConfidenceWidget';
+export { RecommendedActionsWidget } from './RecommendedActionsWidget';
 export { ContractRenderer, FinalizedContractRenderer } from './ContractRenderer';

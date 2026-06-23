@@ -1026,3 +1026,83 @@
     animation: ticker 40s linear infinite;
 }
 
+
+/* ── Recommended Actions (Copilot Next-Step Chips) ─────────── */
+
+.apex-recommended-actions {
+  padding: 8px 0 4px;
+}
+
+.apex-recommended-actions-divider {
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(37, 99, 235, 0.2) 20%,
+    rgba(124, 58, 237, 0.2) 50%,
+    rgba(37, 99, 235, 0.2) 80%,
+    transparent 100%
+  );
+  margin-bottom: 4px;
+}
+
+.apex-recommended-actions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.apex-action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  background: rgba(37, 99, 235, 0.03);
+  color: #a1a1aa;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: var(--font-inter);
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.apex-action-chip:hover {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.07);
+  color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12), 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.apex-action-chip:active {
+  transform: translateY(0px);
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.08);
+}
+
+.apex-action-chip--high {
+  border-color: rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.apex-action-chip--high:hover {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(124, 58, 237, 0.06) 100%);
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.18), 0 0 0 1px rgba(37, 99, 235, 0.12);
+}
+
+.apex-action-chip-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Dark mode text override */
+:is(.dark) .apex-action-chip {
+  color: #71717a;
+}
+
+:is(.dark) .apex-action-chip:hover {
+  color: #60a5fa;
+}

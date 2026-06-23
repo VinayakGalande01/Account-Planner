@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import type { ResponseContract, SectionName } from '../../types/responseContract';
+import type { ResponseContract, SectionName, RecommendedAction } from '../../types/responseContract';
 import { SECTION_RENDER_ORDER } from '../../types/responseContract';
 import { parseStreamingSections, parseResponseContract } from '../../utils/contractParser';
 import { renderInlineMarkdown } from '../../utils/inlineMarkdown';
@@ -12,6 +12,7 @@ import { SignalsWidget } from './SignalsWidget';
 import { ActionsWidget } from './ActionsWidget';
 import { CrmHygieneWidget } from './CrmHygieneWidget';
 import { ConfidenceWidget } from './ConfidenceWidget';
+import { RecommendedActionsWidget } from './RecommendedActionsWidget';
 
 // ── Widget Registry ─────────────────────────────────────────
 // Registry-driven component mapping. Extensible: add new sections
@@ -113,6 +114,16 @@ const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
       return <ConfidenceWidget data={{ score: content, status: content, sources: [] }} />;
     }
   },
+
+  RECOMMENDED_ACTIONS: (content) => {
+    try {
+      const actions = JSON.parse(content);
+      // During streaming, render without click handler (will be wired in finalized view)
+      return <RecommendedActionsWidget actions={actions} />;
+    } catch {
+      return null;
+    }
+  },
 };
 
 // ── Streaming Contract Renderer ─────────────────────────────
@@ -122,6 +133,8 @@ interface ContractRendererProps {
   content: string;
   /** Whether the stream is still active */
   isStreaming: boolean;
+  /** Callback when a recommended action chip is clicked */
+  onActionClick?: (action: RecommendedAction) => void;
 }
 
 /**
@@ -142,7 +155,7 @@ interface ContractRendererProps {
  *              Backend owns all ranking/severity/truncation decisions.
  *              Frontend only handles rendering, layout, and interaction.
  */
-export function ContractRenderer({ content, isStreaming }: ContractRendererProps) {
+export function ContractRenderer({ content, isStreaming, onActionClick }: ContractRendererProps) {
   const streamState = useMemo(() => parseStreamingSections(content), [content]);
 
   // No structured content found → return null (caller handles fallback)
@@ -214,6 +227,24 @@ export function ContractRenderer({ content, isStreaming }: ContractRendererProps
       continue;
     }
 
+    // ── Recommended Actions (special: needs onActionClick callback) ──
+    if (section === 'RECOMMENDED_ACTIONS') {
+      if (completedSections.has('RECOMMENDED_ACTIONS')) {
+        const raContent = completedSections.get('RECOMMENDED_ACTIONS')!;
+        try {
+          const actions = JSON.parse(raContent);
+          renderedSections.push(
+            <div key="apex-RECOMMENDED_ACTIONS" className="apex-section-block animate-slide-up">
+              <RecommendedActionsWidget actions={actions} onActionClick={onActionClick} />
+            </div>
+          );
+        } catch {
+          // Silently skip if JSON invalid
+        }
+      }
+      continue;
+    }
+
     // ── Completed sections ─────────────────────────────────
     if (completedSections.has(section)) {
       const sectionContent = completedSections.get(section)!;
@@ -252,6 +283,8 @@ export function ContractRenderer({ content, isStreaming }: ContractRendererProps
 interface FinalizedRendererProps {
   /** Normalized ResponseContract (post-stream application state) */
   contract: ResponseContract;
+  /** Callback when a recommended action chip is clicked */
+  onActionClick?: (action: RecommendedAction) => void;
 }
 
 /**
@@ -261,7 +294,7 @@ interface FinalizedRendererProps {
  * Used for messages in conversation history. Renders from structured
  * data models, not raw text — enabling future sort/filter/export.
  */
-export function FinalizedContractRenderer({ contract }: FinalizedRendererProps) {
+export function FinalizedContractRenderer({ contract, onActionClick }: FinalizedRendererProps) {
   if (!contract.isStructured) return null;
 
   return (
@@ -330,6 +363,11 @@ export function FinalizedContractRenderer({ contract }: FinalizedRendererProps) 
       {contract.confidence && (
         <div className="apex-section-block">
           <ConfidenceWidget data={contract.confidence} />
+        </div>
+      )}
+      {contract.recommendedActions && contract.recommendedActions.length > 0 && (
+        <div className="apex-section-block">
+          <RecommendedActionsWidget actions={contract.recommendedActions} onActionClick={onActionClick} />
         </div>
       )}
     </div>
