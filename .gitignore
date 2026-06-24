@@ -35,3 +35,5 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 backend/llm_cache.json
+backend/local_planner.db
+
