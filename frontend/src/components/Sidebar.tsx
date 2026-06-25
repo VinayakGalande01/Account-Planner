@@ -1,123 +1,132 @@
-'use client';
+'use client'
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'framer-motion'
+import { useRouter, usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, Users, TrendingUp, Sparkles,
-  Target, Settings, ChevronLeft, ChevronRight,
-  ShieldCheck, Activity,
-} from 'lucide-react';
+  LayoutDashboard,
+  Briefcase,
+  TrendingUp,
+  Brain,
+  Settings,
+  Menu,
+  X,
+  LogOut,
+} from 'lucide-react'
+import { useState } from 'react'
+import { useAuth } from '@/context/AuthContext'
 
-interface SidebarProps {
-  activeTab: string;
-  onTabChange: (tab: string) => void;
-  isCollapsed: boolean;
-  onToggleCollapse: () => void;
-  systemStatus: 'operational' | 'offline' | 'connecting';
-}
+const navigation = [
+  { name: 'Dashboard', icon: LayoutDashboard, href: '/' },
+  { name: 'Accounts', icon: Briefcase, href: '/accounts' },
+  { name: 'Pipeline', icon: TrendingUp, href: '/pipeline' },
+  { name: 'Intelligence', icon: Brain, href: '/intelligence' },
+  { name: 'Settings', icon: Settings, href: '/settings' },
+]
 
-const menuItems = [
-  { id: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'Accounts', label: 'Accounts', icon: Users },
-  { id: 'Pipeline', label: 'Pipeline', icon: TrendingUp },
-  { id: 'Intelligence', label: 'AI Assistant', icon: Sparkles },
-  { id: 'Strategy', label: 'Strategy', icon: Target },
-  { id: 'Settings', label: 'Settings', icon: Settings },
-];
+export function Sidebar() {
+  const [isOpen, setIsOpen] = useState(true)
+  const router = useRouter()
+  const pathname = usePathname()
+  const { user, logout } = useAuth()
 
-export default function Sidebar({ activeTab, onTabChange, isCollapsed, onToggleCollapse, systemStatus }: SidebarProps) {
-  const statusColor = systemStatus === 'operational' ? 'text-emerald-500' : systemStatus === 'connecting' ? 'text-amber-500' : 'text-red-500';
-  const statusLabel = systemStatus === 'operational' ? 'SYSTEM ONLINE' : systemStatus === 'connecting' ? 'CONNECTING...' : 'OFFLINE';
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/'
+    return pathname?.startsWith(href)
+  }
 
   return (
-    <motion.aside
-      animate={{ width: isCollapsed ? 64 : 240 }}
-      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-      className="border-r border-border bg-card flex flex-col h-full shrink-0 overflow-hidden relative z-40"
-    >
-      {/* Logo */}
-      <div className="h-16 border-b border-border flex items-center gap-3 px-4 shrink-0">
-        <img src="/apex-logo.png" alt="APEX Logo" className="w-8 h-8 object-contain shrink-0 drop-shadow-[0_0_10px_rgba(37,99,235,0.3)]" />
-        {!isCollapsed && (
-          <motion.span
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="font-black text-[12px] tracking-[0.15em] text-primary uppercase whitespace-nowrap font-[family-name:var(--font-mono)]"
-          >
-            APEX PLANNER
-          </motion.span>
+    <>
+      {/* Mobile toggle */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed top-4 left-4 z-40 md:hidden"
+      >
+        {isOpen ? (
+          <X className="w-6 h-6" />
+        ) : (
+          <Menu className="w-6 h-6" />
         )}
-      </div>
+      </button>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto scrollbar-hide">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onTabChange(item.id)}
-              data-tooltip={isCollapsed ? item.label : undefined}
-              className={`w-full flex items-center gap-3 rounded-md transition-all duration-150 group relative ${
-                isCollapsed ? 'px-0 py-2.5 justify-center' : 'px-3 py-2.5'
-              } ${
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-zinc-500 hover:bg-muted dark:hover:bg-white/[0.03] hover:text-zinc-300'
+      {/* Sidebar */}
+      <motion.div
+        initial={{ x: -300 }}
+        animate={{ x: isOpen ? 0 : -300 }}
+        transition={{ duration: 0.3 }}
+        className="fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col p-6 z-30 md:static md:translate-x-0"
+      >
+        {/* Logo */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="mb-10"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
+              <span className="text-sm font-bold text-primary-foreground">A</span>
+            </div>
+            <h1 className="text-lg font-semibold text-foreground">APEX</h1>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2 leading-tight">
+            Account Planning
+          </p>
+        </motion.div>
+
+        {/* Navigation */}
+        <nav className="space-y-1 flex-1">
+          {navigation.map((item, index) => (
+            <motion.button
+              key={item.name}
+              onClick={() => router.push(item.href)}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 + index * 0.04 }}
+              whileHover={{ x: 2 }}
+              className={`w-full flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                isActive(item.href)
+                  ? 'text-primary bg-primary/10 border-l-2 border-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40'
               }`}
             >
-              <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors duration-150 ${
-                isActive ? 'text-primary' : 'text-zinc-600 group-hover:text-zinc-400'
-              }`} />
-              {!isCollapsed && (
-                <span className="text-[13px] font-bold uppercase tracking-[0.12em] whitespace-nowrap">
-                  {item.label}
-                </span>
-              )}
-              {isActive && (
-                <motion.div
-                  layoutId="sidebar-active"
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-5 bg-primary rounded-r-full"
-                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                />
-              )}
-            </button>
-          );
-        })}
-      </nav>
+              <item.icon className="w-4 h-4 flex-shrink-0" />
+              <span>{item.name}</span>
+            </motion.button>
+          ))}
+        </nav>
 
-      {/* System Status */}
-      <div className="px-2 pb-2 shrink-0">
-        {!isCollapsed ? (
-          <div className="p-3 bg-muted/30 rounded-md border border-border space-y-2">
-            <div className="flex items-center gap-2">
-              <Activity className={`w-3 h-3 ${statusColor}`} />
-              <span className={`text-[12px] font-bold uppercase tracking-[0.15em] ${statusColor} font-[family-name:var(--font-mono)]`}>
-                {statusLabel}
-              </span>
+        {/* User profile */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="pt-4 border-t border-border flex items-center justify-between px-2"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-md bg-primary flex items-center justify-center text-primary-foreground font-semibold text-xs flex-shrink-0">
+              {user?.name?.substring(0, 2).toUpperCase() || 'U'}
             </div>
-            <p className="text-[12px] text-zinc-600 leading-relaxed font-medium">
-              Backend: :8002 · LLM: :8000
-            </p>
+            <div className="flex-1 min-w-0 pr-2">
+              <p className="text-xs font-medium text-foreground truncate">
+                {user?.name || 'Loading...'}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {user?.email || 'User'}
+              </p>
+            </div>
           </div>
-        ) : (
-          <div className="flex justify-center py-2" data-tooltip="System Status">
-            <div className={`w-2 h-2 rounded-full ${
-              systemStatus === 'operational' ? 'bg-emerald-500' : systemStatus === 'connecting' ? 'bg-amber-500' : 'bg-red-500'
-            } animate-pulse`} />
-          </div>
-        )}
-      </div>
-
-      {/* Collapse Toggle */}
-      <button
-        onClick={onToggleCollapse}
-        className="h-10 border-t border-border flex items-center justify-center text-zinc-600 hover:text-zinc-400 hover:bg-muted dark:hover:bg-white/[0.03] transition-all shrink-0"
-      >
-        {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
-      </button>
-    </motion.aside>
-  );
+          <button
+            onClick={() => {
+              logout()
+              router.push('/')
+            }}
+            className="p-2 text-muted-foreground hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors flex-shrink-0"
+            title="Log Out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </motion.div>
+      </motion.div>
+    </>
+  )
 }

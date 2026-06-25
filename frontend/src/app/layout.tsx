@@ -1,86 +1,65 @@
-import React from 'react';
-import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono, Rajdhani, Chivo } from 'next/font/google';
-import './globals.css';
-import MainLayout from '../components/MainLayout';
-import { DataProvider } from '../context/DataContext';
-import { ThemeProvider } from '../context/ThemeContext';
-import { AuthProvider } from '../context/AuthContext';
+import { Analytics } from '@vercel/analytics/next'
+import type { Metadata, Viewport } from 'next'
+import { Geist, Geist_Mono } from 'next/font/google'
+import './globals.css'
+import { AuthProvider } from '@/context/AuthContext'
+import { DataProvider } from '@/context/DataContext'
+import { AuthWrapper } from '@/components/auth-wrapper'
 
-
-
-const inter = Inter({
+const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
+const geistMono = Geist_Mono({
+  variable: '--font-geist-mono',
   subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  display: 'swap',
-});
-
-const rajdhani = Rajdhani({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-rajdhani',
-  display: 'swap',
-});
-
-const chivo = Chivo({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '700'],
-  variable: '--font-chivo',
-  display: 'swap',
-});
+})
 
 export const metadata: Metadata = {
-  title: 'Account Planner | Tactical Command Center',
-  description: 'ERP-Grade Enterprise Account Intelligence & Strategic Control System',
-};
+  title: 'APEX - Account Planning & Execution Intelligence',
+  description: 'AI-powered sales and account management platform',
+  generator: 'v0.app',
+  icons: {
+    icon: [
+      {
+        url: '/icon-light-32x32.png',
+        media: '(prefers-color-scheme: light)',
+      },
+      {
+        url: '/icon-dark-32x32.png',
+        media: '(prefers-color-scheme: dark)',
+      },
+      {
+        url: '/icon.svg',
+        type: 'image/svg+xml',
+      },
+    ],
+    apple: '/apple-icon.png',
+  },
+}
+
+export const viewport: Viewport = {
+  colorScheme: 'dark',
+  themeColor: [{ media: '(prefers-color-scheme: dark)', color: '#09090b' }],
+}
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+}: Readonly<{
+  children: React.ReactNode
+}>) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable} ${rajdhani.variable} ${chivo.variable}`} suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                const storedTheme = localStorage.getItem('theme');
-                if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                  document.documentElement.classList.add('dark');
-                  document.documentElement.style.colorScheme = 'dark';
-                } else if (storedTheme === 'light') {
-                  document.documentElement.classList.remove('dark');
-                  document.documentElement.style.colorScheme = 'light';
-                } else {
-                  // Default fallback is dark
-                  document.documentElement.classList.add('dark');
-                  document.documentElement.style.colorScheme = 'dark';
-                }
-              } catch (_) {}
-            `,
-          }}
-        />
-      </head>
-      <body className="bg-background text-foreground antialiased selection:bg-primary/30 min-h-screen font-[family-name:var(--font-inter)]">
-        <ThemeProvider>
-          <AuthProvider>
-            <DataProvider>
-              <MainLayout>
-                {children}
-              </MainLayout>
-            </DataProvider>
-          </AuthProvider>
-        </ThemeProvider>
-
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} dark`}
+    >
+      <body className="font-sans antialiased bg-background">
+        <AuthProvider>
+          <DataProvider>
+            <AuthWrapper>
+              {children}
+            </AuthWrapper>
+          </DataProvider>
+        </AuthProvider>
+        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
-  );
+  )
 }
