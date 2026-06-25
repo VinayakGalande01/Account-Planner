@@ -14,8 +14,9 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   isTransitioning: boolean;
+  transitionType: 'login' | 'signup' | null;
   error: string | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string, isSignupFlow?: boolean) => Promise<boolean>;
   signup: (name: string, email: string, password: string) => Promise<boolean>;
   logout: () => void;
   authFetch: (url: string, options?: RequestInit) => Promise<Response>;
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionType, setTransitionType] = useState<'login' | 'signup' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const logout = useCallback(async () => {
@@ -146,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return '';
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string, isSignupFlow: boolean = false): Promise<boolean> => {
     setError(null);
     setLoading(true);
     try {
@@ -175,10 +177,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         if (userRes.ok) {
           const userData = await userRes.json();
+          setTransitionType(isSignupFlow ? 'signup' : 'login');
           setIsTransitioning(true);
           setUser(userData);
           setTimeout(() => {
             setIsTransitioning(false);
+            setTransitionType(null);
           }, 2500);
           return true;
         }
@@ -211,7 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (res.ok) {
         // Automatically log in after successful signup
-        return await login(email, password);
+        return await login(email, password, true);
       } else {
         setError(getErrorMessage(data.detail) || 'Registration failed');
         return false;
@@ -260,6 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       loading,
       isTransitioning,
+      transitionType,
       error,
       login,
       signup,

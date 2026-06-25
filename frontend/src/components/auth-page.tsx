@@ -7,7 +7,7 @@ import { Lock, Mail, User, ShieldAlert, Eye, EyeOff, ArrowRight } from 'lucide-r
 import Image from 'next/image';
 
 export default function AuthPage() {
-  const { login, signup, error, loading, isTransitioning } = useAuth();
+  const { login, signup, error, loading, isTransitioning, transitionType } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   
   // Fields
@@ -216,9 +216,9 @@ export default function AuthPage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", bounce: 0.5, delay: 0.2 }}
-              className={`w-16 h-16 rounded-full mb-8 flex items-center justify-center ${isLogin ? 'bg-emerald-500/20' : 'bg-blue-500/20'}`}
+              className={`w-16 h-16 rounded-full mb-8 flex items-center justify-center ${transitionType === 'login' ? 'bg-emerald-500/20' : 'bg-blue-500/20'}`}
             >
-               <div className={`w-8 h-8 rounded-full animate-pulse ${isLogin ? 'bg-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.8)]' : 'bg-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.8)]'}`} />
+               <div className={`w-8 h-8 rounded-full animate-pulse ${transitionType === 'login' ? 'bg-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.8)]' : 'bg-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.8)]'}`} />
             </motion.div>
             
             <motion.h2 
@@ -227,7 +227,7 @@ export default function AuthPage() {
               transition={{ delay: 0.3 }}
               className="text-2xl sm:text-3xl font-black tracking-[0.1em] text-white uppercase font-[family-name:var(--font-mono)] mb-3 text-center"
             >
-              {isLogin ? "Welcome Back" : "Welcome to APEX"}
+              {transitionType === 'login' ? "Welcome Back" : "Account Created"}
             </motion.h2>
             
             <motion.p 
@@ -236,7 +236,7 @@ export default function AuthPage() {
               transition={{ delay: 0.5 }}
               className="text-zinc-400 font-medium text-center uppercase tracking-[0.2em] text-[11px] sm:text-[13px]"
             >
-              {isLogin ? "Initializing Intelligence Engine..." : "Provisioning Your Account..."}
+              {transitionType === 'login' ? "Initializing Intelligence Engine..." : "Preparing your workspace for launch..."}
             </motion.p>
           </motion.div>
         )}
