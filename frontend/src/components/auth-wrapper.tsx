@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import AuthPage from './auth-page'
 
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, loading, isTransitioning } = useAuth()
 
   if (loading) {
     return (
@@ -19,7 +19,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!user) {
+  if (!user || isTransitioning) {
     return <AuthPage />
   }
 

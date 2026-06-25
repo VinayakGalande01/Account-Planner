@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Mail, User, ShieldAlert, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import Image from 'next/image';
 
 export default function AuthPage() {
-  const { login, signup, error, loading } = useAuth();
+  const { login, signup, error, loading, isTransitioning } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   
   // Fields
@@ -43,7 +44,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground overflow-hidden flex flex-col justify-center items-center px-4">
+    <div className="relative min-h-screen bg-black text-foreground overflow-hidden flex flex-col justify-center items-center px-4">
       {/* Topographic scan line details */}
       <div className="absolute inset-0 opacity-[0.8] pointer-events-none z-10" />
       
@@ -51,28 +52,32 @@ export default function AuthPage() {
       <div className="fixed top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/[0.04] rounded-full blur-[100px] pointer-events-none z-0" />
       <div className="fixed bottom-10 right-10 w-[400px] h-[200px] bg-secondary/[0.03] rounded-full blur-[80px] pointer-events-none z-0" />
 
-      {/* Main card wrapper */}
-      <motion.div 
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-card border border-border relative z-20 w-full max-w-[420px] p-8 rounded-xl shadow-2xl group"
-      >
+      {/* Main card wrapper or Splash screen */}
+      <AnimatePresence mode="wait">
+        {!isTransitioning ? (
+          <motion.div 
+            key="login-form"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, filter: "blur(10px)" }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="bg-zinc-950/80 backdrop-blur-xl border border-white/10 relative z-20 w-full max-w-[420px] p-8 rounded-xl shadow-2xl group"
+          >
         {/* Glow corners */}
-        <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-primary/45 rounded-tl-xl transition-all duration-300 group-hover:w-6 group-hover:h-6" />
-        <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-primary/45 rounded-tr-xl transition-all duration-300 group-hover:w-6 group-hover:h-6" />
-        <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-primary/45 rounded-bl-xl transition-all duration-300 group-hover:w-6 group-hover:h-6" />
-        <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-primary/45 rounded-br-xl transition-all duration-300 group-hover:w-6 group-hover:h-6" />
+        <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-white/20 rounded-tl-xl transition-all duration-300 group-hover:w-6 group-hover:h-6" />
+        <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-white/20 rounded-tr-xl transition-all duration-300 group-hover:w-6 group-hover:h-6" />
+        <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-white/20 rounded-bl-xl transition-all duration-300 group-hover:w-6 group-hover:h-6" />
+        <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-white/20 rounded-br-xl transition-all duration-300 group-hover:w-6 group-hover:h-6" />
 
         {/* Logo and Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-lg bg-primary flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
-             <span className="text-2xl font-bold text-primary-foreground">A</span>
+          <div className="w-20 h-20 mb-4">
+             <Image src="/logo.png" alt="APEX Logo" width={80} height={80} className="object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.2)] brightness-125" priority />
           </div>
-          <h2 className="text-[15px] font-black tracking-[0.15em] text-primary uppercase font-[family-name:var(--font-mono)]">
+          <h2 className="text-[15px] font-black tracking-[0.15em] text-white uppercase font-[family-name:var(--font-mono)]">
             {isLogin ? 'Sign In' : 'Create Your Account'}
           </h2>
-          <p className="text-[11px] text-muted-foreground font-medium mt-1">
+          <p className="text-[11px] text-zinc-400 font-medium mt-1">
             {isLogin ? 'Sign in to your account to continue' : 'Sign up to get started'}
           </p>
         </div>
@@ -105,17 +110,17 @@ export default function AuthPage() {
                 transition={{ duration: 0.2 }}
                 className="space-y-1"
               >
-                <label className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
+                <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
                   Full Name
                 </label>
                 <div className="relative">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Enter your full name"
-                    className="w-full pl-10 pr-4 py-2.5 bg-secondary/50 border border-border rounded-md text-[12px] placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:bg-secondary transition-all font-[family-name:var(--font-mono)]"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-md text-[12px] placeholder:text-zinc-400 focus:outline-none focus:border-white/30 focus:bg-white/10 text-white transition-all font-[family-name:var(--font-mono)]"
                   />
                 </div>
               </motion.div>
@@ -123,38 +128,38 @@ export default function AuthPage() {
           </AnimatePresence>
 
           <div className="space-y-1">
-            <label className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
               Email Address
             </label>
             <div className="relative">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email address"
-                className="w-full pl-10 pr-4 py-2.5 bg-secondary/50 border border-border rounded-md text-[12px] placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:bg-secondary transition-all font-[family-name:var(--font-mono)]"
+                className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-md text-[12px] placeholder:text-zinc-400 focus:outline-none focus:border-white/30 focus:bg-white/10 text-white transition-all font-[family-name:var(--font-mono)]"
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
               Password
             </label>
             <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
-                className="w-full pl-10 pr-10 py-2.5 bg-secondary/50 border border-border rounded-md text-[12px] placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:bg-secondary transition-all"
+                className="w-full pl-10 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-md text-[12px] placeholder:text-zinc-400 focus:outline-none focus:border-white/30 focus:bg-white/10 text-white transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors focus:outline-none"
               >
                 {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
@@ -164,7 +169,7 @@ export default function AuthPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full group/btn relative mt-6 py-3 bg-primary text-primary-foreground text-[11px] font-black uppercase tracking-[0.25em] rounded-md overflow-hidden transition-all duration-300 hover:shadow-[0_0_25px_rgba(37,99,235,0.3)] disabled:opacity-50 disabled:cursor-not-allowed font-[family-name:var(--font-mono)]"
+            className="w-full group/btn relative mt-6 py-3 bg-primary text-black text-[11px] font-black uppercase tracking-[0.25em] rounded-md overflow-hidden transition-all duration-300 hover:bg-zinc-200 hover:shadow-[0_0_25px_rgba(255,255,255,0.15)] disabled:opacity-50 disabled:cursor-not-allowed font-[family-name:var(--font-mono)]"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -188,12 +193,54 @@ export default function AuthPage() {
               setIsLogin(!isLogin);
               setValidationError(null);
             }}
-            className="text-[11px] text-muted-foreground hover:text-primary uppercase tracking-[0.05em] font-[family-name:var(--font-mono)] transition-colors"
+            className="text-[11px] text-zinc-400 hover:text-white uppercase tracking-[0.05em] font-[family-name:var(--font-mono)] transition-colors"
           >
             {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
           </button>
         </div>
       </motion.div>
+        ) : (
+          <motion.div
+            key="success-splash"
+            initial={{ opacity: 0, scale: 0.9, filter: "blur(10px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)" }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="relative z-20 flex flex-col items-center justify-center"
+          >
+            <div className="mb-8 w-24 h-24">
+              <Image src="/logo.png" alt="APEX Logo" width={96} height={96} className="object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)] brightness-125" priority />
+            </div>
+            
+            <motion.div 
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", bounce: 0.5, delay: 0.2 }}
+              className={`w-16 h-16 rounded-full mb-8 flex items-center justify-center ${isLogin ? 'bg-emerald-500/20' : 'bg-blue-500/20'}`}
+            >
+               <div className={`w-8 h-8 rounded-full animate-pulse ${isLogin ? 'bg-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.8)]' : 'bg-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.8)]'}`} />
+            </motion.div>
+            
+            <motion.h2 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="text-2xl sm:text-3xl font-black tracking-[0.1em] text-white uppercase font-[family-name:var(--font-mono)] mb-3 text-center"
+            >
+              {isLogin ? "Welcome Back" : "Welcome to APEX"}
+            </motion.h2>
+            
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="text-zinc-400 font-medium text-center uppercase tracking-[0.2em] text-[11px] sm:text-[13px]"
+            >
+              {isLogin ? "Initializing Intelligence Engine..." : "Provisioning Your Account..."}
+            </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

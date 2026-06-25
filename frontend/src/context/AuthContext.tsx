@@ -13,6 +13,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
+  isTransitioning: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, email: string, password: string) => Promise<boolean>;
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const logout = useCallback(async () => {
@@ -173,7 +175,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         if (userRes.ok) {
           const userData = await userRes.json();
+          setIsTransitioning(true);
           setUser(userData);
+          setTimeout(() => {
+            setIsTransitioning(false);
+          }, 2500);
           return true;
         }
       }
@@ -253,6 +259,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       token,
       loading,
+      isTransitioning,
       error,
       login,
       signup,

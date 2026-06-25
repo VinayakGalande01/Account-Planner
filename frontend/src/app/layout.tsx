@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
 import { DataProvider } from '@/context/DataContext'
+import { Toaster } from 'sonner'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({
@@ -55,6 +56,7 @@ export default function RootLayout({
             {children}
           </DataProvider>
         </AuthProvider>
+        <Toaster theme="dark" position="top-center" />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

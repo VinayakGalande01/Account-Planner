@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
+import Image from 'next/image'
 
 const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
@@ -63,8 +64,8 @@ export function Sidebar() {
           className="mb-10"
         >
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-              <span className="text-sm font-bold text-primary-foreground">A</span>
+            <div className="w-8 h-8">
+              <Image src="/logo.png" alt="APEX Logo" width={32} height={32} className="object-contain drop-shadow-[0_0_10px_rgba(255,255,255,0.2)] brightness-125" priority />
             </div>
             <h1 className="text-lg font-semibold text-foreground">APEX</h1>
           </div>
