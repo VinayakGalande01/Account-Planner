@@ -4,7 +4,6 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
 import { DataProvider } from '@/context/DataContext'
-import { AuthWrapper } from '@/components/auth-wrapper'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({
@@ -53,9 +52,7 @@ export default function RootLayout({
       <body className="font-sans antialiased bg-background">
         <AuthProvider>
           <DataProvider>
-            <AuthWrapper>
-              {children}
-            </AuthWrapper>
+            {children}
           </DataProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
