@@ -78,7 +78,7 @@ export default function IntelligencePage() {
     if (!text.trim() || isLoading) return
 
     // Add user message
-    const userMessage = {
+    const userMessage: Message = {
       id: Date.now(),
       role: 'user',
       content: text,
