@@ -2,8 +2,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from models.crm_models import Account, Opportunity, Contact, Case, Activity
 
-def check_data_hygiene(db: Session) -> list:
-    """Runs a series of database queries to check for CRM data quality warnings."""
+def check_data_hygiene(db: Session, user_id: int) -> list:
+    """Runs a series of database queries to check for CRM data quality warnings scoped by user_id."""
     warnings = []
     today_str = datetime.today().strftime('%Y-%m-%d')
     thirty_days_ago = (datetime.today() - timedelta(days=30)).strftime('%Y-%m-%d')
@@ -11,6 +11,7 @@ def check_data_hygiene(db: Session) -> list:
     # 1. Stale Opportunities (Close date is in the past, but the deal stage is not closed)
     try:
         overdue_opps = db.query(Opportunity).filter(
+            Opportunity.user_id == user_id,
             Opportunity.Close_Date < today_str,
             ~Opportunity.Stage.in_(["Closed Won", "Closed Lost"])
         ).all()
@@ -28,8 +29,9 @@ def check_data_hygiene(db: Session) -> list:
     # 2. Missing contact info (Email or phone is missing/blank)
     try:
         missing_info = db.query(Contact).filter(
-            (Contact.Email == None) | (Contact.Email == "") |
-            (Contact.Phone == None) | (Contact.Phone == "")
+            Contact.user_id == user_id,
+            ((Contact.Email == None) | (Contact.Email == "") |
+             (Contact.Phone == None) | (Contact.Phone == ""))
         ).all()
         for contact in missing_info:
             warnings.append({
@@ -45,11 +47,13 @@ def check_data_hygiene(db: Session) -> list:
     # 3. Strategic Accounts with no activity logged in the last 30 days
     try:
         strategic_accounts = db.query(Account).filter(
-            (Account.Account_Tier.ilike("%Strategic%")) | 
-            (Account.Account_Tier.ilike("%Key%"))
+            Account.user_id == user_id,
+            ((Account.Account_Tier.ilike("%Strategic%")) | 
+             (Account.Account_Tier.ilike("%Key%")))
         ).all()
         for acc in strategic_accounts:
             latest_activity = db.query(Activity).filter(
+                Activity.user_id == user_id,
                 Activity.Account_ID == acc.Account_ID
             ).order_by(Activity.Activity_Date.desc()).first()
             

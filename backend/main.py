@@ -72,6 +72,8 @@ except Exception as db_err:
 from auth.router import router as auth_router
 app.include_router(auth_router)
 
+from database import get_db
+from sqlalchemy.orm import Session
 from auth.dependencies import get_current_user
 from models.user import User
 
@@ -118,7 +120,39 @@ if not DATA_PATH or not os.path.exists(DATA_PATH):
                 DATA_PATH = p
                 break
 
-engine = DataEngine(DATA_PATH)
+# Create default admin user and seed if empty on startup
+from sqlalchemy.orm import Session
+from database import SessionLocal
+with SessionLocal() as startup_db:
+    from models.user import User
+    default_user = startup_db.query(User).filter(User.id == 1).first()
+    if not default_user:
+        from auth.password import hash_password
+        default_user = User(id=1, name="Default Admin", email="admin@apex.com", hashed_password=hash_password("admin"))
+        startup_db.add(default_user)
+        startup_db.commit()
+        startup_db.refresh(default_user)
+    
+    from models.crm_models import Account
+    if startup_db.query(Account).filter(Account.user_id == 1).count() == 0:
+        print("Seeding default admin user data...")
+        from sync_daemon import sync_crm_to_sqlite_for_user
+        sync_crm_to_sqlite_for_user(startup_db, 1)
+
+engine = DataEngine(SessionLocal(), 1)
+
+def get_user_data_engine(
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+) -> DataEngine:
+    from models.crm_models import Account
+    from sync_daemon import sync_crm_to_sqlite_for_user
+    
+    if db.query(Account).filter(Account.user_id == current_user.id).count() == 0:
+        print(f"Seeding demo data for new user: {current_user.email} (ID: {current_user.id})")
+        sync_crm_to_sqlite_for_user(db, current_user.id)
+        
+    return DataEngine(db, current_user.id)
 
 # Configuration for LLM (Remote or Local via .env)
 LLM_URL = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
@@ -1134,14 +1168,20 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
     db_sess = SessionLocal()
     chat_history = []
     try:
-        chat_session = db_sess.query(ChatSession).filter(ChatSession.id == session_id).first()
+        chat_session = db_sess.query(ChatSession).filter(
+            ChatSession.id == session_id,
+            ChatSession.user_id == current_user.id
+        ).first()
         if not chat_session:
-            chat_session = ChatSession(id=session_id)
+            chat_session = ChatSession(id=session_id, user_id=current_user.id)
             db_sess.add(chat_session)
             db_sess.commit()
             db_sess.refresh(chat_session)
         
-        db_history = db_sess.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.timestamp.desc()).limit(2).all()
+        db_history = db_sess.query(ChatMessage).filter(
+            ChatMessage.session_id == session_id,
+            ChatMessage.user_id == current_user.id
+        ).order_by(ChatMessage.timestamp.desc()).limit(2).all()
         for msg in reversed(db_history):
             chat_history.append({
                 "sender": msg.sender,
@@ -1158,9 +1198,12 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
         yield "sys_meta_log|[SYS_LOG] Initializing Account Planning Agent...\n\n"
         await asyncio.sleep(0.05)
         
-        # Instantiate agent at request time (or could be module level, but request time ensures fresh state)
-        from agent_orchestrator import AccountPlanningAgent
-        agent = AccountPlanningAgent(data_engine=engine, is_local=IS_LOCAL_OLLAMA)
+        generator_db = SessionLocal()
+        try:
+            user_engine = get_user_data_engine(generator_db, current_user)
+            # Instantiate agent at request time (or could be module level, but request time ensures fresh state)
+            from agent_orchestrator import AccountPlanningAgent
+            agent = AccountPlanningAgent(data_engine=user_engine, is_local=IS_LOCAL_OLLAMA)
         
         # Map response_mode to recipient_role
         role_map = {
@@ -1198,7 +1241,7 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
             # Save chat history to database
             db_save = SessionLocal()
             try:
-                user_msg = ChatMessage(session_id=session_id, sender="user", text=request.query)
+                user_msg = ChatMessage(session_id=session_id, sender="user", text=request.query, user_id=current_user.id)
                 db_save.add(user_msg)
                 
                 # Determine narrative reply text
@@ -1215,7 +1258,7 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
                     narrative_reply = f"Intent confidence low: showing {opps_count} opportunities."
                 
                 if narrative_reply:
-                    assistant_msg = ChatMessage(session_id=session_id, sender="assistant", text=narrative_reply)
+                    assistant_msg = ChatMessage(session_id=session_id, sender="assistant", text=narrative_reply, user_id=current_user.id)
                     db_save.add(assistant_msg)
                 
                 db_save.commit()
@@ -1420,7 +1463,7 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
             except Exception as ra_err:
                 print(f"[API Warning] Could not generate recommended actions: {ra_err}")
             
-            end_time = asyncio.get_event_loop().time()
+                        end_time = asyncio.get_event_loop().time()
             latency_ms = (end_time - start_time) * 1000
             print(f"[TELEMETRY] Account Planning Agent | Intent: {intent} | Role: {target_role} | Latency: {latency_ms:.2f}ms")
             
@@ -1431,6 +1474,8 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
             yield "__SECTION_HEADLINE__\nProcessing Error"
             yield f"__SECTION_SUMMARY__\nAn error occurred while generating the response: {str(e)}"
             yield "__SECTION_END__"
+        finally:
+            generator_db.close()
 
     return StreamingResponse(
         generate_stream(),
@@ -1557,15 +1602,18 @@ def test_intent_classification(query: str):
     }
 
 @app.get("/api/insights")
-async def get_insights(current_user: User = Depends(get_current_user)):
+async def get_insights(
+    user_engine: DataEngine = Depends(get_user_data_engine),
+    current_user: User = Depends(get_current_user)
+):
     """Analyzes the account portfolio and pipeline to generate proactive insights, alerts, and suggestions using rules + LLM."""
     from datetime import datetime
     try:
-        accounts = engine.data.get('account')
-        opps = engine.data.get('opportunity')
-        contacts = engine.data.get('contact')
-        activities = engine.data.get('activity')
-        cases = engine.data.get('case')
+        accounts = user_engine.data.get('account')
+        opps = user_engine.data.get('opportunity')
+        contacts = user_engine.data.get('contact')
+        activities = user_engine.data.get('activity')
+        cases = user_engine.data.get('case')
 
         insights_list = []
         
@@ -1766,28 +1814,47 @@ async def health_check():
     }
 
 @app.get("/api/accounts/enriched")
-async def get_enriched_accounts(current_user: User = Depends(get_current_user)):
+async def get_enriched_accounts(
+    user_engine: DataEngine = Depends(get_user_data_engine),
+    current_user: User = Depends(get_current_user)
+):
     """Returns all accounts with computed health scores, pipeline values, and last activity dates."""
     try:
-        enriched = engine.get_enriched_accounts_list()
+        enriched = user_engine.get_enriched_accounts_list()
         return enriched
     except Exception as e:
         return []
 
 @app.get("/api/pipeline/summary")
-async def get_pipeline_summary(current_user: User = Depends(get_current_user)):
+async def get_pipeline_summary(
+    user_engine: DataEngine = Depends(get_user_data_engine),
+    current_user: User = Depends(get_current_user)
+):
     """Returns aggregated pipeline data grouped by stage."""
     try:
-        analysis = engine.get_pipeline_analysis()
+        analysis = user_engine.get_pipeline_analysis()
         return analysis
     except Exception as e:
         return {"total_value": 0, "weighted_value": 0, "deal_count": 0, "stage_summary": {}}
 
 @app.get("/api/accounts/{account_id}/details")
-async def get_account_details(account_id: str, current_user: User = Depends(get_current_user)):
+async def get_account_details(
+    account_id: str, 
+    user_engine: DataEngine = Depends(get_user_data_engine),
+    current_user: User = Depends(get_current_user)
+):
     """Returns real JSON details for a specific account."""
     try:
-        details = engine.get_account_details_json(account_id)
+        # Enforce Access Checks (403 Forbidden)
+        from models.crm_models import Account
+        db_account = user_engine.db.query(Account).filter(
+            Account.Account_ID == account_id,
+            Account.user_id == current_user.id
+        ).first()
+        if not db_account:
+            raise HTTPException(status_code=403, detail="Access denied to this account")
+            
+        details = user_engine.get_account_details_json(account_id)
         return details
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1800,41 +1867,39 @@ async def root():
     return {"message": "Account Planner Agent API is running"}
 
 @app.get("/api/accounts")
-async def get_accounts(current_user: User = Depends(get_current_user)):
-    if 'account' not in engine.data:
+async def get_accounts(
+    user_engine: DataEngine = Depends(get_user_data_engine),
+    current_user: User = Depends(get_current_user)
+):
+    if 'account' not in user_engine.data or user_engine.data['account'].empty:
         return []
-    return engine.data['account'][['Account_ID', 'Account_Name', 'Account_Tier']].to_dict('records')
+    return user_engine.data['account'][['Account_ID', 'Account_Name', 'Account_Tier']].to_dict('records')
 
 @app.post("/api/sync")
-async def sync_data(current_user: User = Depends(get_current_user)):
-    """API endpoint to manually trigger the sync daemon."""
-    from sync_daemon import sync_crm_to_sqlite
-    success = sync_crm_to_sqlite()
+async def sync_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """API endpoint to manually trigger the sync daemon scoped to this user."""
+    from sync_daemon import sync_crm_to_sqlite_for_user
+    success = sync_crm_to_sqlite_for_user(db, current_user.id)
     if not success:
         raise HTTPException(status_code=500, detail="Database sync failed")
-    
-    # Also reload memory-based Excel data representation
-    try:
-        engine.load_data()
-    except Exception as e:
-        print(f"⚠️ Warning: Failed to reload DataEngine memory data: {e}")
         
     return {"status": "SUCCESS", "message": "Database successfully synced from CRM dataset"}
 
 @app.get("/api/dashboard/hygiene")
-async def get_hygiene_warnings(current_user: User = Depends(get_current_user)):
+async def get_hygiene_warnings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """API endpoint to retrieve CRM data hygiene alerts."""
-    from database import SessionLocal
     from hygiene_checker import check_data_hygiene
-    
-    db = SessionLocal()
     try:
-        warnings = check_data_hygiene(db)
+        warnings = check_data_hygiene(db, current_user.id)
         return {"warnings": warnings}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
 
 if __name__ == "__main__":
     import uvicorn

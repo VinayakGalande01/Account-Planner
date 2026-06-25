@@ -5,20 +5,106 @@ import os
 from typing import Optional, List, Dict, Any
 
 class DataEngine:
-    def __init__(self, excel_path: str):
-        self.excel_path = excel_path
+    def __init__(self, db, user_id: int):
+        self.db = db
+        self.user_id = user_id
         self.data = {}
         self.load_data()
 
     def load_data(self):
-        """Loads all sheets from the Excel file into pandas DataFrames."""
-        if not os.path.exists(self.excel_path):
-            raise FileNotFoundError(f"Excel file not found at {self.excel_path}")
+        """Loads all data for the user from the database into pandas DataFrames."""
+        from models.crm_models import Account, Opportunity, Contact, Case, Activity
         
-        sheets = pd.read_excel(self.excel_path, sheet_name=None)
-        # Normalize keys to lowercase for easier lookup
-        self.data = {name.lower(): df for name, df in sheets.items()}
-        print(f"Loaded sheets: {list(self.data.keys())}")
+        # 1. Accounts
+        accounts = self.db.query(Account).filter(Account.user_id == self.user_id).all()
+        accounts_list = []
+        for a in accounts:
+            accounts_list.append({
+                "Account_ID": a.Account_ID,
+                "Account_Name": a.Account_Name,
+                "Account_Tier": a.Account_Tier,
+                "Industry": a.Industry,
+                "Territory": a.Territory,
+                "Annual_Revenue_USD": a.Annual_Revenue_USD,
+                "Country": a.Country,
+                "Health_Score": a.Health_Score
+            })
+        self.data['account'] = pd.DataFrame(accounts_list) if accounts_list else pd.DataFrame(columns=[
+            'Account_ID', 'Account_Name', 'Account_Tier', 'Industry', 'Territory', 'Annual_Revenue_USD', 'Country', 'Health_Score'
+        ])
+
+        # 2. Opportunities
+        opps = self.db.query(Opportunity).filter(Opportunity.user_id == self.user_id).all()
+        opps_list = []
+        for o in opps:
+            opps_list.append({
+                "Opp_ID": o.Opp_ID,
+                "Account_ID": o.Account_ID,
+                "Opp_Name": o.Opp_Name,
+                "Amount_USD": o.Amount_USD,
+                "Stage": o.Stage,
+                "Close_Date": o.Close_Date,
+                "Probability_Pct": o.Probability_Pct,
+                "Competitor": o.Competitor
+            })
+        self.data['opportunity'] = pd.DataFrame(opps_list) if opps_list else pd.DataFrame(columns=[
+            'Opp_ID', 'Account_ID', 'Opp_Name', 'Amount_USD', 'Stage', 'Close_Date', 'Probability_Pct', 'Competitor'
+        ])
+
+        # 3. Contacts
+        contacts = self.db.query(Contact).filter(Contact.user_id == self.user_id).all()
+        contacts_list = []
+        for c in contacts:
+            contacts_list.append({
+                "Contact_ID": c.Contact_ID,
+                "Account_ID": c.Account_ID,
+                "First_Name": c.First_Name,
+                "Last_Name": c.Last_Name,
+                "Role": c.Role,
+                "Department": c.Department,
+                "Engagement_Level": c.Engagement_Level,
+                "Email": c.Email,
+                "Phone": c.Phone,
+                "Last_Contact_Date": c.Last_Contact_Date
+            })
+        self.data['contact'] = pd.DataFrame(contacts_list) if contacts_list else pd.DataFrame(columns=[
+            'Contact_ID', 'Account_ID', 'First_Name', 'Last_Name', 'Role', 'Department', 'Engagement_Level', 'Email', 'Phone', 'Last_Contact_Date'
+        ])
+
+        # 4. Cases
+        cases = self.db.query(Case).filter(Case.user_id == self.user_id).all()
+        cases_list = []
+        for c in cases:
+            cases_list.append({
+                "Case_ID": c.Case_ID,
+                "Account_ID": c.Account_ID,
+                "Subject": c.Subject,
+                "Status": c.Status,
+                "Severity": c.Severity,
+                "CSAT_Score": c.CSAT_Score,
+                "Open_Date": c.Open_Date
+            })
+        self.data['case'] = pd.DataFrame(cases_list) if cases_list else pd.DataFrame(columns=[
+            'Case_ID', 'Account_ID', 'Subject', 'Status', 'Severity', 'CSAT_Score', 'Open_Date'
+        ])
+
+        # 5. Activities
+        activities = self.db.query(Activity).filter(Activity.user_id == self.user_id).all()
+        activities_list = []
+        for a in activities:
+            activities_list.append({
+                "Activity_ID": a.Activity_ID,
+                "Account_ID": a.Account_ID,
+                "Contact_ID": a.Contact_ID,
+                "Activity_Type": a.Activity_Type,
+                "Type": a.Type,
+                "Description": a.Description,
+                "Activity_Date": a.Activity_Date
+            })
+        self.data['activity'] = pd.DataFrame(activities_list) if activities_list else pd.DataFrame(columns=[
+            'Activity_ID', 'Account_ID', 'Contact_ID', 'Activity_Type', 'Type', 'Description', 'Activity_Date'
+        ])
+        print(f"Loaded database tables for user_id {self.user_id}: {list(self.data.keys())}")
 
     def _get_days_ago(self, date_val):
         """Helper to compute days since a date."""

@@ -98,3 +98,36 @@ To trigger the automated GitHub Actions CI tests and prompt Render to deploy the
    git push origin main
    ```
 2. Open your GitHub repository page and click the **Actions** tab to watch your test and build suites compile successfully in real time!
+
+---
+
+## Section 3: Technical Challenges, Troubleshooting & Solutions
+
+During the deployment and verification process, several critical hosting limitations and routing conflicts were resolved. This section documents those challenges and their corresponding architectural solutions.
+
+### 1. Render Free Tier Memory Limits (PyTorch / ChromaDB OOM)
+* **Problem**: Render's free tier has a strict **512 MB RAM** limit. The original semantic search configuration imported `sentence-transformers` and PyTorch, which consumes >600 MB of RAM during initialization. This caused Render to repeatedly kill the container with Out of Memory (OOM) errors.
+* **Solution**: Implemented a memory optimization switch in [vector_store.py](file:///e:/Account%20Planner/backend/vector_store.py) controlled by the `DISABLE_CHROMA` environment variable:
+  * By setting `DISABLE_CHROMA=true` in Render's environment variables, the backend bypasses the heavy PyTorch/ChromaDB imports.
+  * It falls back to a lightweight, built-in keyword-matching/fallback algorithm.
+  * This reduced the container startup memory footprint to **~80 MB**, allowing the backend to run reliably on Render's free tier.
+
+### 2. Supabase IPv6 Connectivity Failures
+* **Problem**: Render's free tier currently does not support outbound IPv6 traffic. When attempting to connect to Supabase's direct PostgreSQL endpoint (typically on port `5432`), the DNS resolved to an IPv6 address, resulting in database connection timeout errors on startup.
+* **Solution**: Switched the connection string in the Render environment variables to the **Supabase Connection Pooler URI** on port `6543` (using the transaction pooling address). The connection pooler acts as an IPv4 proxy, allowing Render's IPv4-only environment to connect and run migrations successfully.
+
+### 3. Next.js Double-Slash (`//`) 404 Rewrite Errors
+* **Problem**: Defining `BACKEND_URL` in Vercel with a trailing slash (e.g., `https://apex-backend.onrender.com/`) caused the Next.js rewrite engine to generate double-slashes in request paths (e.g. `https://apex-backend.onrender.com//auth/signup`), which FastAPI rejected with `404 Not Found`.
+* **Solution**: Added a sanitization utility `cleanUrl` in [next.config.ts](file:///e:/Account%20Planner/frontend/next.config.ts):
+  ```typescript
+  const cleanUrl = (url: string) => url.replace(/\/+$/, "");
+  ```
+  This strips any trailing slashes from environment variables before appending paths in the rewrite rules, preventing malformed paths.
+
+### 4. CI/CD Pipeline Failure & Local SQLite Conflicts
+* **Problem 1**: The backend unit test suite (`backend/tests/`) was untracked locally, which would cause GitHub Actions (which runs `pytest` in `backend/`) to fail with exit code 5 (no tests collected).
+* **Problem 2**: Dynamic local SQLite databases (`backend/local_planner.db`) were untracked and showing up in Git staging, risking database conflicts if committed.
+* **Solution**: 
+  * Staged and committed the entire Python unit test suite in [tests](file:///e:/Account%20Planner/backend/tests/) to ensure GitHub Actions runs and passes cleanly on every push.
+  * Added `backend/local_planner.db` to the root [`.gitignore`](file:///e:/Account%20Planner/.gitignore) to prevent developer test data from being committed to the shared repository.
+

@@ -36,24 +36,24 @@ def clean_value(val):
         return val.item()
     return str(val)
 
-def sync_crm_to_sqlite():
-    excel_path = get_data_path()
+def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = None) -> bool:
+    if not excel_path:
+        excel_path = get_data_path()
     if not excel_path or not os.path.exists(excel_path):
-        print(f"❌ Excel data file not found at path: {excel_path}")
+        print(f"Error: Excel data file not found at path: {excel_path}")
         return False
 
-    print(f"🔄 Starting database sync from Excel: {excel_path}")
+    print(f"Starting database sync for user {user_id} from Excel: {excel_path}")
     sheets = pd.read_excel(excel_path, sheet_name=None)
     data = {name.lower(): df for name, df in sheets.items()}
 
-    db: Session = SessionLocal()
     try:
-        # Clear existing tables first
-        db.query(Activity).delete()
-        db.query(Case).delete()
-        db.query(Contact).delete()
-        db.query(Opportunity).delete()
-        db.query(Account).delete()
+        # Clear existing tables for this user first
+        db.query(Activity).filter(Activity.user_id == user_id).delete()
+        db.query(Case).filter(Case.user_id == user_id).delete()
+        db.query(Contact).filter(Contact.user_id == user_id).delete()
+        db.query(Opportunity).filter(Opportunity.user_id == user_id).delete()
+        db.query(Account).filter(Account.user_id == user_id).delete()
         db.commit()
 
         # 1. Sync Accounts
@@ -71,11 +71,12 @@ def sync_crm_to_sqlite():
                     Territory=clean_value(r.get("Territory")),
                     Annual_Revenue_USD=float(annual_rev),
                     Country=clean_value(r.get("Country")),
-                    Health_Score=float(clean_value(r.get("Health_Score"))) if r.get("Health_Score") is not None and not pd.isna(r.get("Health_Score")) else 80.0
+                    Health_Score=float(clean_value(r.get("Health_Score"))) if r.get("Health_Score") is not None and not pd.isna(r.get("Health_Score")) else 80.0,
+                    user_id=user_id
                 )
                 db.add(acc)
             db.commit()
-            print(f"  ✅ Synced {len(accounts_df)} Accounts.")
+            print(f"  Synced {len(accounts_df)} Accounts for user {user_id}.")
 
         # 2. Sync Opportunities
         opps_df = data.get("opportunity")
@@ -95,11 +96,12 @@ def sync_crm_to_sqlite():
                     Stage=clean_value(r.get("Stage")),
                     Close_Date=clean_value(r.get("Close_Date")),
                     Probability_Pct=int(prob),
-                    Competitor=clean_value(r.get("Competitor"))
+                    Competitor=clean_value(r.get("Competitor")),
+                    user_id=user_id
                 )
                 db.add(opp)
             db.commit()
-            print(f"  ✅ Synced {len(opps_df)} Opportunities.")
+            print(f"  Synced {len(opps_df)} Opportunities for user {user_id}.")
 
         # 3. Sync Contacts
         contacts_df = data.get("contact")
@@ -115,11 +117,12 @@ def sync_crm_to_sqlite():
                     Engagement_Level=clean_value(r.get("Engagement_Level")),
                     Email=clean_value(r.get("Email")),
                     Phone=clean_value(r.get("Phone")),
-                    Last_Contact_Date=clean_value(r.get("Last_Contact_Date"))
+                    Last_Contact_Date=clean_value(r.get("Last_Contact_Date")),
+                    user_id=user_id
                 )
                 db.add(ct)
             db.commit()
-            print(f"  ✅ Synced {len(contacts_df)} Contacts.")
+            print(f"  Synced {len(contacts_df)} Contacts for user {user_id}.")
 
         # 4. Sync Cases
         cases_df = data.get("case")
@@ -135,11 +138,12 @@ def sync_crm_to_sqlite():
                     Status=clean_value(r.get("Status")),
                     Severity=clean_value(r.get("Severity")),
                     CSAT_Score=float(csat),
-                    Open_Date=clean_value(r.get("Open_Date"))
+                    Open_Date=clean_value(r.get("Open_Date")),
+                    user_id=user_id
                 )
                 db.add(c)
             db.commit()
-            print(f"  ✅ Synced {len(cases_df)} Cases.")
+            print(f"  Synced {len(cases_df)} Cases for user {user_id}.")
 
         # 5. Sync Activities
         activities_df = data.get("activity")
@@ -153,7 +157,8 @@ def sync_crm_to_sqlite():
                     Activity_Type=clean_value(r.get("Activity_Type")),
                     Type=clean_value(r.get("Activity_Type")), # For compatibility with 'Type' field
                     Description=clean_value(r.get("Notes") or r.get("Description")),
-                    Activity_Date=clean_value(r.get("Activity_Date"))
+                    Activity_Date=clean_value(r.get("Activity_Date")),
+                    user_id=user_id
                 )
                 db.add(act)
                 
@@ -166,21 +171,36 @@ def sync_crm_to_sqlite():
                     "date": act.Activity_Date
                 })
             db.commit()
-            print(f"  ✅ Synced {len(activities_df)} Activities.")
+            print(f"  Synced {len(activities_df)} Activities for user {user_id}.")
 
             # Trigger local RAG vector indexing
             try:
                 from vector_store import vector_store
-                vector_store.index_activities(activities_list)
+                vector_store.index_activities(activities_list, user_id=user_id)
             except Exception as index_err:
-                print(f"⚠️ Warning: Failed to index activities to vector store: {index_err}")
+                print(f"Warning: Failed to index activities to vector store: {index_err}")
 
-        print("🎉 Database sync completed successfully!")
+        print(f"Database sync for user {user_id} completed successfully!")
         return True
     except Exception as e:
         db.rollback()
-        print(f"❌ Error during database sync: {e}")
+        print(f"Error during database sync for user {user_id}: {e}")
         return False
+
+def sync_crm_to_sqlite() -> bool:
+    # Backwards compatibility fallback (e.g. for verify_all.py or admin sync)
+    db = SessionLocal()
+    try:
+        from models.user import User
+        # Get or create default admin user (ID = 1)
+        default_user = db.query(User).filter(User.id == 1).first()
+        if not default_user:
+            from auth.password import hash_password
+            default_user = User(id=1, name="Default Admin", email="admin@apex.com", hashed_password=hash_password("admin"))
+            db.add(default_user)
+            db.commit()
+            db.refresh(default_user)
+        return sync_crm_to_sqlite_for_user(db, default_user.id)
     finally:
         db.close()
 
