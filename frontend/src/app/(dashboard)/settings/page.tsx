@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { useState } from 'react'
-import { Sidebar } from '@/components/sidebar'
+import { Sidebar } from '@/components/Sidebar'
 import { Header } from '@/components/header'
 import { Settings, Lock, Cpu } from 'lucide-react'
 

@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { Sidebar } from '@/components/sidebar'
+import { Sidebar } from '@/components/Sidebar'
 import { Header } from '@/components/header'
 import { Brain, Send, Zap } from 'lucide-react'
 import { ContractRenderer, FinalizedContractRenderer } from '@/components/apex-widgets'
