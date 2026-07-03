@@ -18,27 +18,25 @@ def log_auth_event(action: str, email: str, status_msg: str, jwt_issued: bool, r
     req_id = f"auth_{uuid.uuid4().hex[:6]}"
     
     jwt_status = "YES" if jwt_issued else "NO"
-    status_icon = "✅" if status_msg == "SUCCESS" else "❌"
+    status_icon = "[OK]" if status_msg == "SUCCESS" else "[FAIL]"
     
     log_msg = f"""
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔐 AUTHENTICATION EVENT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+----------------------------------------------
+AUTHENTICATION EVENT
+----------------------------------------------
 Timestamp    : {timestamp}
 Request ID   : {req_id}
-
 Action       : {action}
 Email        : {email}
-
 Status       : {status_msg} {status_icon}
-
 JWT Issued   : {jwt_status}
 Expires In   : 24 Hours
-
 Response Time: {response_time_ms}ms
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
-    print(log_msg)
+----------------------------------------------"""
+    try:
+        print(log_msg)
+    except Exception:
+        print(f"AUTH EVENT: {action} | {email} | {status_msg} | {response_time_ms}ms")
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def signup(user: UserCreate, service: AuthService = Depends()):

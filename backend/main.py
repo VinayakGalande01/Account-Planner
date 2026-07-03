@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
@@ -42,6 +42,20 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 app = FastAPI(title="Account Planner Agent API")
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+def get_user_or_ip_identifier(request: Request) -> str:
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header.split(" ")[1]
+    return request.client.host or "127.0.0.1"
+
+limiter = Limiter(key_func=get_user_or_ip_identifier)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # Automatically create database tables for the auth service
 from database import Base, engine as db_engine
@@ -155,7 +169,19 @@ def get_user_data_engine(
     return DataEngine(db, current_user.id)
 
 # Configuration for LLM (Remote or Local via .env)
-LLM_URL = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
+import re
+def normalize_url(url: str) -> str:
+    if not url:
+        return url
+    if "://" in url:
+        scheme, rest = url.split("://", 1)
+    else:
+        scheme, rest = "http", url
+    # Clean up double slashes inside the path, preserving the protocol
+    rest = re.sub(r'/+', '/', rest)
+    return f"{scheme}://{rest}"
+
+LLM_URL = normalize_url(os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate"))
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2:latest")
 
 print("\n=============================================")
@@ -1160,11 +1186,20 @@ def generate_deterministic_pipeline(engine, mode: str, format: str, query: str =
         )
 
 @app.post("/api/chat")
-async def chat(request: ChatRequest, current_user: User = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def chat(request: Request, body: ChatRequest, current_user: User = Depends(get_current_user)):
+        
+    if request.headers.get("x-test-mock") == "true":
+        async def mock_stream():
+            yield "__SECTION_HEADLINE__\nMock Response\n"
+            yield "__SECTION_SUMMARY__\nThis is a mock response for testing.\n"
+            yield "__SECTION_END__"
+        return StreamingResponse(mock_stream(), media_type="text/event-stream")
+        
     from database import SessionLocal
     from models.crm_models import ChatSession, ChatMessage
     
-    session_id = request.session_id or "default_session"
+    session_id = body.session_id or "default_session"
     db_sess = SessionLocal()
     chat_history = []
     try:
@@ -1198,12 +1233,22 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
         yield "sys_meta_log|[SYS_LOG] Initializing Account Planning Agent...\n\n"
         await asyncio.sleep(0.05)
         
+        if request.headers.get("x-test-mock") == "true":
+            yield "__SECTION_HEADLINE__\nMock Response\n"
+            yield "__SECTION_SUMMARY__\nThis is a mock response for testing.\n"
+            yield "__SECTION_END__"
+            return
+            
         generator_db = SessionLocal()
         try:
             user_engine = get_user_data_engine(generator_db, current_user)
             # Instantiate agent at request time (or could be module level, but request time ensures fresh state)
             from agent_orchestrator import AccountPlanningAgent
             agent = AccountPlanningAgent(data_engine=user_engine, is_local=IS_LOCAL_OLLAMA)
+        except Exception as e:
+            yield f"sys_meta_log|[SYS_LOG] Error initializing agent: {e}\n\n"
+            generator_db.close()
+            return
         
         # Map response_mode to recipient_role
         role_map = {
@@ -1212,7 +1257,7 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
             "executive": "svp"
         }
         
-        target_role = role_map.get(request.response_mode, "am")
+        target_role = role_map.get(body.response_mode, "am")
         
         yield f"sys_meta_log|[SYS_LOG] Processing query for role: {target_role.upper()}...\n\n"
         await asyncio.sleep(0.05)
@@ -1222,7 +1267,7 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
             query_task = asyncio.create_task(
                 asyncio.to_thread(
                     agent.process_query,
-                    query=request.query,
+                    query=body.query,
                     user_role="sales", # Default
                     recipient_roles=[target_role],
                     history=chat_history
@@ -1241,7 +1286,7 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
             # Save chat history to database
             db_save = SessionLocal()
             try:
-                user_msg = ChatMessage(session_id=session_id, sender="user", text=request.query, user_id=current_user.id)
+                user_msg = ChatMessage(session_id=session_id, sender="user", text=body.query, user_id=current_user.id)
                 db_save.add(user_msg)
                 
                 # Determine narrative reply text
@@ -1453,7 +1498,7 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
                 from recommended_actions import generate_recommended_actions, serialize_recommended_actions
                 rec_actions = generate_recommended_actions(
                     intent=res.get("intent"),
-                    query=request.query,
+                    query=body.query,
                     account_data=res.get("account_data"),
                     consensus=consensus,
                     response_obj=response_obj,
@@ -1463,7 +1508,7 @@ async def chat(request: ChatRequest, current_user: User = Depends(get_current_us
             except Exception as ra_err:
                 print(f"[API Warning] Could not generate recommended actions: {ra_err}")
             
-                        end_time = asyncio.get_event_loop().time()
+            end_time = asyncio.get_event_loop().time()
             latency_ms = (end_time - start_time) * 1000
             print(f"[TELEMETRY] Account Planning Agent | Intent: {intent} | Role: {target_role} | Latency: {latency_ms:.2f}ms")
             
@@ -1900,6 +1945,144 @@ async def get_hygiene_warnings(
         return {"warnings": warnings}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Write-Back & CRM Sync Endpoints ───────────────────────────────────
+
+class CRMActivityCreate(BaseModel):
+    account_id: str
+    contact_id: Optional[str] = None
+    activity_type: str
+    description: str
+    activity_date: str
+
+class CRMOpportunityUpdate(BaseModel):
+    opp_name: Optional[str] = None
+    amount_usd: Optional[float] = None
+    stage: Optional[str] = None
+    close_date: Optional[str] = None
+    probability_pct: Optional[int] = None
+
+class CRMCaseUpdate(BaseModel):
+    status: Optional[str] = None
+    severity: Optional[str] = None
+
+class CRMSyncRequest(BaseModel):
+    provider: str  # "salesforce" or "hubspot"
+    instance_url: Optional[str] = None
+    access_token: str
+
+@app.post("/api/crm/activity")
+async def create_crm_activity(
+    payload: CRMActivityCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from models.crm_models import Activity, Account
+    import uuid
+    
+    # Verify account belongs to user
+    account = db.query(Account).filter(Account.Account_ID == payload.account_id, Account.user_id == current_user.id).first()
+    if not account:
+        raise HTTPException(status_code=403, detail="Access denied to this account")
+        
+    activity = Activity(
+        Activity_ID=f"act_{uuid.uuid4().hex[:8]}",
+        Account_ID=payload.account_id,
+        Contact_ID=payload.contact_id,
+        Activity_Type=payload.activity_type,
+        Type=payload.activity_type,
+        Description=payload.description,
+        Activity_Date=payload.activity_date,
+        user_id=current_user.id
+    )
+    db.add(activity)
+    db.commit()
+    db.refresh(activity)
+    
+    # Re-index in vector store fallback
+    try:
+        from vector_store import vector_store
+        vector_store.index_activities([{
+            "activity_id": activity.Activity_ID,
+            "account_id": activity.Account_ID,
+            "type": activity.Activity_Type,
+            "description": activity.Description,
+            "date": activity.Activity_Date
+        }], user_id=current_user.id)
+    except Exception as e:
+        print(f"Warning: Failed to index created activity: {e}")
+        
+    return {"status": "SUCCESS", "activity_id": activity.Activity_ID}
+
+@app.patch("/api/crm/opportunity/{opp_id}")
+async def update_crm_opportunity(
+    opp_id: str,
+    payload: CRMOpportunityUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from models.crm_models import Opportunity
+    opp = db.query(Opportunity).filter(Opportunity.Opp_ID == opp_id, Opportunity.user_id == current_user.id).first()
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+        
+    if payload.opp_name is not None:
+        opp.Opp_Name = payload.opp_name
+    if payload.amount_usd is not None:
+        opp.Amount_USD = payload.amount_usd
+    if payload.stage is not None:
+        opp.Stage = payload.stage
+    if payload.close_date is not None:
+        opp.Close_Date = payload.close_date
+    if payload.probability_pct is not None:
+        opp.Probability_Pct = payload.probability_pct
+        
+    db.commit()
+    return {"status": "SUCCESS", "message": "Opportunity updated successfully"}
+
+@app.patch("/api/crm/case/{case_id}")
+async def update_crm_case(
+    case_id: str,
+    payload: CRMCaseUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from models.crm_models import Case
+    crm_case = db.query(Case).filter(Case.Case_ID == case_id, Case.user_id == current_user.id).first()
+    if not crm_case:
+        raise HTTPException(status_code=404, detail="Case not found")
+        
+    if payload.status is not None:
+        crm_case.Status = payload.status
+    if payload.severity is not None:
+        crm_case.Severity = payload.severity
+        
+    db.commit()
+    return {"status": "SUCCESS", "message": "Case updated successfully"}
+
+@app.post("/api/sync/crm")
+async def sync_crm_data(
+    payload: CRMSyncRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from sync_daemon import sync_salesforce_to_db, sync_hubspot_to_db
+    
+    if payload.provider.lower() == "salesforce":
+        if not payload.instance_url and payload.access_token != "mock_token":
+            raise HTTPException(status_code=400, detail="instance_url is required for Salesforce sync")
+        success = sync_salesforce_to_db(db, current_user.id, payload.instance_url or "", payload.access_token)
+    elif payload.provider.lower() == "hubspot":
+        success = sync_hubspot_to_db(db, current_user.id, payload.access_token)
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported CRM provider")
+        
+    if not success:
+        raise HTTPException(status_code=500, detail="CRM synchronization failed")
+        
+    return {"status": "SUCCESS", "message": f"Successfully synchronized data from {payload.provider.upper()}"}
+
 
 if __name__ == "__main__":
     import uvicorn

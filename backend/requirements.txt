@@ -15,3 +15,6 @@ email-validator
 python-multipart
 chromadb
 sentence-transformers
+slowapi
+limits
+alembic

@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
+import httpx
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models.crm_models import Account, Opportunity, Contact, Case, Activity
@@ -203,6 +204,287 @@ def sync_crm_to_sqlite() -> bool:
         return sync_crm_to_sqlite_for_user(db, default_user.id)
     finally:
         db.close()
+
+def sync_salesforce_to_db(db: Session, user_id: int, instance_url: str, access_token: str) -> bool:
+    if access_token == "mock_token":
+        print(f"Detected mock token for Salesforce. Falling back to local Excel seed for user {user_id}")
+        return sync_crm_to_sqlite_for_user(db, user_id)
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Clear existing tables for this user first
+        db.query(Activity).filter(Activity.user_id == user_id).delete()
+        db.query(Case).filter(Case.user_id == user_id).delete()
+        db.query(Contact).filter(Contact.user_id == user_id).delete()
+        db.query(Opportunity).filter(Opportunity.user_id == user_id).delete()
+        db.query(Account).filter(Account.user_id == user_id).delete()
+        db.commit()
+
+        # 1. Sync Accounts
+        acc_url = f"{instance_url}/services/data/v57.0/query?q=SELECT+Id,Name,Industry,BillingCountry,AnnualRevenue+FROM+Account"
+        r = httpx.get(acc_url, headers=headers)
+        r.raise_for_status()
+        sf_accounts = r.json().get("records", [])
+        
+        for sa in sf_accounts:
+            acc = Account(
+                Account_ID=sa.get("Id"),
+                Account_Name=sa.get("Name"),
+                Account_Tier="Tier 1" if (sa.get("AnnualRevenue") or 0) > 1000000 else "Tier 2",
+                Industry=sa.get("Industry"),
+                Territory="Global",
+                Annual_Revenue_USD=float(sa.get("AnnualRevenue") or 0),
+                Country=sa.get("BillingCountry"),
+                Health_Score=80.0,
+                user_id=user_id
+            )
+            db.add(acc)
+        db.commit()
+
+        # 2. Sync Opportunities
+        opp_url = f"{instance_url}/services/data/v57.0/query?q=SELECT+Id,AccountId,Name,Amount,StageName,CloseDate,Probability+FROM+Opportunity"
+        r = httpx.get(opp_url, headers=headers)
+        r.raise_for_status()
+        sf_opps = r.json().get("records", [])
+        for so in sf_opps:
+            opp = Opportunity(
+                Opp_ID=so.get("Id"),
+                Account_ID=so.get("AccountId"),
+                Opp_Name=so.get("Name"),
+                Amount_USD=float(so.get("Amount") or 0),
+                Stage=so.get("StageName"),
+                Close_Date=so.get("CloseDate"),
+                Probability_Pct=int(so.get("Probability") or 0),
+                Competitor="Unknown",
+                user_id=user_id
+            )
+            db.add(opp)
+        db.commit()
+
+        # 3. Sync Contacts
+        con_url = f"{instance_url}/services/data/v57.0/query?q=SELECT+Id,AccountId,FirstName,LastName,Email,Phone,Title+FROM+Contact"
+        r = httpx.get(con_url, headers=headers)
+        r.raise_for_status()
+        sf_contacts = r.json().get("records", [])
+        for sc in sf_contacts:
+            ct = Contact(
+                Contact_ID=sc.get("Id"),
+                Account_ID=sc.get("AccountId"),
+                First_Name=sc.get("FirstName"),
+                Last_Name=sc.get("LastName"),
+                Role=sc.get("Title"),
+                Department="Sales",
+                Engagement_Level="Medium",
+                Email=sc.get("Email"),
+                Phone=sc.get("Phone"),
+                Last_Contact_Date=None,
+                user_id=user_id
+            )
+            db.add(ct)
+        db.commit()
+
+        # 4. Sync Cases
+        case_url = f"{instance_url}/services/data/v57.0/query?q=SELECT+Id,AccountId,Subject,Status+FROM+Case"
+        r = httpx.get(case_url, headers=headers)
+        r.raise_for_status()
+        sf_cases = r.json().get("records", [])
+        for scase in sf_cases:
+            c = Case(
+                Case_ID=scase.get("Id"),
+                Account_ID=scase.get("AccountId"),
+                Subject=scase.get("Subject"),
+                Status=scase.get("Status"),
+                Severity="Medium",
+                CSAT_Score=4.0,
+                Open_Date=None,
+                user_id=user_id
+            )
+            db.add(c)
+        db.commit()
+
+        # 5. Sync Activities
+        act_url = f"{instance_url}/services/data/v57.0/query?q=SELECT+Id,AccountId,Subject,Description,ActivityDate+FROM+Task"
+        r = httpx.get(act_url, headers=headers)
+        r.raise_for_status()
+        sf_tasks = r.json().get("records", [])
+        activities_list = []
+        for st in sf_tasks:
+            act = Activity(
+                Activity_ID=st.get("Id"),
+                Account_ID=st.get("AccountId"),
+                Contact_ID=None,
+                Activity_Type=st.get("Subject") or "Task",
+                Type=st.get("Subject") or "Task",
+                Description=st.get("Description"),
+                Activity_Date=st.get("ActivityDate"),
+                user_id=user_id
+            )
+            db.add(act)
+            activities_list.append({
+                "activity_id": act.Activity_ID,
+                "account_id": act.Account_ID,
+                "type": act.Activity_Type,
+                "description": act.Description,
+                "date": act.Activity_Date
+            })
+        db.commit()
+
+        # Index to vector store
+        try:
+            from vector_store import vector_store
+            vector_store.index_activities(activities_list, user_id=user_id)
+        except Exception as e:
+            print(f"Warning: Failed to index SF activities: {e}")
+
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Salesforce Sync Error: {e}")
+        return False
+
+def sync_hubspot_to_db(db: Session, user_id: int, access_token: str) -> bool:
+    if access_token == "mock_token":
+        print(f"Detected mock token for HubSpot. Falling back to local Excel seed for user {user_id}")
+        return sync_crm_to_sqlite_for_user(db, user_id)
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Clear existing tables for this user first
+        db.query(Activity).filter(Activity.user_id == user_id).delete()
+        db.query(Case).filter(Case.user_id == user_id).delete()
+        db.query(Contact).filter(Contact.user_id == user_id).delete()
+        db.query(Opportunity).filter(Opportunity.user_id == user_id).delete()
+        db.query(Account).filter(Account.user_id == user_id).delete()
+        db.commit()
+
+        # 1. Sync Companies -> Accounts
+        r = httpx.get("https://api.hubapi.com/crm/v3/objects/companies?properties=name,industry,country,annualrevenue", headers=headers)
+        r.raise_for_status()
+        hs_companies = r.json().get("results", [])
+        for hc in hs_companies:
+            props = hc.get("properties", {})
+            acc = Account(
+                Account_ID=hc.get("id"),
+                Account_Name=props.get("name"),
+                Account_Tier="Tier 1" if float(props.get("annualrevenue") or 0) > 1000000 else "Tier 2",
+                Industry=props.get("industry"),
+                Territory="Global",
+                Annual_Revenue_USD=float(props.get("annualrevenue") or 0),
+                Country=props.get("country"),
+                Health_Score=80.0,
+                user_id=user_id
+            )
+            db.add(acc)
+        db.commit()
+
+        # 2. Sync Deals -> Opportunities
+        r = httpx.get("https://api.hubapi.com/crm/v3/objects/deals?properties=dealname,amount,dealstage,closedate", headers=headers)
+        r.raise_for_status()
+        hs_deals = r.json().get("results", [])
+        for hd in hs_deals:
+            props = hd.get("properties", {})
+            opp = Opportunity(
+                Opp_ID=hd.get("id"),
+                Account_ID=None,
+                Opp_Name=props.get("dealname"),
+                Amount_USD=float(props.get("amount") or 0),
+                Stage=props.get("dealstage"),
+                Close_Date=props.get("closedate"),
+                Probability_Pct=50,
+                Competitor="Unknown",
+                user_id=user_id
+            )
+            db.add(opp)
+        db.commit()
+
+        # 3. Sync Contacts -> Contacts
+        r = httpx.get("https://api.hubapi.com/crm/v3/objects/contacts?properties=firstname,lastname,email,phone,jobtitle", headers=headers)
+        r.raise_for_status()
+        hs_contacts = r.json().get("results", [])
+        for hcon in hs_contacts:
+            props = hcon.get("properties", {})
+            ct = Contact(
+                Contact_ID=hcon.get("id"),
+                Account_ID=None,
+                First_Name=props.get("firstname"),
+                Last_Name=props.get("lastname"),
+                Role=props.get("jobtitle"),
+                Department="Sales",
+                Engagement_Level="Medium",
+                Email=props.get("email"),
+                Phone=props.get("phone"),
+                Last_Contact_Date=None,
+                user_id=user_id
+            )
+            db.add(ct)
+        db.commit()
+
+        # 4. Sync Tickets -> Cases
+        r = httpx.get("https://api.hubapi.com/crm/v3/objects/tickets?properties=subject,hs_ticket_status,hs_ticket_priority", headers=headers)
+        r.raise_for_status()
+        hs_tickets = r.json().get("results", [])
+        for ht in hs_tickets:
+            props = ht.get("properties", {})
+            c = Case(
+                Case_ID=ht.get("id"),
+                Account_ID=None,
+                Subject=props.get("subject"),
+                Status=props.get("hs_ticket_status"),
+                Severity=props.get("hs_ticket_priority") or "Medium",
+                CSAT_Score=4.0,
+                Open_Date=None,
+                user_id=user_id
+            )
+            db.add(c)
+        db.commit()
+
+        # 5. Sync Meetings -> Activities
+        r = httpx.get("https://api.hubapi.com/crm/v3/objects/meetings?properties=hs_meeting_title,hs_meeting_body,hs_meeting_start_time", headers=headers)
+        r.raise_for_status()
+        hs_meetings = r.json().get("results", [])
+        activities_list = []
+        for hm in hs_meetings:
+            props = hm.get("properties", {})
+            act = Activity(
+                Activity_ID=hm.get("id"),
+                Account_ID=None,
+                Contact_ID=None,
+                Activity_Type="Meeting",
+                Type="Meeting",
+                Description=props.get("hs_meeting_body") or props.get("hs_meeting_title"),
+                Activity_Date=props.get("hs_meeting_start_time"),
+                user_id=user_id
+            )
+            db.add(act)
+            activities_list.append({
+                "activity_id": act.Activity_ID,
+                "account_id": act.Account_ID,
+                "type": act.Activity_Type,
+                "description": act.Description,
+                "date": act.Activity_Date
+            })
+        db.commit()
+
+        # Index to vector store
+        try:
+            from vector_store import vector_store
+            vector_store.index_activities(activities_list, user_id=user_id)
+        except Exception as e:
+            print(f"Warning: Failed to index HS activities: {e}")
+
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"HubSpot Sync Error: {e}")
+        return False
 
 if __name__ == "__main__":
     sync_crm_to_sqlite()

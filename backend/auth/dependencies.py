@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 from auth.jwt_handler import decode_access_token
 from auth.service import AuthService
 from models.user import User
+from database import current_user_id_var
 
 # OAuth2 scheme expects a token endpoint at /auth/login
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -25,4 +26,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), service: AuthService =
     user = service.get_user_by_id(user_id)
     if not user:
         raise credentials_exception
+    
+    # Set context variable for DB Row-Level Security
+    current_user_id_var.set(str(user.id))
+    
     return user

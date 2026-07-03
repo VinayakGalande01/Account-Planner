@@ -315,7 +315,7 @@ class AccountPlanningAgent:
         try:
             from vector_store import vector_store
             acc_id = account_data.get("account_id")
-            semantic_matches = vector_store.search_activities(query, account_id=acc_id, limit=3)
+            semantic_matches = vector_store.search_activities(query, user_id=self.data_engine.user_id, account_id=acc_id, limit=3)
             if semantic_matches:
                 account_data["semantic_activities"] = [m["text"] for m in semantic_matches]
                 print(f"[RAG] Appended {len(semantic_matches)} semantically relevant activities to context.")
