@@ -1631,20 +1631,22 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
 
 
 class ReasoningEngine:
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, is_local: bool = True):
         self.url = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
         self.model = model or os.getenv("MODEL_NAME", "llama3.2:latest")
         self.raw_reasoning_bucket = {}
+        self.is_local = is_local
 
     def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 300) -> str:
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        if gemini_key:
-            try:
-                print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
-                # Use a reasonable timeout for Gemini (usually responds in seconds) but allow up to passed timeout
-                return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=400, timeout=min(timeout, 60))
-            except Exception as e:
-                print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
+        if not self.is_local:
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            if gemini_key:
+                try:
+                    print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
+                    # Use a reasonable token limit for Gemini to avoid truncating JSON outputs
+                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 60))
+                except Exception as e:
+                    print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
 
         # Enforce conciseness for resource-constrained systems
         system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. Total JSON output must be under 200 tokens."
@@ -2332,19 +2334,21 @@ class SVPResponseOutput(BaseModel):
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 class ResponseGenerator:
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, is_local: bool = True):
         self.url = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
         self.model = model or os.getenv("MODEL_NAME", "llama3.2:latest")
         self.raw_response_bucket = {}
+        self.is_local = is_local
 
     def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 300) -> str:
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        if gemini_key:
-            try:
-                print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
-                return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=512, timeout=min(timeout, 60))
-            except Exception as e:
-                print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
+        if not self.is_local:
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            if gemini_key:
+                try:
+                    print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
+                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 60))
+                except Exception as e:
+                    print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
 
         # Enforce conciseness for resource-constrained systems
         system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. The narrative response must be under 150 words."
@@ -2367,26 +2371,20 @@ class ResponseGenerator:
     def _repair_json_string(self, text: str) -> str:
         return repair_json_string(text)
 
-    def _extract_fallback_fields(self, text: str, role: str) -> dict:
-        """Extract narrative and other fields using regex from broken JSON."""
-        salvaged = {}
-        narrative_match = re.search(r'"narrative"\s*:\s*"([^"]+)"', text)
-        if narrative_match:
-            salvaged["narrative"] = narrative_match.group(1)
-        else:
-            salvaged["narrative"] = "Partial response salvaged from LLM output."
-            
-        why_match = re.search(r'"why_this_matters"\s*:\s*"([^"]+)"', text)
-        if why_match:
-            salvaged["why_this_matters"] = why_match.group(1)
-            
-        urgency_match = re.search(r'"urgency"\s*:\s*"([^"]+)"', text)
-        if urgency_match:
-            salvaged["urgency"] = urgency_match.group(1)
-            
-        # Add crucial defaults per role to ensure Pydantic doesn't fail
+    def _apply_defaults(self, salvaged: dict, role: str) -> dict:
+        """Crucial defaults per role to ensure Pydantic doesn't fail on missing keys."""
+        salvaged.setdefault("narrative", "No narrative generated.")
         if role == 'am':
-            salvaged.setdefault("playbook_7day", [])
+            salvaged.setdefault("urgency", "P3")
+            salvaged.setdefault("playbook_7day", [
+                {
+                    "day": 1,
+                    "action": "Review consensus findings and manually verify CRM contact completeness.",
+                    "owner": "Account Manager",
+                    "success_metric": "Verified contacts",
+                    "template": "MEETING_AGENDA: Internal strategy alignment"
+                }
+            ])
             salvaged.setdefault("stakeholder_sequence", [])
             salvaged.setdefault("risks_and_mitigations", [])
             salvaged.setdefault("confidence_in_playbook", 0.5)
@@ -2404,8 +2402,26 @@ class ResponseGenerator:
             salvaged.setdefault("decision_framework", [])
             salvaged.setdefault("long_term_implication", "")
             salvaged.setdefault("confidence", 0.5)
-            
         return salvaged
+
+    def _extract_fallback_fields(self, text: str, role: str) -> dict:
+        """Extract narrative and other fields using regex from broken JSON."""
+        salvaged = {}
+        narrative_match = re.search(r'"narrative"\s*:\s*"([^"]+)"', text)
+        if narrative_match:
+            salvaged["narrative"] = narrative_match.group(1)
+        else:
+            salvaged["narrative"] = "Partial response salvaged from LLM output."
+            
+        why_match = re.search(r'"why_this_matters"\s*:\s*"([^"]+)"', text)
+        if why_match:
+            salvaged["why_this_matters"] = why_match.group(1)
+            
+        urgency_match = re.search(r'"urgency"\s*:\s*"([^"]+)"', text)
+        if urgency_match:
+            salvaged["urgency"] = urgency_match.group(1)
+            
+        return self._apply_defaults(salvaged, role)
 
     def _clean_and_parse(self, text: str) -> dict:
         role = 'am'
@@ -2423,11 +2439,13 @@ class ResponseGenerator:
             end = clean_text.rfind("}")
             if start != -1 and end != -1:
                 clean_text = clean_text[start:end+1]
-            return json.loads(clean_text)
+            parsed = json.loads(clean_text)
+            return self._apply_defaults(parsed, role)
         except Exception as e1:
             try:
                 repaired = self._repair_json_string(text)
-                return json.loads(repaired)
+                parsed = json.loads(repaired)
+                return self._apply_defaults(parsed, role)
             except Exception as e2:
                 try:
                     return self._extract_fallback_fields(text, role)

@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger("llm")
 """
 APEX Pure-Agentic Plan-and-Execute Pipeline
 
@@ -322,10 +324,10 @@ async def _get_active_llm_config(client: httpx.AsyncClient) -> tuple[str, str]:
                         if res.status_code < 500:
                             _cached_url = cached_url
                             _cached_model = cached_model
-                            print(f"[LLM CONFIG] Loaded active LLM from cache file: {cached_url} (model: {cached_model})")
+                            logger.info(f"[LLM CONFIG] Loaded active LLM from cache file: {cached_url} (model: {cached_model})")
                             return _cached_url, _cached_model
                     except Exception:
-                        print(f"[LLM CONFIG WARNING] Cached LLM at {cached_url} was unreachable. Re-probing...")
+                        logger.info(f"[LLM CONFIG WARNING] Cached LLM at {cached_url} was unreachable. Re-probing...")
         except Exception:
             pass
             
@@ -338,7 +340,7 @@ async def _get_active_llm_config(client: httpx.AsyncClient) -> tuple[str, str]:
         base_url = primary_url.rsplit("/api/generate", 1)[0] or primary_url
         res = await client.get(base_url, timeout=2.0)
         if res.status_code < 500:
-            print(f"[LLM CONFIG] Successfully connected to remote GPU primary LLM at {primary_url} (model: {primary_model})")
+            logger.info(f"[LLM CONFIG] Successfully connected to remote GPU primary LLM at {primary_url} (model: {primary_model})")
             _cached_url = primary_url
             _cached_model = primary_model
             # Save to file cache
@@ -352,7 +354,7 @@ async def _get_active_llm_config(client: httpx.AsyncClient) -> tuple[str, str]:
         pass
         
     # Default fallback to configured values if primary is completely unreachable
-    print(f"[LLM CONFIG] Primary LLM unreachable. Defaulting to configured environment values: {primary_url} (model: {primary_model})")
+    logger.info(f"[LLM CONFIG] Primary LLM unreachable. Defaulting to configured environment values: {primary_url} (model: {primary_model})")
     return primary_url, primary_model
 
 
@@ -362,7 +364,7 @@ async def _get_active_llm_config(client: httpx.AsyncClient) -> tuple[str, str]:
 
 async def run_phase1_planner(query: str, client: httpx.AsyncClient) -> dict:
     """Phase 1: Parse user query into structured context JSON using local LLM via Layer 1 IntentClassifier."""
-    print(f"[PHASE 1] Analyzing query intent & parameters: '{query}'...")
+    logger.info(f"[PHASE 1] Analyzing query intent & parameters: '{query}'...")
     
     from intent_classifier import IntentClassifier, IntentEnum, UrgencyEnum, ScopeEnum, ExtractedEntities
     
@@ -374,7 +376,7 @@ async def run_phase1_planner(query: str, client: httpx.AsyncClient) -> dict:
         # Call synchronously in a thread pool to avoid blocking the async event loop
         output = await asyncio.to_thread(classifier.classify, query, "Account Manager")
     except Exception as e:
-        print(f"[PHASE 1 WARNING] IntentClassifier instantiation or call failed: {e}. Falling back to default.")
+        logger.info(f"[PHASE 1 WARNING] IntentClassifier instantiation or call failed: {e}. Falling back to default.")
         from intent_classifier import IntentClassificationOutput
         output = IntentClassificationOutput(
             primary_intent=IntentEnum.ACTION_RECOMMENDATION,
@@ -450,13 +452,13 @@ async def run_phase1_planner(query: str, client: httpx.AsyncClient) -> dict:
 
 def run_phase2_retrieval(engine: DataEngine, phase1_json: dict) -> str:
     """Phase 2: Query the local Pandas engine and retrieve formatted text payload."""
-    print("[PHASE 2] Executing deterministic data retrieval...")
+    logger.info("[PHASE 2] Executing deterministic data retrieval...")
     return execute_data_retrieval(engine, phase1_json)
 
 
 async def run_phase3_reasoner(retrieved_text: str, phase1_json: dict, client: httpx.AsyncClient, governance_directives: Optional[List[str]] = None) -> dict:
     """Phase 3: Execute deep strategic business reasoning on the retrieved data -> SIP JSON."""
-    print("[PHASE 3] Executing core business reasoning on retrieved facts...")
+    logger.info("[PHASE 3] Executing core business reasoning on retrieved facts...")
     
     max_attempts = 5
     cooldown_seconds = 3.5
@@ -493,15 +495,15 @@ async def run_phase3_reasoner(retrieved_text: str, phase1_json: dict, client: ht
             }
             
             try:
-                print(f"[PHASE 3] Attempt {attempt}/{max_attempts} - Chat API call: {chat_url}")
+                logger.info(f"[PHASE 3] Attempt {attempt}/{max_attempts} - Chat API call: {chat_url}")
                 response = await client.post(chat_url, json=chat_payload, timeout=custom_timeout)
                 if response.status_code == 200:
                     raw_text = response.json().get("message", {}).get("content", "")
                     return clean_and_parse_json(raw_text)
                 else:
-                    print(f"[PHASE 3 WARNING] Chat API returned {response.status_code}. Trying Generate API fallback...")
+                    logger.info(f"[PHASE 3 WARNING] Chat API returned {response.status_code}. Trying Generate API fallback...")
             except Exception as chat_err:
-                print(f"[PHASE 3 WARNING] Chat API failed: {chat_err}. Trying Generate API fallback...")
+                logger.info(f"[PHASE 3 WARNING] Chat API failed: {chat_err}. Trying Generate API fallback...")
 
             # Fallback to Generate API (Raw Prompt concatenation)
             prompt_content = f"System: {system_content}\n\nCONTEXT DETAILS:\n{json.dumps(phase1_json, indent=2)}\n\nRAW CRM DATA SUBSET EXECUTED:\n{retrieved_text}\nOutput ONLY valid JSON code block."
@@ -510,7 +512,7 @@ async def run_phase3_reasoner(retrieved_text: str, phase1_json: dict, client: ht
                 "prompt": prompt_content,
                 "stream": False
             }
-            print(f"[PHASE 3] Attempt {attempt}/{max_attempts} - Generate API call: {active_url}")
+            logger.info(f"[PHASE 3] Attempt {attempt}/{max_attempts} - Generate API call: {active_url}")
             response = await client.post(active_url, json=generate_payload, timeout=custom_timeout)
             if response.status_code == 200:
                 raw_text = response.json().get("response", "")
@@ -519,14 +521,14 @@ async def run_phase3_reasoner(retrieved_text: str, phase1_json: dict, client: ht
                 raise httpx.HTTPStatusError(f"HTTP {response.status_code}", request=response.request, response=response)
                 
         except Exception as e:
-            print(f"[PHASE 3 WARNING] Attempt {attempt}/{max_attempts} failed: {e.__class__.__name__} - {e}.")
+            logger.info(f"[PHASE 3 WARNING] Attempt {attempt}/{max_attempts} failed: {e.__class__.__name__} - {e}.")
             if attempt < max_attempts:
-                print(f"[PHASE 3] Halting for {cooldown_seconds}s before next retry...")
+                logger.info(f"[PHASE 3] Halting for {cooldown_seconds}s before next retry...")
                 await asyncio.sleep(cooldown_seconds)
             else:
                 import traceback
                 traceback.print_exc()
-                print(f"[PHASE 3 ERROR] All {max_attempts} attempts failed. Generating safe fallback reasoning package.")
+                logger.info(f"[PHASE 3 ERROR] All {max_attempts} attempts failed. Generating safe fallback reasoning package.")
                 
     # Safe default fallback matrix aligned to the upgraded schema (Step C Refinement)
     fallback_plan = {
@@ -597,13 +599,13 @@ async def run_phase4_narrative_stream(
         intent + scope + confidence. This ensures narrative variability across
         different query types.
     """
-    print("[PHASE 4] Streaming narrative response contract...")
+    logger.info("[PHASE 4] Streaming narrative response contract...")
     
     # Build prompt dynamically from blueprint, or fall back to legacy
     if blueprint is not None:
         from response_blueprint import build_phase4_prompt
         narrative_prompt = build_phase4_prompt(blueprint)
-        print(f"[PHASE 4] Blueprint mode: {blueprint.mode.value} | Sections: {blueprint.get_ordered_sections()}")
+        logger.info(f"[PHASE 4] Blueprint mode: {blueprint.mode.value} | Sections: {blueprint.get_ordered_sections()}")
     else:
         narrative_prompt = PHASE4_NARRATIVE_PROMPT_FALLBACK
     
@@ -626,7 +628,7 @@ async def run_phase4_narrative_stream(
                     except json.JSONDecodeError:
                         pass
     except Exception as e:
-        print(f"[PHASE 4 ERROR] Streaming failed: {e}")
+        logger.info(f"[PHASE 4 ERROR] Streaming failed: {e}")
         # Standard fallback output so the UI never breaks
         yield f"__SECTION_INTENT__\nACTION_RECOMMENDATION\n"
         yield f"__SECTION_HEADLINE__\nStrategic Assessment nominal — Narrative fallback active\n"
@@ -644,7 +646,7 @@ async def run_phase4_narrative_stream(
 
 async def test_agent_pipeline():
     """Verify Phase 1, 2, and 3 synchronously to validate the pipeline flow."""
-    print("=== STARTING AGENT PIPELINE INTEGRATION TEST ===")
+    logger.info("=== STARTING AGENT PIPELINE INTEGRATION TEST ===")
     
     test_query = "Who should I call at Infosys?"
     
@@ -652,17 +654,17 @@ async def test_agent_pipeline():
     dataset_1 = r"C:\Users\VINAYAK\Downloads\SF_AccountingAgent_DummyData.xlsx"
     dataset_2 = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "SF_AccountingAgent_DummyData.xlsx")
     p = dataset_1 if os.path.exists(dataset_1) else dataset_2
-    print(f"Loading test database: {p}")
+    logger.info(f"Loading test database: {p}")
     engine = DataEngine(p)
     
     async with httpx.AsyncClient() as client:
         # Phase 1
         p1_res = await run_phase1_planner(test_query, client)
-        print(f"\n[PHASE 1 RESULT] JSON:\n{json.dumps(p1_res, indent=2)}")
+        logger.info(f"\n[PHASE 1 RESULT] JSON:\n{json.dumps(p1_res, indent=2)}")
         
         # Phase 2
         p2_res = run_phase2_retrieval(engine, p1_res)
-        print(f"\n[PHASE 2 RESULT] Length: {len(p2_res)} chars. Sample:\n{p2_res[:800]}")
+        logger.info(f"\n[PHASE 2 RESULT] Length: {len(p2_res)} chars. Sample:\n{p2_res[:800]}")
         
         # Phase 3
         from intelligence_layer import generate_strategic_synthesis
@@ -675,19 +677,19 @@ async def test_agent_pipeline():
             query_scope=p1_parsed.query_scope
         )
         p3_res = await run_phase3_reasoner(p2_res, p1_res, client, synthesis.governance_directives)
-        print(f"\n[PHASE 3 RESULT] Structured Intelligence Package (SIP):\n{json.dumps(p3_res, indent=2)}")
+        logger.info(f"\n[PHASE 3 RESULT] Structured Intelligence Package (SIP):\n{json.dumps(p3_res, indent=2)}")
         
         # Phase 4 Narrative sample
-        print("\n[PHASE 4 PREVIEW] Streaming first 200 chars:")
+        logger.info("\n[PHASE 4 PREVIEW] Streaming first 200 chars:")
         count = 0
         async for token in run_phase4_narrative_stream(p3_res, test_query, client):
-            print(token, end="", flush=True)
+            logger.info(token, end="", flush=True)
             count += len(token)
             if count > 200:
-                print("\n[Truncated Preview]")
+                logger.info("\n[Truncated Preview]")
                 break
                 
-    print("\n=== AGENT PIPELINE TEST COMPLETE ===")
+    logger.info("\n=== AGENT PIPELINE TEST COMPLETE ===")
 
 if __name__ == "__main__":
     asyncio.run(test_agent_pipeline())

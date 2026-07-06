@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 import pandas as pd
 import numpy as np
 import httpx
@@ -65,7 +68,7 @@ def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = Non
                 if pd.isna(annual_rev):
                     annual_rev = 0
                 acc = Account(
-                    Account_ID=clean_value(r.get("Account_ID")),
+                    Account_ID=f"{user_id}_{clean_value(r.get('Account_ID'))}",
                     Account_Name=clean_value(r.get("Account_Name")),
                     Account_Tier=clean_value(r.get("Account_Tier")),
                     Industry=clean_value(r.get("Industry")),
@@ -90,8 +93,8 @@ def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = Non
                 if pd.isna(prob):
                     prob = 0
                 opp = Opportunity(
-                    Opp_ID=clean_value(r.get("Opp_ID")),
-                    Account_ID=clean_value(r.get("Account_ID")),
+                    Opp_ID=f"{user_id}_{clean_value(r.get('Opp_ID'))}",
+                    Account_ID=f"{user_id}_{clean_value(r.get('Account_ID'))}",
                     Opp_Name=clean_value(r.get("Opp_Name")),
                     Amount_USD=float(amt),
                     Stage=clean_value(r.get("Stage")),
@@ -109,8 +112,8 @@ def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = Non
         if contacts_df is not None:
             for _, r in contacts_df.iterrows():
                 ct = Contact(
-                    Contact_ID=clean_value(r.get("Contact_ID")),
-                    Account_ID=clean_value(r.get("Account_ID")),
+                    Contact_ID=f"{user_id}_{clean_value(r.get('Contact_ID'))}",
+                    Account_ID=f"{user_id}_{clean_value(r.get('Account_ID'))}",
                     First_Name=clean_value(r.get("First_Name")),
                     Last_Name=clean_value(r.get("Last_Name")),
                     Role=clean_value(r.get("Role")),
@@ -133,8 +136,8 @@ def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = Non
                 if pd.isna(csat):
                     csat = 0.0
                 c = Case(
-                    Case_ID=clean_value(r.get("Case_ID")),
-                    Account_ID=clean_value(r.get("Account_ID")),
+                    Case_ID=f"{user_id}_{clean_value(r.get('Case_ID'))}",
+                    Account_ID=f"{user_id}_{clean_value(r.get('Account_ID'))}",
                     Subject=clean_value(r.get("Subject")),
                     Status=clean_value(r.get("Status")),
                     Severity=clean_value(r.get("Severity")),
@@ -152,9 +155,9 @@ def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = Non
             activities_list = []
             for _, r in activities_df.iterrows():
                 act = Activity(
-                    Activity_ID=clean_value(r.get("Activity_ID")),
-                    Account_ID=clean_value(r.get("Account_ID")),
-                    Contact_ID=clean_value(r.get("Contact_ID")),
+                    Activity_ID=f"{user_id}_{clean_value(r.get('Activity_ID'))}",
+                    Account_ID=f"{user_id}_{clean_value(r.get('Account_ID'))}",
+                    Contact_ID=f"{user_id}_{clean_value(r.get('Contact_ID'))}" if r.get("Contact_ID") and not pd.isna(r.get("Contact_ID")) else None,
                     Activity_Type=clean_value(r.get("Activity_Type")),
                     Type=clean_value(r.get("Activity_Type")), # For compatibility with 'Type' field
                     Description=clean_value(r.get("Notes") or r.get("Description")),
@@ -193,15 +196,33 @@ def sync_crm_to_sqlite() -> bool:
     db = SessionLocal()
     try:
         from models.user import User
-        # Get or create default admin user (ID = 1)
-        default_user = db.query(User).filter(User.id == 1).first()
+        from auth.password import hash_password
+        
+        # Get or create default admin user for Company-A
+        default_user = db.query(User).filter(User.email == "admin@apex.com").first()
         if not default_user:
-            from auth.password import hash_password
-            default_user = User(id=1, name="Default Admin", email="admin@apex.com", hashed_password=hash_password("admin"))
+            default_user = User(name="Default Admin", email="admin@apex.com", hashed_password=hash_password("admin"))
             db.add(default_user)
             db.commit()
             db.refresh(default_user)
-        return sync_crm_to_sqlite_for_user(db, default_user.id)
+            
+        # Get or create AbhiTech admin user for Company-B
+        abhitech_user = db.query(User).filter(User.email == "abhitech_admin@apex.com").first()
+        if not abhitech_user:
+            abhitech_user = User(name="AbhiTech Admin", email="abhitech_admin@apex.com", hashed_password=hash_password("admin123"))
+            db.add(abhitech_user)
+            db.commit()
+            db.refresh(abhitech_user)
+
+        # Sync original dataset for default admin
+        success_1 = sync_crm_to_sqlite_for_user(db, default_user.id)
+        
+        # Sync AbhiTech dataset for AbhiTech admin
+        abhitech_dataset_path = "/Users/theabhijitjagtap/Downloads/AbhiTech_DummyData_100Companies.xlsx"
+        print(f"Syncing secondary dataset from: {abhitech_dataset_path}")
+        success_2 = sync_crm_to_sqlite_for_user(db, abhitech_user.id, excel_path=abhitech_dataset_path)
+        
+        return success_1 and success_2
     finally:
         db.close()
 

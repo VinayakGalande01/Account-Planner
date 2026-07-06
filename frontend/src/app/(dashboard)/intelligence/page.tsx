@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { Sidebar } from '@/components/Sidebar'
+import { Sidebar } from '@/components/sidebar'
 import { Header } from '@/components/header'
 import { Brain, Send, Zap } from 'lucide-react'
 import { ContractRenderer, FinalizedContractRenderer } from '@/components/apex-widgets'
@@ -90,9 +90,13 @@ export default function IntelligencePage() {
     setIsLoading(true)
 
     try {
+      const provider = typeof window !== 'undefined' ? (localStorage.getItem('llm_provider') || 'local') : 'local'
       const response = await authFetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-llm-provider': provider
+        },
         body: JSON.stringify({ query: text }),
       })
 

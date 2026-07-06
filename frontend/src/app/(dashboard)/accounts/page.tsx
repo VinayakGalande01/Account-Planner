@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { useState, useMemo } from 'react'
 import { useData } from '@/context/DataContext'
-import { Sidebar } from '@/components/Sidebar'
+import { Sidebar } from '@/components/sidebar'
 import { Header } from '@/components/header'
 import { AICopilotPanel } from '@/components/ai-copilot-panel'
 import { Sparkles, Search, ChevronDown } from 'lucide-react'

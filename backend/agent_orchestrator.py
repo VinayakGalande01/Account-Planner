@@ -207,8 +207,8 @@ class AccountPlanningAgent:
         self.intent_classifier = IntentClassifier(known_accounts=known_accounts)
             
         self.data_retrieval = DataRetrieval(self.data_engine)
-        self.reasoning_engine = ReasoningEngine()
-        self.response_generator = ResponseGenerator()
+        self.reasoning_engine = ReasoningEngine(is_local=is_local)
+        self.response_generator = ResponseGenerator(is_local=is_local)
     
     def process_query(
         self,

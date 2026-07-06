@@ -41,6 +41,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv(override=True)
 
+import logging
+from logging_config import setup_logging
+setup_logging()
+logger = logging.getLogger("backend")
+frontend_logger = logging.getLogger("frontend")
+
 app = FastAPI(title="Account Planner Agent API")
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -1242,9 +1248,14 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
         generator_db = SessionLocal()
         try:
             user_engine = get_user_data_engine(generator_db, current_user)
-            # Instantiate agent at request time (or could be module level, but request time ensures fresh state)
+            
+            # Dynamically determine LLM provider from frontend request headers
+            provider_header = request.headers.get("x-llm-provider", "local").lower()
+            is_local = (provider_header == "local")
+            
+            # Instantiate agent at request time
             from agent_orchestrator import AccountPlanningAgent
-            agent = AccountPlanningAgent(data_engine=user_engine, is_local=IS_LOCAL_OLLAMA)
+            agent = AccountPlanningAgent(data_engine=user_engine, is_local=is_local)
         except Exception as e:
             yield f"sys_meta_log|[SYS_LOG] Error initializing agent: {e}\n\n"
             generator_db.close()
@@ -2082,6 +2093,23 @@ async def sync_crm_data(
         raise HTTPException(status_code=500, detail="CRM synchronization failed")
         
     return {"status": "SUCCESS", "message": f"Successfully synchronized data from {payload.provider.upper()}"}
+
+
+class FrontendLogPayload(BaseModel):
+    level: str
+    message: str
+    context: Optional[dict] = None
+
+@app.post("/api/logs/frontend")
+async def log_frontend_event(payload: FrontendLogPayload):
+    log_msg = f"{payload.message} | Context: {payload.context}"
+    if payload.level.lower() == "error":
+        frontend_logger.error(log_msg)
+    elif payload.level.lower() == "warn":
+        frontend_logger.warning(log_msg)
+    else:
+        frontend_logger.info(log_msg)
+    return {"status": "success"}
 
 
 if __name__ == "__main__":

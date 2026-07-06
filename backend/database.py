@@ -18,17 +18,29 @@ else:
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+@event.listens_for(Session, "do_orm_execute")
+def _do_orm_execute(execute_state):
+    # Retrieve user_id from session info (which we will set during auth)
+    # and attach it to the query's execution_options which survives thread pools!
+    user_id = execute_state.session.info.get("user_id")
+    if user_id:
+        execute_state.statement = execute_state.statement.execution_options(user_id=user_id)
+
 @event.listens_for(engine, 'before_cursor_execute', retval=False)
 def set_rls_user_id(conn, cursor, statement, parameters, context, executemany):
     if conn.dialect.name == "postgresql":
         if "set_config" not in statement and "SET ROLE" not in statement and "RESET ROLE" not in statement:
-            user_id = current_user_id_var.get()
+            user_id = None
+            if context and context.execution_options:
+                user_id = context.execution_options.get("user_id")
+            
+            if not user_id:
+                user_id = current_user_id_var.get()
+
             if user_id:
-                print(f"DEBUG RLS: before_cursor_execute setting role and app.current_user_id to '{user_id}'")
                 cursor.execute("SET ROLE authenticated")
                 cursor.execute("SELECT set_config('app.current_user_id', %s, true)", (str(user_id),))
             else:
-                print("DEBUG RLS: before_cursor_execute resetting role and clearing app.current_user_id")
                 cursor.execute("RESET ROLE")
                 cursor.execute("SELECT set_config('app.current_user_id', '', true)")
 

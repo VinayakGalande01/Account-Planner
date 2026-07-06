@@ -1,8 +1,8 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState } from 'react'
-import { Sidebar } from '@/components/Sidebar'
+import { useState, useEffect } from 'react'
+import { Sidebar } from '@/components/sidebar'
 import { Header } from '@/components/header'
 import { Settings, Lock, Cpu } from 'lucide-react'
 
@@ -11,6 +11,14 @@ export default function SettingsPage() {
     aiServer: '8000',
     claudeIntegration: 'LOCKED',
   })
+
+  const [llmProvider, setLlmProvider] = useState('local')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setLlmProvider(localStorage.getItem('llm_provider') || 'local')
+    }
+  }, [])
 
   const [securityConfig, setSecurityConfig] = useState({
     dataEncryption: 'AES-256',
@@ -70,6 +78,25 @@ export default function SettingsPage() {
                         ACTIVE: {modelConfig.aiServer}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Reasoning Model Provider */}
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      AI Reasoning Provider
+                    </label>
+                    <select
+                      value={llmProvider}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setLlmProvider(val)
+                        localStorage.setItem('llm_provider', val)
+                      }}
+                      className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="local">Local Model (Ollama on Port 8000)</option>
+                      <option value="gemini">Cloud Model (Google Gemini API)</option>
+                    </select>
                   </div>
 
                   {/* Claude Integration */}

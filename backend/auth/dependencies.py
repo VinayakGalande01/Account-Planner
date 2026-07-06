@@ -30,4 +30,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), service: AuthService =
     # Set context variable for DB Row-Level Security
     current_user_id_var.set(str(user.id))
     
+    # Thread-safe attachment of user context to the database session
+    if hasattr(service, "db") and service.db:
+        service.db.info["user_id"] = str(user.id)
+    
     return user
