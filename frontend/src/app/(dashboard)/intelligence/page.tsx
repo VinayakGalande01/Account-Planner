@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { Sidebar } from '@/components/sidebar'
+import { Sidebar } from '@/components/Sidebar'
 import { Header } from '@/components/header'
 import { Brain, Send, Zap } from 'lucide-react'
 import { ContractRenderer, FinalizedContractRenderer } from '@/components/apex-widgets'
@@ -93,7 +93,7 @@ export default function IntelligencePage() {
       const provider = typeof window !== 'undefined' ? (localStorage.getItem('llm_provider') || 'local') : 'local'
       const response = await authFetch('/api/chat', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-llm-provider': provider
         },
@@ -105,7 +105,7 @@ export default function IntelligencePage() {
       const reader = response.body.getReader()
       const decoder = new TextDecoder('utf-8')
       let fullText = ''
-      
+
       const aiMessageId = Date.now() + 1
       setMessages((prev) => [...prev, { id: aiMessageId, role: 'assistant', content: '', timestamp: new Date() }])
 
@@ -114,14 +114,14 @@ export default function IntelligencePage() {
         if (done) break
         const chunk = decoder.decode(value, { stream: true })
         fullText += chunk
-        
+
         setMessages((prev) => prev.map(msg => msg.id === aiMessageId ? { ...msg, content: fullText } : msg))
       }
 
       const contract = parseResponseContract(fullText)
-      setMessages((prev) => prev.map(msg => 
-        msg.id === aiMessageId 
-          ? { ...msg, content: fullText, contract: contract.isStructured ? contract : undefined } 
+      setMessages((prev) => prev.map(msg =>
+        msg.id === aiMessageId
+          ? { ...msg, content: fullText, contract: contract.isStructured ? contract : undefined }
           : msg
       ))
     } catch (error) {
@@ -184,11 +184,10 @@ export default function IntelligencePage() {
                       className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`px-4 py-2 rounded-lg ${
-                          message.role === 'user'
+                        className={`px-4 py-2 rounded-lg ${message.role === 'user'
                             ? 'max-w-lg bg-primary text-primary-foreground'
                             : 'max-w-3xl bg-secondary/50 text-foreground border border-border w-full'
-                        }`}
+                          }`}
                       >
                         {message.role === 'assistant' ? (
                           message.contract ? (

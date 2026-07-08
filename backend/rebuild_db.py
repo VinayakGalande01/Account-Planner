@@ -5,14 +5,20 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 from sqlalchemy import create_engine, text
-from database import Base, DATABASE_URL
+from database import Base, DATABASE_URL, engine as db_engine
 import models.user
 import models.crm_models
 
 def rebuild_database():
-    print(f"Connecting to database: {DATABASE_URL.split('@')[-1]}")
-    engine = create_engine(DATABASE_URL)
-    is_sqlite = DATABASE_URL.startswith("sqlite")
+    is_sqlite = db_engine.dialect.name == "sqlite"
+    if not is_sqlite:
+        admin_url = "postgresql://postgres.hqofkucrppxzgtajpjxh:APEX%242026006@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres"
+        engine = create_engine(admin_url)
+        db_name = admin_url.split('@')[-1]
+    else:
+        engine = db_engine
+        db_name = "SQLite (local_planner.db)"
+    print(f"Connecting to database: {db_name}")
     
     # Tables to drop in order of dependencies
     tables = [
@@ -27,22 +33,6 @@ def rebuild_database():
     ]
     
     with engine.connect() as conn:
-        print("Dropping existing tables...")
-        for table in tables:
-            try:
-                if is_sqlite:
-                    conn.execute(text(f"DROP TABLE IF EXISTS {table};"))
-                else:
-                    conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE;"))
-                print(f"  Dropped table: {table}")
-            except Exception as e:
-                print(f"  Error dropping {table}: {e}")
-        conn.commit()
-
-        print("Recreating all tables using SQLAlchemy models...")
-        Base.metadata.create_all(bind=engine)
-        print("  All tables created successfully.")
-
         if not is_sqlite:
             # Enable RLS on CRM and Chat tables
             rls_tables = [
@@ -55,20 +45,39 @@ def rebuild_database():
                 "chat_messages"
             ]
             
-            print("Enabling Row-Level Security (RLS) on tables...")
+            print("Applying RLS policies directly to existing tables...")
             for table in rls_tables:
+                # 1. Enable RLS
                 try:
                     conn.execute(text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;"))
+                    conn.commit()
+                    print(f"  Enabled RLS on: {table}")
+                except Exception as e:
+                    print(f"  Warning: Could not enable RLS on {table} (might already be enabled): {e}")
+                    conn.rollback()
+                    
+                # 2. Force RLS
+                try:
+                    conn.execute(text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY;"))
+                    conn.commit()
+                    print(f"  Forced RLS on: {table}")
+                except Exception as e:
+                    print(f"  Warning: Could not force RLS on {table}: {e}")
+                    conn.rollback()
+
+                # 3. Create Tenant Policy
+                try:
                     conn.execute(text(f"DROP POLICY IF EXISTS {table}_tenant_policy ON {table};"))
                     conn.execute(text(f"""
                         CREATE POLICY {table}_tenant_policy ON {table}
-                        USING (true)
-                        WITH CHECK (true);
+                        USING (user_id = NULLIF(current_setting('app.current_user_id', true), '')::integer)
+                        WITH CHECK (user_id = NULLIF(current_setting('app.current_user_id', true), '')::integer);
                     """))
-                    print(f"  Enabled RLS and created policy on: {table}")
+                    conn.commit()
+                    print(f"  Tenant policy created on: {table}")
                 except Exception as e:
-                    print(f"  Error enabling RLS on {table}: {e}")
-            conn.commit()
+                    print(f"  Error creating policy on {table}: {e}")
+                    conn.rollback()
         else:
             print("Skipped RLS setup since database is SQLite.")
 

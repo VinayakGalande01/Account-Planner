@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { useState, useMemo } from 'react'
 import { useData } from '@/context/DataContext'
-import { Sidebar } from '@/components/sidebar'
+import { Sidebar } from '@/components/Sidebar'
 import { Header } from '@/components/header'
 import { AICopilotPanel } from '@/components/ai-copilot-panel'
 import { Sparkles, Search, ChevronDown } from 'lucide-react'
@@ -28,12 +28,12 @@ export default function AccountsPage() {
         const nameMatch = (account.Account_Name || '').toLowerCase().includes(searchTerm.toLowerCase())
         const industryMatch = (account.Industry || '').toLowerCase().includes(searchTerm.toLowerCase())
         const matchesSearch = nameMatch || industryMatch
-        
+
         // Ensure case-insensitive or consistent matching for tier
         const accTier = (account.Account_Tier || '').toUpperCase()
         const targetTier = filterTier.toUpperCase()
         const matchesTier = filterTier === 'ALL TIERS' || accTier === targetTier
-        
+
         return matchesSearch && matchesTier
       })
       .sort((a, b) => {

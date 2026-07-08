@@ -1,8 +1,12 @@
 import pytest
 from sqlalchemy import text
+import os
 from dotenv import load_dotenv
 # Load environment variables before importing database modules
-load_dotenv(override=True)
+if os.path.exists("backend/.env"):
+    load_dotenv("backend/.env", override=True)
+else:
+    load_dotenv(override=True)
 from database import SessionLocal, current_user_id_var, DATABASE_URL
 from models.user import User
 from models.crm_models import Account

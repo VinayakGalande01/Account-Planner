@@ -7,6 +7,7 @@ import numpy as np
 import httpx
 from sqlalchemy.orm import Session
 from database import SessionLocal
+import models.user
 from models.crm_models import Account, Opportunity, Contact, Case, Activity
 
 def get_data_path():
@@ -41,6 +42,9 @@ def clean_value(val):
     return str(val)
 
 def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = None) -> bool:
+    # Explicitly set the session info user_id for RLS enforcement
+    db.info["user_id"] = str(user_id)
+    
     if not excel_path:
         excel_path = get_data_path()
     if not excel_path or not os.path.exists(excel_path):

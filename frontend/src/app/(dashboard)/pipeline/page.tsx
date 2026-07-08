@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { Sidebar } from '@/components/sidebar'
+import { Sidebar } from '@/components/Sidebar'
 import { Header } from '@/components/header'
 import { AICopilotPanel } from '@/components/ai-copilot-panel'
 import { Sparkles, TrendingUp } from 'lucide-react'
@@ -22,7 +22,7 @@ import {
 
 export default function PipelinePage() {
   const [isCopilotOpen, setIsCopilotOpen] = useState(false)
-  
+
   const { authFetch } = useAuth()
   const [pipelineData, setPipelineData] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
@@ -52,7 +52,7 @@ export default function PipelinePage() {
   const totalPipeline = Object.entries(pipelineData)
     .filter(([k]) => k !== 'Closed Won' && k !== 'Closed Lost')
     .reduce((sum, [, v]) => sum + v, 0)
-    
+
   const closedWon = pipelineData['Closed Won'] || 0
 
   const simTotalPipeline = totalPipeline * dealSizeExpansion * (1 - cycleAcceleration * 0.005)
@@ -72,8 +72,8 @@ export default function PipelinePage() {
 
   const baseForecasted = [2.1, 2.4, 2.8, 3.1, 3.6, 4.0, 4.2]
   const actual = [1.8, 2.2, 2.5, 2.9, 3.2, 3.4, 3.9]
-  
-  const simulatedForecast = baseForecasted.map(v => 
+
+  const simulatedForecast = baseForecasted.map(v =>
     v * dealSizeExpansion * (1 + (winRateBoost * 0.012) + (cycleAcceleration * 0.008))
   )
 
@@ -242,7 +242,7 @@ export default function PipelinePage() {
                         <p className="text-xs text-muted-foreground">Deal Size Multiplier</p>
                         <span className="text-sm font-semibold">{dealSizeExpansion.toFixed(2)}x</span>
                       </div>
-                      <input type="range" min="50" max="175" value={dealSizeExpansion * 100} onChange={(e) => setDealSizeExpansion(parseInt(e.target.value)/100)} className="w-full accent-primary" />
+                      <input type="range" min="50" max="175" value={dealSizeExpansion * 100} onChange={(e) => setDealSizeExpansion(parseInt(e.target.value) / 100)} className="w-full accent-primary" />
                     </div>
                     <div className="bg-secondary/20 border border-border rounded-md p-4">
                       <div className="flex justify-between items-center mb-2">

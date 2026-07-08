@@ -69,7 +69,7 @@ import models.user
 import models.crm_models
 try:
     Base.metadata.create_all(bind=db_engine)
-    print("  ✅ Database tables initialized successfully.")
+    print("  [SUCCESS] Database tables initialized successfully.")
     
     # Run sync if database is empty
     from sqlalchemy.orm import sessionmaker
@@ -77,16 +77,17 @@ try:
     session = SessionLocal()
     try:
         from models.crm_models import Account
+        session.info["user_id"] = "1"  # Set context for RLS count check
         if session.query(Account).count() == 0:
-            print("🔄 SQLite database is empty. Triggering initial sync...")
+            print("  [INFO] SQLite database is empty. Triggering initial sync...")
             from sync_daemon import sync_crm_to_sqlite
             sync_crm_to_sqlite()
     except Exception as sync_err:
-        print(f"⚠️ Error running initial sync: {sync_err}")
+        print(f"  [ERROR] Error running initial sync: {sync_err}")
     finally:
         session.close()
 except Exception as db_err:
-    print(f"  ❌ Warning: Database table initialization failed: {db_err}")
+    print(f"  [ERROR] Database table initialization failed: {db_err}")
     print("     Ensure PostgreSQL is running and database 'account_planner' exists.")
 
 from auth.router import router as auth_router
@@ -143,34 +144,59 @@ if not DATA_PATH or not os.path.exists(DATA_PATH):
 # Create default admin user and seed if empty on startup
 from sqlalchemy.orm import Session
 from database import SessionLocal
-with SessionLocal() as startup_db:
-    from models.user import User
-    default_user = startup_db.query(User).filter(User.id == 1).first()
-    if not default_user:
-        from auth.password import hash_password
-        default_user = User(id=1, name="Default Admin", email="admin@apex.com", hashed_password=hash_password("admin"))
-        startup_db.add(default_user)
-        startup_db.commit()
-        startup_db.refresh(default_user)
-    
-    from models.crm_models import Account
-    if startup_db.query(Account).filter(Account.user_id == 1).count() == 0:
-        print("Seeding default admin user data...")
-        from sync_daemon import sync_crm_to_sqlite_for_user
-        sync_crm_to_sqlite_for_user(startup_db, 1)
+try:
+    with SessionLocal() as startup_db:
+        from models.user import User
+        default_user = startup_db.query(User).filter(User.id == 1).first()
+        if not default_user:
+            from auth.password import hash_password
+            default_user = User(id=1, name="Default Admin", email="admin@apex.com", hashed_password=hash_password("admin"))
+            startup_db.add(default_user)
+            startup_db.commit()
+            startup_db.refresh(default_user)
+        
+        from models.crm_models import Account
+        if startup_db.query(Account).filter(Account.user_id == 1).count() == 0:
+            print("Seeding default admin user data...")
+            from sync_daemon import sync_crm_to_sqlite_for_user
+            sync_crm_to_sqlite_for_user(startup_db, 1)
+except Exception as startup_db_err:
+    print(f"  [WARNING] Database startup seeding skipped: {startup_db_err}")
 
-engine = DataEngine(SessionLocal(), 1)
+try:
+    engine = DataEngine(SessionLocal(), 1)
+except Exception as engine_init_err:
+    print(f"  [WARNING] Failed to initialize root DataEngine: {engine_init_err}")
+    engine = None
+
+import threading
+
+# Global dictionary to track per-user database sync locks
+_sync_locks = {}
+_sync_locks_mutex = threading.Lock()
 
 def get_user_data_engine(
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ) -> DataEngine:
+    # Set RLS user context
+    db.info["user_id"] = str(current_user.id)
+    
     from models.crm_models import Account
     from sync_daemon import sync_crm_to_sqlite_for_user
     
-    if db.query(Account).filter(Account.user_id == current_user.id).count() == 0:
-        print(f"Seeding demo data for new user: {current_user.email} (ID: {current_user.id})")
-        sync_crm_to_sqlite_for_user(db, current_user.id)
+    # 1. Thread-safe lock retrieval/creation for this user
+    with _sync_locks_mutex:
+        if current_user.id not in _sync_locks:
+            _sync_locks[current_user.id] = threading.Lock()
+        user_lock = _sync_locks[current_user.id]
+        
+    # 2. Acquire lock to serialize sync executions
+    with user_lock:
+        # Re-verify count inside lock context in case a concurrent request already finished seeding
+        if db.query(Account).filter(Account.user_id == current_user.id).count() == 0:
+            print(f"Seeding demo data for new user: {current_user.email} (ID: {current_user.id})")
+            sync_crm_to_sqlite_for_user(db, current_user.id)
         
     return DataEngine(db, current_user.id)
 
@@ -191,9 +217,9 @@ LLM_URL = normalize_url(os.getenv("LLM_URL", "http://192.168.135.105:8000/api/ge
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2:latest")
 
 print("\n=============================================")
-print("  🚀 APEX INTELLIGENCE SYSTEM STARTING UP")
-print(f"  🔗 LLM URL    : {LLM_URL}")
-print(f"  🤖 LLM Model  : {MODEL_NAME}")
+print("  [STARTUP] APEX INTELLIGENCE SYSTEM STARTING UP")
+print(f"  [URL] LLM URL    : {LLM_URL}")
+print(f"  [MODEL] LLM Model  : {MODEL_NAME}")
 print("=============================================\n")
 
 class ChatRequest(BaseModel):
@@ -1207,6 +1233,7 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
     
     session_id = body.session_id or "default_session"
     db_sess = SessionLocal()
+    db_sess.info["user_id"] = str(current_user.id)
     chat_history = []
     try:
         chat_session = db_sess.query(ChatSession).filter(
@@ -1229,7 +1256,7 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
                 "text": msg.text
             })
     except Exception as e:
-        print(f"⚠️ Warning: Database error retrieving chat history: {e}")
+        print(f"  [WARNING] Database error retrieving chat history: {e}")
     finally:
         db_sess.close()
 
@@ -1256,24 +1283,18 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
             # Instantiate agent at request time
             from agent_orchestrator import AccountPlanningAgent
             agent = AccountPlanningAgent(data_engine=user_engine, is_local=is_local)
-        except Exception as e:
-            yield f"sys_meta_log|[SYS_LOG] Error initializing agent: {e}\n\n"
-            generator_db.close()
-            return
-        
-        # Map response_mode to recipient_role
-        role_map = {
-            "analyst": "vp",
-            "operational": "am",
-            "executive": "svp"
-        }
-        
-        target_role = role_map.get(body.response_mode, "am")
-        
-        yield f"sys_meta_log|[SYS_LOG] Processing query for role: {target_role.upper()}...\n\n"
-        await asyncio.sleep(0.05)
-        
-        try:
+            
+            # Map response_mode to recipient_role
+            role_map = {
+                "analyst": "vp",
+                "operational": "am",
+                "executive": "svp"
+            }
+            
+            target_role = role_map.get(body.response_mode, "am")
+            
+            yield f"sys_meta_log|[SYS_LOG] Processing query for role: {target_role.upper()}...\n\n"
+            await asyncio.sleep(0.05)
             # Run the 3-Layer pipeline in a task so we can stream keep-alive heartbeats in the meantime
             query_task = asyncio.create_task(
                 asyncio.to_thread(
@@ -1296,6 +1317,7 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
             
             # Save chat history to database
             db_save = SessionLocal()
+            db_save.info["user_id"] = str(current_user.id)
             try:
                 user_msg = ChatMessage(session_id=session_id, sender="user", text=body.query, user_id=current_user.id)
                 db_save.add(user_msg)
@@ -1319,7 +1341,7 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
                 
                 db_save.commit()
             except Exception as save_err:
-                print(f"⚠️ Failed to save chat history: {save_err}")
+                print(f"  [WARNING] Failed to save chat history: {save_err}")
                 db_save.rollback()
             finally:
                 db_save.close()

@@ -42,8 +42,11 @@ class DataRetrieval:
         acc_row = pd.DataFrame()
         
         if acc_name:
-            # Case-insensitive substring match
-            matching = accounts_df[accounts_df['Account_Name'].str.lower().str.contains(acc_name.lower(), na=False)]
+            # Case-insensitive substring match on Account_Name or Account_ID
+            matching = accounts_df[
+                accounts_df['Account_Name'].str.lower().str.contains(acc_name.lower(), na=False) |
+                accounts_df['Account_ID'].str.lower().str.contains(acc_name.lower(), na=False)
+            ]
             if not matching.empty:
                 acc_row = matching.iloc[0]
                 
@@ -204,7 +207,7 @@ class AccountPlanningAgent:
             if accounts_df is not None and not accounts_df.empty and 'Account_Name' in accounts_df.columns:
                 known_accounts = accounts_df['Account_Name'].dropna().unique().tolist()
         
-        self.intent_classifier = IntentClassifier(known_accounts=known_accounts)
+        self.intent_classifier = IntentClassifier(known_accounts=known_accounts, is_local=is_local)
             
         self.data_retrieval = DataRetrieval(self.data_engine)
         self.reasoning_engine = ReasoningEngine(is_local=is_local)
@@ -254,8 +257,12 @@ class AccountPlanningAgent:
                         "num_predict": 150
                     }
                 }
-                with httpx.Client(timeout=15) as client:
+                httpx_timeout = httpx.Timeout(15.0, connect=5.0)
+                print(f"  [LLM CONNECT] Attempting greeting connection to: {self.response_generator.url}")
+                with httpx.Client(timeout=httpx_timeout) as client:
+                    print(f"  [LLM REQUEST] Sending greeting query payload to: {self.response_generator.url}...")
                     response = client.post(self.response_generator.url, json=payload)
+                    print(f"  [LLM RESPONSE] Received greeting status {response.status_code} from: {self.response_generator.url}")
                     if response.status_code == 200:
                         welcome_text = response.json().get("response", "").strip()
             except Exception as e:

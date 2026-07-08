@@ -1,13 +1,22 @@
 """
-Rule-based intent classifier - no LLM needed.
-Fast, reliable, deterministic.
+Hybrid Semantic-Symbolic Intent Classifier.
+Uses local embeddings for deterministic fast-path, falling back to a local LLM Matrix Router.
 """
 
-# from models import IntentClassificationOutput, IntentEnum, ExtractedEntities
-from enum import Enum
-from typing import Optional, Dict
-from pydantic import BaseModel
+import os
 import re
+import json
+import numpy as np
+from enum import Enum
+from typing import Optional, Dict, List, Literal
+from pydantic import BaseModel, ValidationError
+
+# Defensively import sentence-transformers
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 class IntentEnum(str, Enum):
     RISK_ASSESSMENT = "risk_assessment"
@@ -17,16 +26,12 @@ class IntentEnum(str, Enum):
     ACTION_RECOMMENDATION = "action_recommendation"
     PIPELINE_SUMMARY = "pipeline_summary"
 
-
 class ExtractedEntities(BaseModel):
     account: Optional[str] = None
     stage: Optional[str] = None
     metric: Optional[str] = None
     timeframe: Optional[str] = None
     competitor: Optional[str] = None
-
-
-from typing import List, Dict
 
 class IntentClassificationOutput(BaseModel):
     primary_intent: IntentEnum
@@ -41,93 +46,185 @@ class IntentClassificationOutput(BaseModel):
     complexity: str       # "FACTUAL", "OPERATIONAL", "STRATEGIC", "EXECUTIVE"
     target_entities: List[str] = []
 
+class RouterOutput(BaseModel):
+    intent: Literal["ACT_REVIEW", "RISK_TRIAGE", "DEAL_VELOCITY"]
+    complexity: Literal["TACTICAL", "STRATEGIC", "EXECUTIVE"]
+    target_entity: Optional[str] = None
+    focus_area: Optional[str] = None
+
+# Seed queries for deterministic embedding lookup
+SEED_QUERIES = [
+    # ACT_REVIEW
+    {"query": "strategic account plan for Wipro", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "playbook for Wipro", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "TCS strategy mitigation plan", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "objections for Wipro alignment", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "Show Wipro account", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "Give me a high-level summary of the Wipro pipeline for my VP", "intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "Wipro executive briefing", "intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "board review summary for TCS", "intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    
+    # RISK_TRIAGE
+    {"query": "stale activity notes for Wipro", "intent": "RISK_TRIAGE", "complexity": "TACTICAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
+    {"query": "Write an email to the Wipro CIO about their open security ticket", "intent": "RISK_TRIAGE", "complexity": "TACTICAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
+    {"query": "critical open support cases for TCS", "intent": "RISK_TRIAGE", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
+    {"query": "high risk accounts in my portfolio", "intent": "RISK_TRIAGE", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
+    {"query": "TCS open support tickets and blockers", "intent": "RISK_TRIAGE", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
+    {"query": "value at risk for Wipro account", "intent": "RISK_TRIAGE", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
+    
+    # DEAL_VELOCITY
+    {"query": "Top opportunities stalling in TCS", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+    {"query": "opportunities list for Wipro", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+    {"query": "active pipeline for this month", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+    {"query": "weighted forecast review", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+    {"query": "TCS largest deals in negotiation", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+    {"query": "Wipro close rate and deal velocity", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+    {"query": "forecast summary for the quarter", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+]
+
 class IntentClassifier:
-    """Rule-based intent classifier using keyword matching."""
+    """Hybrid intent classifier combining embeddings and LLM routing."""
     
-    def __init__(self, known_accounts: Optional[List[str]] = None):
+    def __init__(self, known_accounts: Optional[List[str]] = None, is_local: bool = True):
         self.known_accounts = known_accounts or []
-    
+        self.is_local = is_local
+        self.embedding_model = None
+        self.seed_embeddings = None
+
+    def _init_embeddings(self):
+        """Lazy load sentence transformers and calculate seed embeddings."""
+        if self.embedding_model is None and SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                print("[Router] Initializing SentenceTransformer model...")
+                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+                queries = [q["query"] for q in SEED_QUERIES]
+                self.seed_embeddings = self.embedding_model.encode(queries)
+                print(f"[Router] Successfully cached {len(queries)} seed embeddings.")
+            except Exception as e:
+                print(f"Warning: Failed to load SentenceTransformer for fast router: {e}")
+
     def classify(self, query: str, history: Optional[List[Dict[str, str]]] = None, user_role: str = "Account Manager") -> IntentClassificationOutput:
-        """Classify intent using robust Phase 1 regex patterns."""
+        """Classify query using Hybrid Semantic-Symbolic routing."""
         
         query_lower = query.lower()
+        self._init_embeddings()
         
-        # ═══════════════════════════════════════════════════════════════
-        # PHASE 1: Robust Regex and Pattern Matching (Active)
-        # ═══════════════════════════════════════════════════════════════
+        # Default fallback values (derived from legacy rules)
+        scope_val = self._detect_scope(query_lower)
+        complexity_val = "STRATEGIC"
+        intent_val = "ACT_REVIEW"
+        primary_intent_val = self._detect_intent(query_lower)
+        confidence_val = self._calculate_confidence(query_lower, primary_intent_val)
         
-        # 1. Scope Detection
-        scope_val = "ENTITY"
-        if any(w in query_lower for w in ["all", "portfolio", "every", "each", "pipeline", "forecast", "weighted forecast", "top opportunities", "opportunities ranking", "active pipeline", "accounts"]):
-            scope_val = "PORTFOLIO"
-        elif any(w in query_lower for w in ["today", "priorities", "my priorities"]):
-            scope_val = "MIXED"
-            
-        # 2. Complexity Detection (Priority: Executive > Strategic > Operational > Factual)
-        complexity_val = "STRATEGIC"  # Default fallback
-        if re.search(r"\b(executive briefing|board review|board summary|board narrative|portfolio health|executive summary|portfolio overview)\b", query_lower):
-            complexity_val = "EXECUTIVE"
-        elif re.search(r"\b(strategic account plan|strategic review|strategic focus|playbook|strategy|mitigation|objections|action plan to align|align them|downgrade our reasoning confidence|stale activity notes)\b", query_lower):
-            complexity_val = "STRATEGIC"
-        elif re.search(r"\b(top \d+ opportunities|opportunities stalling|opportunities list|pipeline review|forecast summary|weighted forecast|pipeline summary|active cases|critical cases|deal velocity|risk reduction|priority actions|value-at-risk|accounts affected|total value-at-risk|highest risk accounts|critical open support cases|priority actions for today|priorities for today)\b", query_lower):
-            complexity_val = "OPERATIONAL"
-        elif re.search(r"\b(who is|who are|show contact|list contact|contacts of|contacts for|decision maker|decision makers|email of|phone of|owner of|last time we contacted|last contact)\b", query_lower):
-            complexity_val = "FACTUAL"
-            
-        # 3. Intent Detection
-        intent_val = "ACCOUNT_REVIEW"
-        if re.search(r"\b(contact|who is|who are|decision maker|decision makers|people|stakeholder|stakeholders|last time we contacted|last contact)\b", query_lower):
-            if re.search(r"\b(action plan|playbook|align|blockers)\b", query_lower):
-                intent_val = "ACCOUNT_PLAN"
-            else:
-                intent_val = "CONTACT_LOOKUP"
-        elif re.search(r"\b(top \d+ opportunities|ranking|largest deals|biggest|highest value)\b", query_lower):
-            intent_val = "OPPORTUNITY_RANKING"
-        elif re.search(r"\b(pipeline|forecast|pipeline review|weighted|deal velocity|value-at-risk|total value-at-risk|pipeline confidence)\b", query_lower):
-            intent_val = "PIPELINE_REVIEW"
-        elif re.search(r"\b(executive briefing|board review|board narrative)\b", query_lower):
-            intent_val = "EXECUTIVE_BRIEFING"
-        elif re.search(r"\b(portfolio analysis|portfolio health|portfolio review|highest risk accounts)\b", query_lower):
-            intent_val = "PORTFOLIO_ANALYSIS"
-        elif re.search(r"\b(risk|churn|at risk|danger|stalled|stuck|stalling|blockers|critical open support cases)\b", query_lower):
-            if re.search(r"\b(action plan|playbook|align)\b", query_lower):
-                intent_val = "ACCOUNT_PLAN"
-            else:
-                intent_val = "RISK_ANALYSIS"
-        elif re.search(r"\b(account plan|action plan|playbook|strategy|strategic review|strategic focus)\b", query_lower):
-            intent_val = "ACCOUNT_PLAN"
-
-        # 4. Check for Conversational Greetings
+        # Check for Conversational Greetings first
         GREETING_PATTERN = r"\b(hello|hi|hey|what's up|howdy|anyone there|how are you|can you help)\b"
         if re.search(GREETING_PATTERN, query_lower):
             domain_terms = ["opp", "opportunity", "opportunities", "forecast", "pipeline", "stalled", "stalling", "contact", "decision maker", "action plan", "playbook", "blocker", "cases", "risk", "deal"]
             if not any(t in query_lower for t in domain_terms):
-                complexity_val = "CONVERSATIONAL"
-                intent_val = "GREETING"
-                scope_val = "MIXED"
-            
-        # ═══════════════════════════════════════════════════════════════
-        # PHASE 2: Semantic Similarity (Commented Out for Future Phase)
-        # TODO: Compute local query embeddings and calculate cosine similarity
-        # against category centroids using a local model.
-        # ═══════════════════════════════════════════════════════════════
-        
-        # ═══════════════════════════════════════════════════════════════
-        # PHASE 3: Tiny LLM Classifier Fallback (Commented Out for Future Phase)
-        # TODO: Fallback to local LLM JSON classification if similarity score is low.
-        # ═══════════════════════════════════════════════════════════════
+                return IntentClassificationOutput(
+                    primary_intent=IntentEnum.ACTION_RECOMMENDATION,
+                    confidence_primary=1.0,
+                    extracted_entities=ExtractedEntities(),
+                    urgency="medium",
+                    scope="MIXED",
+                    intent="GREETING",
+                    complexity="CONVERSATIONAL",
+                    target_entities=[],
+                    context_summary="Conversational greeting"
+                )
 
-        # Standard legacy intent mapping
-        legacy_intent = self._detect_intent(query_lower)
-        confidence = self._calculate_confidence(query_lower, legacy_intent)
-        
-        # Entity extraction
-        entities = self._extract_entities(query, legacy_intent)
-        
-        # Urgency
+        # ═══════════════════════════════════════════════════════════════
+        # STEP 1: Deterministic Fast-Lane (Embeddings Cosine Similarity)
+        # ═══════════════════════════════════════════════════════════════
+        fast_path_matched = False
+        if self.embedding_model is not None and self.seed_embeddings is not None:
+            try:
+                query_emb = self.embedding_model.encode([query])
+                # Calculate cosine similarities
+                norm_seeds = np.linalg.norm(self.seed_embeddings, axis=1)
+                norm_query = np.linalg.norm(query_emb)
+                
+                if norm_query > 0:
+                    sims = np.dot(self.seed_embeddings, query_emb[0]) / (norm_seeds * norm_query)
+                    best_idx = np.argmax(sims)
+                    best_score = sims[best_idx]
+                    
+                    if best_score >= 0.85:
+                        matched = SEED_QUERIES[best_idx]
+                        intent_val = matched["intent"]
+                        complexity_val = matched["complexity"]
+                        primary_intent_val = matched["primary_intent"]
+                        confidence_val = float(best_score)
+                        fast_path_matched = True
+                        print(f"[Router Fast-Path] Similarity: {best_score:.4f} -> Routed to {intent_val} / {complexity_val}")
+            except Exception as e:
+                print(f"[Router Fast-Path] Fast-path embedding routing failed: {e}")
+
+        # ═══════════════════════════════════════════════════════════════
+        # STEP 2 & 3: LLM Matrix Router & Pydantic Guardrail
+        # ═══════════════════════════════════════════════════════════════
+        if not fast_path_matched:
+            print("[Router] Fast-lane missed (similarity < 0.85). Invoking Turn 1 LLM Router...")
+            
+            system_rules = """You are the APEX Matrix Router. Your sole function is to translate raw sales queries into symbolic system variables.
+You do not answer the user. You only output a flat JSON object matching the exact schema provided.
+
+[INTENT_MAP]
+ACT_REVIEW = Account planning and strategy
+RISK_TRIAGE = Dealing with support cases and blockers
+DEAL_VELOCITY = Closing active opportunities
+
+[COMPLEXITY_MAP]
+TACTICAL = Daily tasks, emails, immediate next steps
+STRATEGIC = Multi-day playbooks, risk analysis
+EXECUTIVE = Macro revenue summaries, VP-level outputs"""
+
+            few_shots = """Input: "Write an email to the Wipro CIO about their open security ticket."
+Output: {"intent": "RISK_TRIAGE", "complexity": "TACTICAL", "target_entity": "Wipro", "focus_area": "security ticket"}
+
+Input: "Give me a high-level summary of the Wipro pipeline for my VP."
+Output: {"intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "target_entity": "Wipro", "focus_area": "pipeline"}"""
+
+            user_prompt = f"Analyze and classify this input:\nInput: \"{query}\""
+            
+            try:
+                raw_llm_output = self._call_llm(
+                    system_prompt=f"{system_rules}\n\n{few_shots}",
+                    user_prompt=user_prompt
+                )
+                
+                parsed_json = self._clean_and_parse_json(raw_llm_output)
+                
+                # Pydantic Guardrail
+                validated = RouterOutput(**parsed_json)
+                
+                intent_val = validated.intent
+                complexity_val = validated.complexity
+                confidence_val = 0.90
+                
+                # Map to legacy enum
+                if intent_val == "RISK_TRIAGE":
+                    primary_intent_val = IntentEnum.RISK_ASSESSMENT
+                elif intent_val == "DEAL_VELOCITY":
+                    primary_intent_val = IntentEnum.PIPELINE_SUMMARY
+                else:
+                    primary_intent_val = IntentEnum.ACTION_RECOMMENDATION
+                    
+                print(f"[Router LLM] Output verified: {intent_val} / {complexity_val}")
+                
+            except (ValidationError, Exception) as err:
+                # Intercept error and fallback gracefully to default values without raising exceptions
+                print(f"[Router Guardrail] Validation or LLM error: {err}. Safe fallback applied.")
+                intent_val = "ACT_REVIEW"
+                complexity_val = "STRATEGIC"
+                primary_intent_val = IntentEnum.ACTION_RECOMMENDATION
+                confidence_val = 0.50
+
+        # Entity extraction (using robust legacy rules)
+        entities = self._extract_entities(query, primary_intent_val)
         urgency = self._detect_urgency(query_lower)
         
-        # Extract target entities using Case-Insensitive Database Matcher
+        # Extract target entities from database
         target_entities_val = []
         if self.known_accounts:
             for acc in self.known_accounts:
@@ -135,7 +232,7 @@ class IntentClassifier:
                 if re.search(pattern, query_lower):
                     target_entities_val.append(acc)
         
-        # Fallback to contiguous capitalized word search if database matcher has no results
+        # Contiguous capitalized word fallback
         if not target_entities_val:
             noise = {'Top', 'Show', 'Give', 'Get', 'Review', 'Evaluate', 'Provide', 'Who', 'What', 'Where', 'When', 'Why', 'How', 'Which', 'Are', 'Is', 'They', 'Them', 'Our', 'Your', 'Please', 'Traced'}
             matches = re.findall(r'\b[A-Z][a-zA-Z0-9]*(?:\s+[A-Z][a-zA-Z0-9]*)*\b', query)
@@ -144,12 +241,11 @@ class IntentClassifier:
                 filtered_words = [w for w in m_words if w not in noise]
                 if filtered_words:
                     target_entities_val.append(" ".join(filtered_words))
-
-        # Carry over active account from history if query uses pronouns
+        
+        # Carrying over active account from history if pronouns are used
         if not target_entities_val and history:
             pronouns = ["he", "she", "they", "them", "their", "that account", "it", "him", "her"]
             if any(re.search(r'\b' + re.escape(p) + r'\b', query_lower) for p in pronouns):
-                # Search backwards in history
                 for msg in reversed(history):
                     msg_text = msg.get("text", "").lower()
                     found_acc = None
@@ -163,63 +259,92 @@ class IntentClassifier:
                         target_entities_val.append(found_acc)
                         break
         
-        # Backwards compatibility update
         if target_entities_val:
             entities.account = target_entities_val[0]
             
         return IntentClassificationOutput(
-            primary_intent=legacy_intent,
-            confidence_primary=confidence,
+            primary_intent=primary_intent_val,
+            confidence_primary=confidence_val,
             extracted_entities=entities,
             urgency=urgency,
             scope=scope_val,
             intent=intent_val,
             complexity=complexity_val,
             target_entities=target_entities_val,
-            context_summary=f"Skills-based: {intent_val} ({complexity_val})"
+            context_summary=f"APEX Router: {intent_val} ({complexity_val})"
         )
+
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 1500) -> str:
+        url = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
+        model = os.getenv("MODEL_NAME", "llama3.2:latest")
+        
+        if not self.is_local:
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            if gemini_key:
+                try:
+                    from reasoning_engine import call_gemini_api
+                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=256, timeout=min(timeout, 1500))
+                except Exception as e:
+                    print(f"[Router LLM] Gemini API fallback failed: {e}. Falling back to local model...")
+        
+        import httpx
+        payload = {
+            "model": model,
+            "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON.",
+            "stream": False,
+            "options": {
+                "temperature": 0.0,
+                "num_predict": 128
+            }
+        }
+        httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
+        print(f"  [LLM CONNECT] Attempting connection to: {url} (model: {model})")
+        with httpx.Client(timeout=httpx_timeout) as client:
+            print(f"  [LLM REQUEST] Sending query payload to: {url}...")
+            response = client.post(url, json=payload)
+            print(f"  [LLM RESPONSE] Received status {response.status_code} from: {url}")
+            if response.status_code == 200:
+                return response.json().get("response", "").strip()
+            else:
+                raise Exception(f"HTTP error {response.status_code}")
+
+    def _clean_and_parse_json(self, text: str) -> dict:
+        text = text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        elif text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        
+        start = text.find('{')
+        end = text.rfind('}')
+        if start != -1 and end != -1:
+            text = text[start:end+1]
+        return json.loads(text)
+
     def _has_word(self, query: str, words: list) -> bool:
-        """Helper to match whole words/phrases with word boundaries."""
         for w in words:
             if re.search(r'\b' + re.escape(w) + r'\b', query, re.IGNORECASE):
                 return True
         return False
 
     def _detect_intent(self, query: str) -> IntentEnum:
-        """Detect intent from keywords."""
-        
-        # COMPETITIVE_INTELLIGENCE
         if self._has_word(query, ['competitor', 'losing', 'win/loss', 'threat', 'competitor x']):
             return IntentEnum.COMPETITIVE_INTELLIGENCE
-        
-        # RISK_ASSESSMENT
         if self._has_word(query, ['risk', 'churn', 'declining', 'health', 'at risk', 'warning', 'stalling', 'stalled', 'stuck']):
             return IntentEnum.RISK_ASSESSMENT
-        
-        # RELATIONSHIP_ANALYSIS
         if self._has_word(query, ['contact', 'stakeholder', 'decision maker', 'influencer', 'who are']):
             return IntentEnum.RELATIONSHIP_ANALYSIS
-        
-        # PIPELINE_SUMMARY
         if self._has_word(query, ['pipeline', 'velocity', 'forecast', 'closing in', 'deal velocity', 'weighted forecast']):
             return IntentEnum.PIPELINE_SUMMARY
-        
-        # OPPORTUNITY_EXPANSION
         if self._has_word(query, ['expand', 'grow', 'upsell', 'cross-sell', 'opportunity', 'opportunities']):
-            # But check if it's about stalled/at-risk opportunities (then RISK)
             if not self._has_word(query, ['stalling', 'stalled', 'stuck']):
                 return IntentEnum.OPPORTUNITY_EXPANSION
-        
-        # ACTION_RECOMMENDATION (default)
-        if self._has_word(query, ['plan', 'strategy', 'recommend', 'action', 'playbook', 'should']):
-            return IntentEnum.ACTION_RECOMMENDATION
-        
-        # Default
         return IntentEnum.ACTION_RECOMMENDATION
-    
+
     def _calculate_confidence(self, query: str, intent: IntentEnum) -> float:
-        """Calculate confidence based on keyword match strength."""
-        
         keyword_map = {
             IntentEnum.COMPETITIVE_INTELLIGENCE: ['competitor', 'losing', 'threat', 'competitor x'],
             IntentEnum.RISK_ASSESSMENT: ['risk', 'churn', 'declining', 'health', 'at risk', 'warning', 'stalling', 'stalled', 'stuck'],
@@ -229,25 +354,18 @@ class IntentClassifier:
             IntentEnum.ACTION_RECOMMENDATION: ['plan', 'strategy', 'recommend', 'action', 'playbook', 'should']
         }
         
-        # Check total matches across ALL intents first to see if it's a completely unrelated query
         total_matches = sum(1 for kws in keyword_map.values() for kw in kws if re.search(r'\b' + re.escape(kw) + r'\b', query, re.IGNORECASE))
         if total_matches == 0:
-            return 0.2  # Very low confidence for completely vague/unrelated queries
+            return 0.2
             
         keywords = keyword_map.get(intent, [])
         matches = sum(1 for kw in keywords if re.search(r'\b' + re.escape(kw) + r'\b', query, re.IGNORECASE))
-        
-        # Confidence = 0.6 + (matches * 0.1), capped at 0.95
         confidence = min(0.6 + (matches * 0.1), 0.95)
-        
         return confidence
-    
+
     def _extract_entities(self, query: str, intent: IntentEnum) -> ExtractedEntities:
-        """Extract entities using regex and keyword matching."""
-        
         entities = ExtractedEntities()
         
-        # STAGE extraction
         stage_patterns = {
             r'\b(negotiation|negotiate|review)\b': 'negotiation/review',
             r'\b(proposal|quote|proposal/price)\b': 'proposal/price quote',
@@ -257,44 +375,35 @@ class IntentClassifier:
             r'\b(closed lost|lost)\b': 'closed lost',
             r'\b(value proposition)\b': 'value proposition'
         }
-        
         for pattern, stage_value in stage_patterns.items():
             if re.search(pattern, query, re.IGNORECASE):
                 entities.stage = stage_value
                 break
         
-        # TIMEFRAME extraction
         timeframe_patterns = {
             r'(\d+)\s*days?': lambda m: f"{m.group(1)} days",
             r'next\s*(week|month|quarter)': lambda m: f"next {m.group(1)}",
             r'closing in\s*(\d+)\s*days?': lambda m: f"closing in {m.group(1)} days",
             r'end of\s*(month|quarter|year)': lambda m: f"end of {m.group(1)}"
         }
-        
         for pattern, formatter in timeframe_patterns.items():
             match = re.search(pattern, query, re.IGNORECASE)
             if match:
                 entities.timeframe = formatter(match)
                 break
         
-        # ACCOUNT extraction (proper nouns, capitalized words)
         words = query.split()
         capitalized = [w.rstrip('?.,;:') for w in words if w and w[0].isupper() and len(w) > 2]
-        
-        # Filter noise
         noise = ['Top', 'Show', 'Give', 'Get', 'Review', 'Evaluate', 'Provide', 'Who', 'What', 'Where', 'When', 'Why', 'How', 'Which', 'Are', 'Is', 'They', 'Them', 'Our', 'Your']
         capitalized = [w for w in capitalized if w not in noise]
-        
         if capitalized:
             entities.account = capitalized[0]
         
-        # COMPETITOR extraction
         if 'competitor' in query:
             match = re.search(r'competitor\s+(\w+)', query, re.IGNORECASE)
             if match:
                 entities.competitor = match.group(1)
         
-        # METRIC extraction
         metric_keywords = ['top', 'bottom', 'highest', 'lowest', 'forecast', 'velocity', 'arr', 'health']
         if any(kw in query for kw in metric_keywords):
             match = re.search(r'top\s+(\d+)', query, re.IGNORECASE)
@@ -304,31 +413,19 @@ class IntentClassifier:
                 entities.metric = 'summary'
         
         return entities
-    
+
     def _detect_urgency(self, query: str) -> str:
-        """Detect urgency level."""
-        
         if any(word in query for word in ['immediately', 'urgent', 'asap', 'critical', 'now', 'today']):
             return 'high'
-        
         if any(word in query for word in ['soon', 'next week', 'this week', 'before']):
             return 'high'
-        
         if any(word in query for word in ['next month', 'this quarter', 'eventually']):
             return 'medium'
-        
         return 'medium'
-    
+
     def _detect_scope(self, query: str) -> str:
-        """Detect scope: entity, portfolio, or pipeline."""
-        
-        # Portfolio scope
         if any(word in query for word in ['accounts', 'all', 'portfolio', 'every', 'each']):
             return 'portfolio'
-        
-        # Pipeline scope
         if any(word in query for word in ['pipeline', 'forecast', 'velocity']):
             return 'pipeline'
-        
-        # Entity scope (default - single account/opportunity)
         return 'entity'

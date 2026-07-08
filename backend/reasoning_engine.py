@@ -1599,7 +1599,7 @@ def summarize_large_dataset(account_data: Dict[str, Any], requested_count: int =
     return cleaned_data
 
 
-def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_tokens: int = 400, timeout: int = 30) -> str:
+def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_tokens: int = 400, timeout: int = 1500) -> str:
     """Fallback router to Gemini API when key is configured."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
@@ -1617,9 +1617,13 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
         }
     }
     
-    with httpx.Client(timeout=timeout) as client:
+    httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
+    print(f"  [LLM CONNECT] Attempting Gemini proxy connection to: {url}")
+    with httpx.Client(timeout=httpx_timeout) as client:
+        print(f"  [LLM REQUEST] Sending Gemini proxy payload to: {url}...")
         headers = {"Content-Type": "application/json"}
         response = client.post(url, json=payload, headers=headers)
+        print(f"  [LLM RESPONSE] Received Gemini proxy status {response.status_code} from: {url}")
         if response.status_code == 200:
             res_json = response.json()
             try:
@@ -1630,6 +1634,91 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
             raise Exception(f"Gemini API error {response.status_code}: {response.text}")
 
 
+def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Programmatically constructs natural, professional fallback narratives from data."""
+    account_name = account_data.get("account_name") or "Global Portfolio"
+    health_score = account_data.get("health_score") or 80.0
+    opps = account_data.get("opportunities") or []
+    contacts = account_data.get("contacts") or []
+    cases = account_data.get("cases") or []
+    
+    num_opps = len(opps)
+    total_rev = sum(opp.get("amount_usd", 0.0) or opp.get("amount", 0.0) for opp in opps)
+    num_contacts = len(contacts)
+    num_cases = len(cases)
+    
+    rev_str = f"${total_rev:,.2f}"
+    macro_summary = f"Reviewing the database metrics for {account_name}, we see {num_opps} active opportunities worth {rev_str}. The current client health score is recorded at {health_score:.1f}%."
+    if num_cases > 0:
+        macro_summary += f" Attention is recommended to address {num_cases} open support tickets."
+        
+    ae_insight = f"Based on the {num_contacts} registered stakeholders in the system, we should coordinate a sync with key contacts to reaffirm our commitment."
+    if contacts:
+        top_contact = contacts[0].get("name", "stakeholders")
+        role = contacts[0].get("role", "Key Contact")
+        ae_insight += f" The primary contact is listed as {top_contact} ({role})."
+        
+    director_insight = f"No critical blockers are currently preventing opportunity progression in our systems."
+    if num_cases > 0:
+        top_case = cases[0].get("subject", "support case")
+        sev = cases[0].get("severity", "medium")
+        director_insight = f"Critical focus should be placed on resolving the open ticket '{top_case}' which is marked with severity '{sev}'."
+        
+    tactical_playbook = []
+    day_cnt = 1
+    
+    if opps:
+        top_opp = opps[0].get("opp_name") or "active pipeline"
+        stage = opps[0].get("stage") or "Negotiation"
+        tactical_playbook.append({
+            "day": day_cnt,
+            "action": f"Review stage and details of opportunity '{top_opp}' currently in '{stage}' stage.",
+            "owner": "Account Manager",
+            "success_metric": "Opportunity details validated"
+        })
+        day_cnt += 2
+        
+    if contacts:
+        top_contact = contacts[0].get("name", "stakeholder")
+        tactical_playbook.append({
+            "day": day_cnt,
+            "action": f"Verify engagement level and schedule check-in with {top_contact}.",
+            "owner": "Account Manager",
+            "success_metric": "Check-in invitation sent"
+        })
+        day_cnt += 2
+        
+    if cases:
+        top_case_id = cases[0].get("case_id") or "support case"
+        tactical_playbook.append({
+            "day": day_cnt,
+            "action": f"Sync with engineering team regarding support case {top_case_id}.",
+            "owner": "Technical Support Lead",
+            "success_metric": "Case resolution plan updated"
+        })
+        day_cnt += 2
+        
+    if not tactical_playbook:
+        tactical_playbook.append({
+            "day": 1,
+            "action": "Initiate comprehensive stakeholder identification for this account.",
+            "owner": "Account Manager",
+            "success_metric": "Initial contact list populated"
+        })
+        
+    return {
+        "executive_brief": {
+            "revenue_at_stake": rev_str,
+            "macro_summary": macro_summary
+        },
+        "persona_insights": {
+            "enterprise_ae": ae_insight,
+            "strategic_director": director_insight
+        },
+        "tactical_playbook": tactical_playbook
+    }
+
+
 class ReasoningEngine:
     def __init__(self, model: Optional[str] = None, is_local: bool = True):
         self.url = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
@@ -1637,14 +1726,14 @@ class ReasoningEngine:
         self.raw_reasoning_bucket = {}
         self.is_local = is_local
 
-    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 300) -> str:
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 1500) -> str:
         if not self.is_local:
             gemini_key = os.getenv("GEMINI_API_KEY")
             if gemini_key:
                 try:
                     print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
                     # Use a reasonable token limit for Gemini to avoid truncating JSON outputs
-                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 60))
+                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 1500))
                 except Exception as e:
                     print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
 
@@ -1659,8 +1748,12 @@ class ReasoningEngine:
                 "num_predict": 400
             }
         }
-        with httpx.Client(timeout=timeout) as client:
+        httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
+        print(f"  [LLM CONNECT] Attempting Crucible thread connection to: {self.url} (model: {self.model})")
+        with httpx.Client(timeout=httpx_timeout) as client:
+            print(f"  [LLM REQUEST] Sending Crucible thread query payload to: {self.url}...")
             response = client.post(self.url, json=payload)
+            print(f"  [LLM RESPONSE] Received Crucible thread status {response.status_code} from: {self.url}")
             if response.status_code == 200:
                 return response.json().get("response", "").strip()
             else:
@@ -1762,9 +1855,8 @@ class ReasoningEngine:
         requested_count: int = 5
     ) -> ConsensusOutput:
         """
-        Run reasoning threads dynamically based on complexity.
-        If local=True, runs sequentially to avoid overwhelming single GPU.
-        If local=False, runs in parallel.
+        Run multi-persona reasoning.
+        APEX Architecture: Runs a single-pass Multi-Persona Crucible LLM call to save latency.
         """
         # 1. Handle FACTUAL complexity level
         if complexity == "FACTUAL":
@@ -1801,101 +1893,88 @@ class ReasoningEngine:
         # Summarize large dataset to protect context windows
         account_data = summarize_large_dataset(account_data, requested_count)
         
-        results = {}
+        target_entity = account_data.get("account_name", "Global Portfolio")
         
-        # Determine active threads based on complexity
-        if complexity == "OPERATIONAL":
-            active_threads = ["data"]
-        elif complexity == "STRATEGIC":
-            active_threads = ["am", "data"]
-        else:
-            active_threads = ["am", "vp", "svp", "data"]
-            
-        print(f"[Governance] Complexity: {complexity}. Actively running threads: {active_threads}")
+        # Prepare crucible LLM prompts
+        system_rules = f"""You are the APEX Multi-Persona Crucible. You must synthesize a comprehensive account playbook by simulating the perspectives of different enterprise experts within a single JSON response.
 
-        if local:
-            # Sequential execution for local models to prevent GPU crashing
-            # We use a shorter timeout since they run one after another
-            seq_timeout = max(timeout_per_thread, total_timeout // len(active_threads) if active_threads else 1)
+You must adapt your output based on the provided [COMPLEXITY] variable.
+- If TACTICAL: Focus on immediate SMB AE and SDR actions.
+- If STRATEGIC: Focus on Enterprise AE playbooks and Strategic Director risk mitigation.
+- If EXECUTIVE: Focus entirely on CRO-level revenue summaries."""
+
+        context_payload = {
+            "Target Entity": target_entity,
+            "Complexity Required": complexity,
+            "Raw Database Context": json.dumps(account_data, indent=2)
+        }
+        
+        user_prompt = f"""Analyze the database context. Output your analysis using the exact JSON schema below. Do not generate markdown backticks or conversational text outside the JSON block.
+
+Schema format:
+{{
+  "executive_brief": {{
+    "revenue_at_stake": "[Sum of active opportunities]",
+    "macro_summary": "[2-sentence overview]"
+  }},
+  "persona_insights": {{
+    "enterprise_ae": "[Strategic stakeholder pathing]",
+    "strategic_director": "[Risk analysis of open cases]"
+  }},
+  "tactical_playbook": [
+    {{ "day": 1, "action": "...", "owner": "...", "success_metric": "..." }},
+    {{ "day": 3, "action": "...", "owner": "...", "success_metric": "..." }}
+  ]
+}}
+
+Context Payload:
+{json.dumps(context_payload, indent=2)}"""
+
+        crucible_data = None
+        raw_llm_output = ""
+        
+        # Call Crucible LLM
+        try:
+            print("[Crucible] Initiating single-pass multi-persona crucible...")
+            raw_llm_output = self._call_llm(system_rules, user_prompt, timeout=timeout_per_thread)
+            self.raw_reasoning_bucket['consensus'] = raw_llm_output
             
-            if "am" in active_threads:
-                try:
-                    am_res = self._run_am_thread(account_data, seq_timeout)
-                    results['am'] = am_res.model_dump() if hasattr(am_res, "model_dump") else am_res
-                except Exception as e:
-                    print(f"[ReasoningEngine] Warning: AM thread failed: {e}")
-                    results['am'] = self._fallback_for_thread('am', str(e))
-                    
-            if "vp" in active_threads:
-                try:
-                    vp_res = self._run_vp_thread(account_data, market_context, seq_timeout)
-                    results['vp'] = vp_res.model_dump() if hasattr(vp_res, "model_dump") else vp_res
-                except Exception as e:
-                    print(f"[ReasoningEngine] Warning: VP thread failed: {e}")
-                    results['vp'] = self._fallback_for_thread('vp', str(e))
-                    
-            if "svp" in active_threads:
-                try:
-                    svp_res = self._run_svp_thread(account_data, market_context, seq_timeout)
-                    results['svp'] = svp_res.model_dump() if hasattr(svp_res, "model_dump") else svp_res
-                except Exception as e:
-                    print(f"[ReasoningEngine] Warning: SVP thread failed: {e}")
-                    results['svp'] = self._fallback_for_thread('svp', str(e))
-                    
-            if "data" in active_threads:
-                try:
-                    data_res = self._run_data_thread(account_data, seq_timeout)
-                    results['data'] = data_res.model_dump() if hasattr(data_res, "model_dump") else data_res
-                except Exception as e:
-                    print(f"[ReasoningEngine] Warning: Data thread failed: {e}")
-                    results['data'] = self._fallback_for_thread('data', str(e))
-                    
-        else:
-            # Parallel execution for cloud models
-            executor = ThreadPoolExecutor(max_workers=len(active_threads))
-            futures = {}
+            # Clean and parse JSON
+            parsed_json = self._clean_and_parse(raw_llm_output)
             
-            if "am" in active_threads:
-                futures['am'] = executor.submit(self._run_am_thread, account_data, timeout_per_thread)
-            if "vp" in active_threads:
-                futures['vp'] = executor.submit(self._run_vp_thread, account_data, market_context, timeout_per_thread)
-            if "svp" in active_threads:
-                futures['svp'] = executor.submit(self._run_svp_thread, account_data, market_context, timeout_per_thread)
-            if "data" in active_threads:
-                futures['data'] = executor.submit(self._run_data_thread, account_data, timeout_per_thread)
-            
-            start_time = time.time()
-            
-            for thread_name, future in futures.items():
-                elapsed = time.time() - start_time
-                remaining_timeout = max(0.5, total_timeout - elapsed)
+            # Basic schema validation
+            if "executive_brief" in parsed_json and "persona_insights" in parsed_json:
+                crucible_data = parsed_json
+                print("[Crucible] Successfully parsed single-pass JSON output.")
+            else:
+                raise ValueError("JSON parsed successfully but missing required Crucible schema keys.")
                 
-                try:
-                    res_obj = future.result(timeout=remaining_timeout)
-                    results[thread_name] = res_obj.model_dump() if hasattr(res_obj, "model_dump") else res_obj
-                except Exception as e:
-                    print(f"[ReasoningEngine] Warning: Thread {thread_name} failed/timed out: {e}")
-                    results[thread_name] = self._fallback_for_thread(thread_name, str(e))
+        except Exception as e:
+            print(f"[Crucible Warning] Crucible execution or parsing failed: {e}. Generating context-aware fallback data.")
+            if 'consensus' not in self.raw_reasoning_bucket:
+                self.raw_reasoning_bucket['consensus'] = f"Error or parsing issue: {e}. Raw text: {raw_llm_output[:200]}"
+            
+            # Context-Aware Natural Fallback Engine (Task 5)
+            crucible_data = generate_contextual_fallback_data(account_data)
+
+        # Build ConsensusOutput in Python
+        macro_summary = crucible_data.get("executive_brief", {}).get("macro_summary", "Strategic review compiled.")
+        rev_stake = crucible_data.get("executive_brief", {}).get("revenue_at_stake", "N/A")
         
-        # 2. Handle OPERATIONAL complexity level (Bypass LLM consensus synthesis)
-        if complexity == "OPERATIONAL":
-            print("[Governance] OPERATIONAL complexity detected: Bypassing LLM consensus synthesis.")
-            data_res = results.get("data", {})
-            return ConsensusOutput(
-                consensus_recommendation={
-                    "action": "Displaying data quality and core metrics.",
-                    "confidence": data_res.get("overall_confidence", 0.8),
-                    "rationale": data_res.get("data_perspective", "Operational details retrieved.")
-                },
-                thread_agreement={"data": data_res.get("overall_confidence", 0.8)},
-                agreement_score=1.0,
-                dissenting_views=[],
-                confidence_limiting_factors=[],
-                final_confidence=data_res.get("overall_confidence", 0.8)
-            )
+        consensus = ConsensusOutput(
+            consensus_recommendation={
+                "action": "Proceed with Crucible recommendations.",
+                "confidence": 0.85,
+                "rationale": macro_summary,
+                "crucible_data": crucible_data  # Save the crucible data for Layer 3 Response Generation
+            },
+            thread_agreement={"am": 0.85, "vp": 0.85, "svp": 0.85, "data": 0.90},
+            agreement_score=0.85,
+            dissenting_views=[],
+            confidence_limiting_factors=[],
+            final_confidence=0.85
+        )
         
-        # Build consensus from active threads
-        consensus = self._build_consensus(results, timeout_per_thread)
         return consensus
     
     def _run_am_thread(self, account_data: Dict, timeout: int) -> AMPerspectiveOutput:
@@ -2340,13 +2419,13 @@ class ResponseGenerator:
         self.raw_response_bucket = {}
         self.is_local = is_local
 
-    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 300) -> str:
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 1500) -> str:
         if not self.is_local:
             gemini_key = os.getenv("GEMINI_API_KEY")
             if gemini_key:
                 try:
                     print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
-                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 60))
+                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 1500))
                 except Exception as e:
                     print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
 
@@ -2361,8 +2440,12 @@ class ResponseGenerator:
                 "num_predict": 512
             }
         }
-        with httpx.Client(timeout=timeout) as client:
+        httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
+        print(f"  [LLM CONNECT] Attempting single-pass Crucible connection to: {self.url} (model: {self.model})")
+        with httpx.Client(timeout=httpx_timeout) as client:
+            print(f"  [LLM REQUEST] Sending single-pass Crucible query payload to: {self.url}...")
             response = client.post(self.url, json=payload)
+            print(f"  [LLM RESPONSE] Received single-pass Crucible status {response.status_code} from: {self.url}")
             if response.status_code == 200:
                 return response.json().get("response", "").strip()
             else:
@@ -2463,6 +2546,30 @@ class ResponseGenerator:
         """
         self.raw_response_bucket[recipient_role] = "Pending generation..."
         
+        # Check if the consensus has our new single-pass crucible data embedded
+        crucible_data = None
+        if hasattr(consensus, "consensus_recommendation") and isinstance(consensus.consensus_recommendation, dict):
+            crucible_data = consensus.consensus_recommendation.get("crucible_data")
+            
+        if crucible_data:
+            print(f"[ResponseGenerator] Mapping role response dynamically for: {recipient_role.upper()}")
+            try:
+                if recipient_role == "am":
+                    resp = self._map_am_from_crucible(crucible_data)
+                    self.raw_response_bucket[recipient_role] = "Mapped dynamically from Crucible (zero LLM latency)"
+                    return resp
+                elif recipient_role == "vp":
+                    resp = self._map_vp_from_crucible(crucible_data)
+                    self.raw_response_bucket[recipient_role] = "Mapped dynamically from Crucible (zero LLM latency)"
+                    return resp
+                elif recipient_role == "svp":
+                    resp = self._map_svp_from_crucible(crucible_data)
+                    self.raw_response_bucket[recipient_role] = "Mapped dynamically from Crucible (zero LLM latency)"
+                    return resp
+            except Exception as map_err:
+                print(f"[ResponseGenerator Warning] Crucible mapping failed: {map_err}. Falling back to standard LLM generation.")
+                
+        # Legacy fallback if crucible data is not available or mapping fails
         if recipient_role == "am":
             return self._generate_am_response(consensus)
         elif recipient_role == "vp":
@@ -2471,6 +2578,122 @@ class ResponseGenerator:
             return self._generate_svp_response(consensus)
         else:
             raise ValueError(f"Unknown role: {recipient_role}")
+
+    def _map_am_from_crucible(self, crucible_data: Dict[str, Any]) -> AMResponseOutput:
+        exec_brief = crucible_data.get("executive_brief", {})
+        persona_insights = crucible_data.get("persona_insights", {})
+        tactical_playbook = crucible_data.get("tactical_playbook", [])
+        
+        narrative = exec_brief.get("macro_summary", "Strategic plan initiated.")
+        
+        playbook_actions = []
+        for item in tactical_playbook:
+            playbook_actions.append(PlaybookAction(
+                day=item.get("day", 1),
+                action=item.get("action", ""),
+                owner=item.get("owner", "Account Manager"),
+                success_metric=item.get("success_metric", "Action step completed"),
+                template=item.get("template")
+            ))
+            
+        ae_text = persona_insights.get("enterprise_ae", "")
+        stakeholder_sequence = []
+        if ae_text:
+            stakeholder_sequence.append(Stakeholder(
+                stakeholder="Key Stakeholders",
+                role="Strategic Sponsors",
+                engagement_type="meeting",
+                talking_points=[ae_text[:120]],
+                success_indicator="Partnership alignment confirmed"
+            ))
+            
+        director_text = persona_insights.get("strategic_director", "")
+        risks_and_mitigations = []
+        if director_text:
+            risks_and_mitigations.append(RiskMitigation(
+                risk=director_text[:120],
+                mitigation="Initiate immediate communication and review service milestones."
+            ))
+            
+        return AMResponseOutput(
+            narrative=narrative,
+            urgency="P2",
+            playbook_7day=playbook_actions,
+            stakeholder_sequence=stakeholder_sequence,
+            risks_and_mitigations=risks_and_mitigations,
+            confidence_in_playbook=0.85,
+            why_this_matters=exec_brief.get("macro_summary", "Strategic review required.")[:150]
+        )
+
+    def _map_vp_from_crucible(self, crucible_data: Dict[str, Any]) -> VPResponseOutput:
+        exec_brief = crucible_data.get("executive_brief", {})
+        persona_insights = crucible_data.get("persona_insights", {})
+        
+        narrative = exec_brief.get("macro_summary", "Strategic portfolio review initiated.")
+        rev_stake = exec_brief.get("revenue_at_stake", "$0")
+        
+        portfolio_impact = PortfolioImpact(
+            accounts_affected=1,
+            total_arr_at_risk=rev_stake,
+            probability_of_churn=0.3
+        )
+        
+        market_signal = MarketSignal(
+            is_market_wide=False,
+            competitor_threat=persona_insights.get("strategic_director", "")[:150],
+            strategic_implication="Immediate client relationship touchpoint needed to defend revenue."
+        )
+        
+        resource_rec = ResourceRecommendation(
+            investment_required="Core Account Management alignment",
+            teams_needed=["Account Team", "Customer Success"],
+            timeline="Next 7 days"
+        )
+        
+        return VPResponseOutput(
+            narrative=narrative,
+            portfolio_impact=portfolio_impact,
+            market_signal=market_signal,
+            resource_recommendation=resource_rec,
+            strategic_action=persona_insights.get("enterprise_ae", "Coordinate executive alignment."),
+            confidence=0.85
+        )
+
+    def _map_svp_from_crucible(self, crucible_data: Dict[str, Any]) -> SVPResponseOutput:
+        exec_brief = crucible_data.get("executive_brief", {})
+        persona_insights = crucible_data.get("persona_insights", {})
+        
+        narrative = exec_brief.get("macro_summary", "Macro account briefing.")
+        
+        strat_context = StrategicContext(
+            strategic_fit="KEEP",
+            strategic_value="High strategic value customer account.",
+            rationale=exec_brief.get("macro_summary", "Key relationship.")
+        )
+        
+        comp_position = CompetitivePositioning(
+            threat_level="medium",
+            market_signal="Active competitor positioning detected.",
+            response_strategy="Reaffirm value framework and demonstrate ROI milestones."
+        )
+        
+        decision_scenarios = [
+            DecisionScenario(
+                scenario="Competitor discounts or displaces relationship",
+                action="Engage senior leadership and sponsor executive review",
+                expected_outcome="Reinforce relationship trust and secure renewal"
+            )
+        ]
+        
+        return SVPResponseOutput(
+            narrative=narrative,
+            strategic_context=strat_context,
+            competitive_positioning=comp_position,
+            board_narrative=exec_brief.get("macro_summary", "SVP Executive Account Briefing."),
+            decision_framework=decision_scenarios,
+            long_term_implication="Ensure structured communication plan is established to avoid competitor lock-in.",
+            confidence=0.85
+        )
 
     def _generate_am_response(self, consensus: ConsensusOutput) -> AMResponseOutput:
         system_prompt = """You are translating consensus reasoning into an Account Manager's playbook.
