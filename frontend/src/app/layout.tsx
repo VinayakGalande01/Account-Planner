@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
+import { SidebarProvider } from '@/context/SidebarContext'
 import { DataProvider } from '@/context/DataContext'
 import { Toaster } from 'sonner'
 
@@ -52,9 +53,11 @@ export default function RootLayout({
     >
       <body className="font-sans antialiased bg-background">
         <AuthProvider>
-          <DataProvider>
-            {children}
-          </DataProvider>
+          <SidebarProvider>
+            <DataProvider>
+              {children}
+            </DataProvider>
+          </SidebarProvider>
         </AuthProvider>
         <Toaster theme="dark" position="top-center" />
         {process.env.NODE_ENV === 'production' && <Analytics />}

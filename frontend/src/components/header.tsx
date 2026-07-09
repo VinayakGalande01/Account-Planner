@@ -2,10 +2,12 @@
 
 import { motion } from 'framer-motion'
 import { usePathname } from 'next/navigation'
-import { Bell, Search, ChevronRight } from 'lucide-react'
+import { Bell, Search, ChevronRight, Menu } from 'lucide-react'
+import { useSidebar } from '@/context/SidebarContext'
 
 export function Header() {
   const pathname = usePathname()
+  const { isSidebarOpen, setSidebarOpen } = useSidebar()
 
   const getBreadcrumb = () => {
     if (pathname === '/') return { page: 'Dashboard', subtitle: 'Account Health' }
@@ -28,6 +30,17 @@ export function Header() {
       <div className="px-6 py-3.5 flex items-center justify-between gap-4">
         {/* Breadcrumbs */}
         <div className="flex items-center gap-2 text-xs">
+          {!isSidebarOpen && (
+            <motion.button
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              onClick={() => setSidebarOpen(true)}
+              className="mr-2 p-1.5 hover:bg-secondary/80 text-muted-foreground hover:text-foreground rounded-md transition-colors flex items-center justify-center"
+              title="Expand Sidebar"
+            >
+              <Menu className="w-4.5 h-4.5" />
+            </motion.button>
+          )}
           <span className="text-muted-foreground">APEX</span>
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
           <span className="text-foreground font-medium">{subtitle}</span>

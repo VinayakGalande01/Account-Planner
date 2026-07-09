@@ -10,6 +10,8 @@ import { ContractRenderer, FinalizedContractRenderer } from '@/components/apex-w
 import { parseResponseContract } from '@/utils/contractParser'
 import type { ResponseContract, RecommendedAction } from '@/types/responseContract'
 
+import { useSidebar } from '@/context/SidebarContext'
+
 interface Message {
   id: number;
   role: 'user' | 'assistant';
@@ -46,7 +48,7 @@ const initialMessages: Message[] = [
     id: 1,
     role: 'assistant',
     content: 'APEX is ready. Client list loaded. How can I help you today?',
-    timestamp: new Date(Date.now() - 5 * 60000),
+    timestamp: new Date(),
   },
 ]
 
@@ -59,9 +61,11 @@ const suggestedPrompts = [
 
 export default function IntelligencePage() {
   const { authFetch } = useAuth()
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
+  const { activeSessionId, loadSessions } = useSidebar()
+  const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isSessionLoading, setIsSessionLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   const handleActionClick = (action: RecommendedAction) => {
@@ -73,6 +77,51 @@ export default function IntelligencePage() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Load session messages when activeSessionId changes
+  useEffect(() => {
+    let active = true
+    const fetchSessionMessages = async () => {
+      if (!activeSessionId) return
+      setIsSessionLoading(true)
+      try {
+        const res = await authFetch(`/api/chat/sessions/${activeSessionId}/messages`)
+        if (res.ok && active) {
+          const data = await res.json()
+          if (Array.isArray(data) && data.length > 0) {
+            const formatted = data.map((msg: any) => ({
+              id: msg.id || Date.now(),
+              role: msg.role as 'user' | 'assistant',
+              content: msg.content,
+              timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+              contract: parseResponseContract(msg.content).isStructured ? parseResponseContract(msg.content) : undefined
+            }))
+            setMessages(formatted)
+          } else {
+            setMessages(initialMessages)
+          }
+        } else if (active) {
+          setMessages(initialMessages)
+        }
+      } catch (err) {
+        console.error('Error fetching session messages:', err)
+        if (active) {
+          setMessages(initialMessages)
+        }
+      } finally {
+        if (active) {
+          setIsSessionLoading(false)
+        }
+      }
+    }
+
+    if (mounted) {
+      fetchSessionMessages()
+    }
+    return () => {
+      active = false
+    }
+  }, [activeSessionId, mounted])
 
   const handleSendMessage = async (text = inputValue) => {
     if (!text.trim() || isLoading) return
@@ -97,7 +146,10 @@ export default function IntelligencePage() {
           'Content-Type': 'application/json',
           'x-llm-provider': provider
         },
-        body: JSON.stringify({ query: text }),
+        body: JSON.stringify({
+          query: text,
+          session_id: activeSessionId || 'default_session'
+        }),
       })
 
       if (!response.body) throw new Error('No stream body')
@@ -124,6 +176,11 @@ export default function IntelligencePage() {
           ? { ...msg, content: fullText, contract: contract.isStructured ? contract : undefined }
           : msg
       ))
+
+      // Refresh sidebar sessions to show generated title for the session
+      setTimeout(() => {
+        loadSessions()
+      }, 500)
     } catch (error) {
       setMessages((prev) => [...prev, {
         id: Date.now() + 1,
@@ -167,51 +224,58 @@ export default function IntelligencePage() {
               className="flex-1 bg-card border border-border rounded-lg p-5 mb-4 overflow-y-auto"
             >
               <div className="space-y-4 flex flex-col">
-                {messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full">
+                {isSessionLoading ? (
+                  <div className="flex items-center justify-center h-64">
                     <div className="text-center">
-                      <Brain className="w-12 h-12 text-primary/30 mx-auto mb-3" />
-                      <p className="text-muted-foreground">Start a conversation...</p>
+                      <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-3" />
+                      <p className="text-xs text-muted-foreground">Loading conversation history...</p>
                     </div>
                   </div>
-                ) : (
-                  messages.map((message, index) => (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`px-4 py-2 rounded-lg ${message.role === 'user'
-                            ? 'max-w-lg bg-primary text-primary-foreground'
-                            : 'max-w-3xl bg-secondary/50 text-foreground border border-border w-full'
-                          }`}
-                      >
-                        {message.role === 'assistant' ? (
-                          message.contract ? (
-                            <FinalizedContractRenderer contract={message.contract} onActionClick={handleActionClick} />
-                          ) : message.content.includes('__SECTION_') ? (
-                            <ContractRenderer content={message.content} isStreaming={isLoading && index === messages.length - 1} onActionClick={handleActionClick} />
-                          ) : (
-                            <div className="text-sm leading-relaxed">
-                              <RenderMessageLines content={message.content} />
-                              {isLoading && index === messages.length - 1 && (
-                                <span className="inline-block w-[2px] h-4 bg-primary ml-0.5 animate-pulse align-middle rounded-full" />
-                              )}
-                            </div>
-                          )
-                        ) : (
-                          <p className="text-sm">{message.content}</p>
-                        )}
-                        <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
-                          {mounted ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                        </p>
+                ) : messages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <Brain className="w-12 h-12 text-primary/30 mx-auto mb-3" />
+                        <p className="text-muted-foreground">Start a conversation...</p>
                       </div>
-                    </motion.div>
-                  ))
-                )}
+                    </div>
+                  ) : (
+                    messages.map((message, index) => (
+                      <motion.div
+                        key={message.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`px-4 py-2 rounded-lg ${message.role === 'user'
+                              ? 'max-w-lg bg-primary text-primary-foreground'
+                              : 'max-w-3xl bg-secondary/50 text-foreground border border-border w-full'
+                            }`}
+                        >
+                          {message.role === 'assistant' ? (
+                            message.contract ? (
+                              <FinalizedContractRenderer contract={message.contract} onActionClick={handleActionClick} />
+                            ) : message.content.includes('__SECTION_') ? (
+                              <ContractRenderer content={message.content} isStreaming={isLoading && index === messages.length - 1} onActionClick={handleActionClick} />
+                            ) : (
+                              <div className="text-sm leading-relaxed">
+                                <RenderMessageLines content={message.content} />
+                                {isLoading && index === messages.length - 1 && (
+                                  <span className="inline-block w-[2px] h-4 bg-primary ml-0.5 animate-pulse align-middle rounded-full" />
+                                )}
+                              </div>
+                            )
+                          ) : (
+                            <p className="text-sm">{message.content}</p>
+                          )}
+                          <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+                            {mounted ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
 
                 {isLoading && (
                   <motion.div

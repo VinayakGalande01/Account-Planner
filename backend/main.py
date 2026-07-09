@@ -1217,6 +1217,100 @@ def generate_deterministic_pipeline(engine, mode: str, format: str, query: str =
             why_this_matters=synthesis.why_this_matters if synthesis.why_this_matters else None
         )
 
+@app.get("/api/chat/sessions")
+async def get_chat_sessions(current_user: User = Depends(get_current_user)):
+    from database import SessionLocal
+    from models.crm_models import ChatSession, ChatMessage
+    from fastapi import HTTPException
+    
+    db_sess = SessionLocal()
+    db_sess.info["user_id"] = str(current_user.id)
+    try:
+        sessions = db_sess.query(ChatSession).filter(
+            ChatSession.user_id == current_user.id
+        ).order_by(ChatSession.created_at.desc()).all()
+        
+        result = []
+        for s in sessions:
+            first_msg = db_sess.query(ChatMessage).filter(
+                ChatMessage.session_id == s.id,
+                ChatMessage.user_id == current_user.id
+            ).order_by(ChatMessage.timestamp.asc()).first()
+            
+            title = "New Chat"
+            if first_msg:
+                title = first_msg.text[:25] + "..." if len(first_msg.text) > 25 else first_msg.text
+            
+            result.append({
+                "id": s.id,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "title": title
+            })
+        return result
+    except Exception as e:
+        print(f"Error listing chat sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db_sess.close()
+
+@app.get("/api/chat/sessions/{session_id}/messages")
+async def get_chat_messages(session_id: str, current_user: User = Depends(get_current_user)):
+    from database import SessionLocal
+    from models.crm_models import ChatMessage
+    from fastapi import HTTPException
+    
+    db_sess = SessionLocal()
+    db_sess.info["user_id"] = str(current_user.id)
+    try:
+        messages = db_sess.query(ChatMessage).filter(
+            ChatMessage.session_id == session_id,
+            ChatMessage.user_id == current_user.id
+        ).order_by(ChatMessage.timestamp.asc()).all()
+        
+        return [
+            {
+                "id": m.id,
+                "role": m.sender,
+                "content": m.text,
+                "timestamp": m.timestamp.isoformat() if m.timestamp else None
+            }
+            for m in messages
+        ]
+    except Exception as e:
+        print(f"Error fetching chat messages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db_sess.close()
+
+@app.delete("/api/chat/sessions/{session_id}")
+async def delete_chat_session(session_id: str, current_user: User = Depends(get_current_user)):
+    from database import SessionLocal
+    from models.crm_models import ChatSession
+    from fastapi import HTTPException
+    
+    db_sess = SessionLocal()
+    db_sess.info["user_id"] = str(current_user.id)
+    try:
+        chat_session = db_sess.query(ChatSession).filter(
+            ChatSession.id == session_id,
+            ChatSession.user_id == current_user.id
+        ).first()
+        
+        if not chat_session:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+            
+        db_sess.delete(chat_session)
+        db_sess.commit()
+        return {"status": "SUCCESS", "message": "Session deleted successfully"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Error deleting session: {e}")
+        db_sess.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db_sess.close()
+
 @app.post("/api/chat")
 @limiter.limit("30/minute")
 async def chat(request: Request, body: ChatRequest, current_user: User = Depends(get_current_user)):
