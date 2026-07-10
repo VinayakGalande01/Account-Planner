@@ -37,3 +37,12 @@ Thumbs.db
 backend/llm_cache.json
 backend/local_planner.db
 
+# Local Databases and Vector Indexes
+chroma_db/
+backend/chroma_db/
+local_planner.db
+
+# Backend temporary files and logs
+backend/logs/
+backend/server.log
+backend/stream.txt

@@ -70,6 +70,8 @@ export interface ResponseContract {
   recommendedActions: RecommendedAction[];
   /** Raw text content for fallback rendering */
   rawContent: string;
+  /** Pipeline breakdown details */
+  breakdown: { total_usd: number; breakdown: string[] } | null;
   /** Whether the response contains structured __SECTION_*__ tags */
   isStructured: boolean;
 }
@@ -86,6 +88,7 @@ export type SectionName =
   | 'TABLE_DATA'
   | 'TABLE'
   | 'SIGNALS'
+  | 'BREAKDOWN'
   | 'WHY_THIS_MATTERS'
   | 'ACTIONS'
   | 'CRM_HYGIENE'

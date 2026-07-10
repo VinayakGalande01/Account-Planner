@@ -210,6 +210,31 @@ class DataEngine:
             }
         }
 
+    def calculate_portfolio_health_score(self) -> float:
+        """Calculate weighted average health score across the entire portfolio."""
+        accounts = self.data.get('account')
+        if accounts is None or accounts.empty:
+            return 75.0
+            
+        total_score = 0
+        total_accounts = 0
+        
+        for _, row in accounts.iterrows():
+            acc_id = row['Account_ID']
+            try:
+                health_data = self.calculate_health_score(acc_id)
+                total_score += health_data.get("overall_score", 75.0)
+                total_accounts += 1
+            except Exception:
+                pass
+                
+        if total_accounts == 0:
+            return 75.0
+            
+        return round(total_score / total_accounts, 1)
+
+
+
     def calculate_risk_score(self, account_id: str):
         """MODULE 4: RISK DETECTION - Realistic implementation based on business guidelines"""
         accounts = self.data.get('account')

@@ -123,6 +123,9 @@ export default function IntelligencePage() {
     }
   }, [activeSessionId, mounted])
 
+  const [sessionId] = useState(() => Math.random().toString(36).substring(2, 15))
+  const [activeAccount, setActiveAccount] = useState<string | null>(null)
+
   const handleSendMessage = async (text = inputValue) => {
     if (!text.trim() || isLoading) return
 
@@ -148,11 +151,16 @@ export default function IntelligencePage() {
         },
         body: JSON.stringify({
           query: text,
-          session_id: activeSessionId || 'default_session'
+          session_id: activeSessionId || 'default_session',
+          active_account: activeAccount,
+          chat_history: messages.slice(-10).map(m => ({
+            role: m.role,
+            content: m.content
+          }))
         }),
       })
 
-      if (!response.body) throw new Error('No stream body')
+      if(!response.body) throw new Error('No stream body')
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder('utf-8')
@@ -166,6 +174,14 @@ export default function IntelligencePage() {
         if (done) break
         const chunk = decoder.decode(value, { stream: true })
         fullText += chunk
+
+        // Extract active account from meta log if available
+        if (chunk.includes('sys_meta_log|')) {
+          const match = fullText.match(/Active Account: (.*?)\n/);
+          if (match) {
+            setActiveAccount(match[1].trim());
+          }
+        }
 
         setMessages((prev) => prev.map(msg => msg.id === aiMessageId ? { ...msg, content: fullText } : msg))
       }
@@ -232,50 +248,50 @@ export default function IntelligencePage() {
                     </div>
                   </div>
                 ) : messages.length === 0 ? (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center">
-                        <Brain className="w-12 h-12 text-primary/30 mx-auto mb-3" />
-                        <p className="text-muted-foreground">Start a conversation...</p>
-                      </div>
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <Brain className="w-12 h-12 text-primary/30 mx-auto mb-3" />
+                      <p className="text-muted-foreground">Start a conversation...</p>
                     </div>
-                  ) : (
-                    messages.map((message, index) => (
-                      <motion.div
-                        key={message.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  </div>
+                ) : (
+                  messages.map((message, index) => (
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`px-4 py-2 rounded-lg ${message.role === 'user'
+                          ? 'max-w-lg bg-primary text-primary-foreground'
+                          : 'max-w-3xl bg-secondary/50 text-foreground border border-border w-full'
+                          }`}
                       >
-                        <div
-                          className={`px-4 py-2 rounded-lg ${message.role === 'user'
-                              ? 'max-w-lg bg-primary text-primary-foreground'
-                              : 'max-w-3xl bg-secondary/50 text-foreground border border-border w-full'
-                            }`}
-                        >
-                          {message.role === 'assistant' ? (
-                            message.contract ? (
-                              <FinalizedContractRenderer contract={message.contract} onActionClick={handleActionClick} />
-                            ) : message.content.includes('__SECTION_') ? (
-                              <ContractRenderer content={message.content} isStreaming={isLoading && index === messages.length - 1} onActionClick={handleActionClick} />
-                            ) : (
-                              <div className="text-sm leading-relaxed">
-                                <RenderMessageLines content={message.content} />
-                                {isLoading && index === messages.length - 1 && (
-                                  <span className="inline-block w-[2px] h-4 bg-primary ml-0.5 animate-pulse align-middle rounded-full" />
-                                )}
-                              </div>
-                            )
+                        {message.role === 'assistant' ? (
+                          message.contract ? (
+                            <FinalizedContractRenderer contract={message.contract} onActionClick={handleActionClick} />
+                          ) : message.content.includes('__SECTION_') ? (
+                            <ContractRenderer content={message.content} isStreaming={isLoading && index === messages.length - 1} onActionClick={handleActionClick} />
                           ) : (
-                            <p className="text-sm">{message.content}</p>
-                          )}
-                          <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
-                            {mounted ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                          </p>
-                        </div>
-                      </motion.div>
-                    ))
-                  )}
+                            <div className="text-sm leading-relaxed">
+                              <RenderMessageLines content={message.content} />
+                              {isLoading && index === messages.length - 1 && (
+                                <span className="inline-block w-[2px] h-4 bg-primary ml-0.5 animate-pulse align-middle rounded-full" />
+                              )}
+                            </div>
+                          )
+                        ) : (
+                          <p className="text-sm">{message.content}</p>
+                        )}
+                        <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+                          {mounted ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </p>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
 
                 {isLoading && (
                   <motion.div

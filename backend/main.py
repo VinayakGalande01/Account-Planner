@@ -4,13 +4,17 @@ from pydantic import BaseModel
 import os
 import sys
 
+# Force Hugging Face offline mode to prevent network hangs on import/initialization
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
 # Set stdout/stderr encoding to utf-8 to prevent Windows terminal cp1252 issues
 try:
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
 except AttributeError:
     pass # fallback for older python versions
-from typing import List, Optional
+from typing import List, Optional, Dict
 import httpx
 import json
 import asyncio
@@ -119,6 +123,22 @@ http_client = httpx.AsyncClient(timeout=httpx.Timeout(connect=3.0, read=1800.0, 
 async def shutdown_event():
     await http_client.aclose()
 
+@app.on_event("startup")
+async def startup_event():
+    """Pre-warm SentenceTransformer in a thread pool so the first user
+    query does not block the event loop."""
+    import asyncio
+    from intent_classifier import IntentClassifier
+    def _warmup():
+        try:
+            print("[STARTUP] Pre-warming semantic router (SentenceTransformer)...")
+            router = IntentClassifier(is_local=True)
+            router._init_embeddings()
+            print("[STARTUP] Semantic router warmed up successfully.")
+        except Exception as e:
+            print(f"[STARTUP WARNING] Router warm-up failed (non-fatal): {e}")
+    await asyncio.get_event_loop().run_in_executor(None, _warmup)
+
 DATA_PATH = os.getenv("DATA_PATH", "")
 if not DATA_PATH or not os.path.exists(DATA_PATH):
     # Two custom data paths for dynamic local developer environments
@@ -213,7 +233,9 @@ def normalize_url(url: str) -> str:
     rest = re.sub(r'/+', '/', rest)
     return f"{scheme}://{rest}"
 
-LLM_URL = normalize_url(os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate"))
+LLM_URL = normalize_url(os.getenv("LLM_URL", ""))
+if not LLM_URL:
+    raise RuntimeError("[STARTUP ERROR] LLM_URL is not set in .env. Please configure it before starting the server.")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2:latest")
 
 print("\n=============================================")
@@ -225,6 +247,8 @@ print("=============================================\n")
 class ChatRequest(BaseModel):
     query: str
     session_id: Optional[str] = "default_session"
+    active_account: Optional[str] = None
+    chat_history: Optional[List[Dict[str, str]]] = []
     response_format: Optional[str] = "markdown"  # "markdown" or "json"
     response_mode: Optional[str] = "operational"  # "executive", "operational", "analyst"
 
@@ -1343,18 +1367,23 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
         db_history = db_sess.query(ChatMessage).filter(
             ChatMessage.session_id == session_id,
             ChatMessage.user_id == current_user.id
-        ).order_by(ChatMessage.timestamp.desc()).limit(2).all()
+        ).order_by(ChatMessage.timestamp.desc()).limit(10).all()
         for msg in reversed(db_history):
+            text = msg.text or ""
+            if msg.sender == "assistant" and "__SECTION_" in text:
+                import re
+                match = re.search(r'__SECTION_(?:SUMMARY|HEADLINE)__\n(.*?)(?=__SECTION_|\Z)', text, re.DOTALL)
+                text = match.group(1).strip() if match else text[:300]
             chat_history.append({
                 "sender": msg.sender,
-                "text": msg.text
+                "text": text
             })
     except Exception as e:
         print(f"  [WARNING] Database error retrieving chat history: {e}")
     finally:
         db_sess.close()
 
-    async def generate_stream():
+    async def _generate_stream_impl():
         start_time = asyncio.get_event_loop().time()
 
         yield "sys_meta_log|[SYS_LOG] Initializing Account Planning Agent...\n\n"
@@ -1396,7 +1425,8 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
                     query=body.query,
                     user_role="sales", # Default
                     recipient_roles=[target_role],
-                    history=chat_history
+                    history=body.chat_history if body.chat_history else chat_history,
+                    active_account=body.active_account
                 )
             )
             
@@ -1409,36 +1439,13 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
             
             res = query_task.result()
             
-            # Save chat history to database
-            db_save = SessionLocal()
-            db_save.info["user_id"] = str(current_user.id)
-            try:
-                user_msg = ChatMessage(session_id=session_id, sender="user", text=body.query, user_id=current_user.id)
-                db_save.add(user_msg)
-                
-                # Determine narrative reply text
-                narrative_reply = ""
-                if res.get("status") == "SUCCESS":
-                    resp_role = res.get("responses", {}).get(target_role)
-                    if resp_role:
-                        narrative_reply = resp_role.get("narrative", "") if isinstance(resp_role, dict) else getattr(resp_role, "narrative", "")
-                elif res.get("status") == "DATA_ONLY_LOCAL":
-                    opps_count = len(res.get("data", {}).get("opportunities", []))
-                    narrative_reply = f"Data summary: {opps_count} opportunities retrieved locally."
-                elif res.get("status") == "INTENT_LOW_CONFIDENCE":
-                    opps_count = len(res.get("data", {}).get("opportunities", []))
-                    narrative_reply = f"Intent confidence low: showing {opps_count} opportunities."
-                
-                if narrative_reply:
-                    assistant_msg = ChatMessage(session_id=session_id, sender="assistant", text=narrative_reply, user_id=current_user.id)
-                    db_save.add(assistant_msg)
-                
-                db_save.commit()
-            except Exception as save_err:
-                print(f"  [WARNING] Failed to save chat history: {save_err}")
-                db_save.rollback()
-            finally:
-                db_save.close()
+            # Yield active account for frontend tracking
+            resolved_account = res.get("account_data", {}).get("account_name")
+            if resolved_account and resolved_account != "Global Portfolio View":
+                yield f"sys_meta_log|Active Account: {resolved_account}\n\n"
+                await asyncio.sleep(0.05)
+            
+            # Database save logic moved to the outer wrapper function to capture full streamed payload
 
             
             # # OLD LOW_CONFIDENCE PATH (Commented down)
@@ -1514,22 +1521,12 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
                 actions += "2. Validate opportunity stages in CRM\n"
                 actions += "3. For full strategic analysis, use cloud deployment\n"
                 yield f"__SECTION_ACTIONS__ {actions}\n"
-                
-                # 6. CRM HYGIENE
-                if data_quality.limiting_factors:
-                    hygiene = "\n".join([f"• {f}" for f in data_quality.limiting_factors])
-                    yield f"__SECTION_CRM_HYGIENE__ Data Quality Issues:\n{hygiene}\n"
-                
-                # 7. CONFIDENCE
-                confidence_pct = int(data_quality.overall_sufficiency * 100)
-                yield f"__SECTION_CONFIDENCE__ Grounding: {confidence_pct}%\n"
-                
-                # 8. RECOMMENDED ACTIONS (Copilot chips)
+                          # 8. RECOMMENDED ACTIONS (Copilot chips)
                 try:
                     from recommended_actions import generate_recommended_actions, serialize_recommended_actions
                     rec_actions = generate_recommended_actions(
                         intent=res.get("intent"),
-                        query=request.query,
+                        query=body.query,
                         account_data=data,
                     )
                     if rec_actions:
@@ -1539,7 +1536,7 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
                 
                 yield "__SECTION_END__\n"
                 return
-
+ 
             if res["status"] == "INTENT_LOW_CONFIDENCE":
                 yield "sys_meta_log|[SYS_LOG] Intent confidence too low. Returning data summary only.\n\n"
                 await asyncio.sleep(0.05)
@@ -1560,7 +1557,7 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
                     from recommended_actions import generate_recommended_actions, serialize_recommended_actions
                     rec_actions = generate_recommended_actions(
                         intent=res.get("intent"),
-                        query=request.query,
+                        query=body.query,
                         account_data=data,
                     )
                     if rec_actions:
@@ -1600,7 +1597,7 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
                         "target_accounts": [res.get("account_data", {}).get("account_name", "")]
                     }
                 }
-                table_data = compute_table_for_intent(engine, intent, account_id, request.query, p1_json)
+                table_data = compute_table_for_intent(user_engine, intent, account_id, body.query, p1_json)
                 if table_data:
                     yield f"__SECTION_TABLE_DATA__\n{json.dumps(table_data)}\n"
             except Exception as e:
@@ -1614,7 +1611,8 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
                 consensus=consensus,
                 data_sufficiency_score=data_sufficiency_score,
                 intent=res["intent"].intent,
-                complexity=res["intent"].complexity
+                complexity=res["intent"].complexity,
+                pipeline_breakdown=res.get("account_data", {}).get("pipeline_breakdown")
             )
             
             # Stream the complete mapped contract
@@ -1648,6 +1646,30 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
             yield "__SECTION_END__"
         finally:
             generator_db.close()
+
+    async def generate_stream():
+        _contract_chunks = []
+        async for chunk in _generate_stream_impl():
+            yield chunk
+            if isinstance(chunk, str) and not chunk.startswith("sys_meta_log|"):
+                _contract_chunks.append(chunk)
+        
+        full_contract = "".join(_contract_chunks)
+        db_save = SessionLocal()
+        db_save.info["user_id"] = str(current_user.id)
+        try:
+            user_msg = ChatMessage(session_id=session_id, sender="user", text=body.query, user_id=current_user.id)
+            db_save.add(user_msg)
+            if full_contract.strip():
+                assistant_msg = ChatMessage(session_id=session_id, sender="assistant", text=full_contract, user_id=current_user.id)
+                db_save.add(assistant_msg)
+            db_save.commit()
+            print(f"[DB SAVE] Saved full contract ({len(full_contract)} chars) to session {session_id}")
+        except Exception as save_err:
+            print(f"  [WARNING] Failed to save chat history: {save_err}")
+            db_save.rollback()
+        finally:
+            db_save.close()
 
     return StreamingResponse(
         generate_stream(),

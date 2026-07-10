@@ -14,13 +14,18 @@ class SectionContractMapper:
         consensus: ConsensusOutput,
         data_sufficiency_score: float,
         intent: str = "ACTION_RECOMMENDATION_QUERY",
-        complexity: str = "EXECUTIVE"
+        complexity: str = "EXECUTIVE",
+        pipeline_breakdown: Optional[dict] = None
     ) -> str:
         """
         Maps the structured output and consensus into the exact section tags 
         the frontend parser expects based on the complexity level.
         """
         parts = []
+
+        if pipeline_breakdown and pipeline_breakdown.get("breakdown"):
+            breakdown_str = json.dumps(pipeline_breakdown)
+            parts.append(f"__SECTION_BREAKDOWN__\n{breakdown_str}")
 
         # 0. Intent (Common to all)
         parts.append(f"__SECTION_INTENT__\n{intent}")

@@ -25,6 +25,8 @@ class IntentEnum(str, Enum):
     RELATIONSHIP_ANALYSIS = "relationship_analysis"
     ACTION_RECOMMENDATION = "action_recommendation"
     PIPELINE_SUMMARY = "pipeline_summary"
+    DRAFT_EMAIL = "draft_email"
+    MEETING_AGENDA = "meeting_agenda"
 
 class ExtractedEntities(BaseModel):
     account: Optional[str] = None
@@ -47,13 +49,21 @@ class IntentClassificationOutput(BaseModel):
     target_entities: List[str] = []
 
 class RouterOutput(BaseModel):
-    intent: Literal["ACT_REVIEW", "RISK_TRIAGE", "DEAL_VELOCITY"]
+    intent: Literal["ACT_REVIEW", "RISK_TRIAGE", "DEAL_VELOCITY", "DRAFT_EMAIL", "MEETING_AGENDA"]
     complexity: Literal["TACTICAL", "STRATEGIC", "EXECUTIVE"]
     target_entity: Optional[str] = None
     focus_area: Optional[str] = None
 
 # Seed queries for deterministic embedding lookup
 SEED_QUERIES = [
+    # DRAFT_EMAIL
+    {"query": "draft an email to", "intent": "DRAFT_EMAIL", "complexity": "TACTICAL", "primary_intent": IntentEnum.DRAFT_EMAIL},
+    {"query": "write an email", "intent": "DRAFT_EMAIL", "complexity": "TACTICAL", "primary_intent": IntentEnum.DRAFT_EMAIL},
+    
+    # MEETING_AGENDA
+    {"query": "create a meeting agenda", "intent": "MEETING_AGENDA", "complexity": "TACTICAL", "primary_intent": IntentEnum.MEETING_AGENDA},
+    {"query": "prepare an agenda", "intent": "MEETING_AGENDA", "complexity": "TACTICAL", "primary_intent": IntentEnum.MEETING_AGENDA},
+    
     # ACT_REVIEW
     {"query": "strategic account plan for Wipro", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
     {"query": "playbook for Wipro", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
@@ -96,14 +106,14 @@ class IntentClassifier:
         if self.embedding_model is None and SENTENCE_TRANSFORMERS_AVAILABLE:
             try:
                 print("[Router] Initializing SentenceTransformer model...")
-                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
                 queries = [q["query"] for q in SEED_QUERIES]
                 self.seed_embeddings = self.embedding_model.encode(queries)
                 print(f"[Router] Successfully cached {len(queries)} seed embeddings.")
             except Exception as e:
                 print(f"Warning: Failed to load SentenceTransformer for fast router: {e}")
 
-    def classify(self, query: str, history: Optional[List[Dict[str, str]]] = None, user_role: str = "Account Manager") -> IntentClassificationOutput:
+    def classify(self, query: str, history: Optional[List[Dict[str, str]]] = None, user_role: str = "Account Manager", active_account: Optional[str] = None) -> IntentClassificationOutput:
         """Classify query using Hybrid Semantic-Symbolic routing."""
         
         query_lower = query.lower()
@@ -116,22 +126,28 @@ class IntentClassifier:
         primary_intent_val = self._detect_intent(query_lower)
         confidence_val = self._calculate_confidence(query_lower, primary_intent_val)
         
-        # Check for Conversational Greetings first
-        GREETING_PATTERN = r"\b(hello|hi|hey|what's up|howdy|anyone there|how are you|can you help)\b"
-        if re.search(GREETING_PATTERN, query_lower):
-            domain_terms = ["opp", "opportunity", "opportunities", "forecast", "pipeline", "stalled", "stalling", "contact", "decision maker", "action plan", "playbook", "blocker", "cases", "risk", "deal"]
-            if not any(t in query_lower for t in domain_terms):
-                return IntentClassificationOutput(
-                    primary_intent=IntentEnum.ACTION_RECOMMENDATION,
-                    confidence_primary=1.0,
-                    extracted_entities=ExtractedEntities(),
-                    urgency="medium",
-                    scope="MIXED",
-                    intent="GREETING",
-                    complexity="CONVERSATIONAL",
-                    target_entities=[],
-                    context_summary="Conversational greeting"
-                )
+        # Check for Conversational Greetings and Chitchat first
+        GREETING_PATTERN = r"\b(hello|hi|hey|what's up|howdy|anyone there|how are you|can you help|good morning|good afternoon|good evening|thanks|thank you|bye|goodbye)\b"
+        OFF_TOPIC_SIGNALS = ["joke", "capital of", "who won", "weather", "news", "sport", "movie", "tell me about yourself", "what can you do"]
+        CRM_DOMAIN_TERMS = ["opp", "opportunity", "opportunities", "forecast", "pipeline", "stalled", "contact", "decision maker", "action plan", "playbook", "blocker", "cases", "risk", "deal", "account", "revenue", "stakeholder", "ticket", "case", "close"]
+
+        is_greeting = bool(re.search(GREETING_PATTERN, query_lower))
+        is_off_topic = any(sig in query_lower for sig in OFF_TOPIC_SIGNALS)
+        has_crm_context = any(t in query_lower for t in CRM_DOMAIN_TERMS)
+
+        if (is_greeting or is_off_topic) and not has_crm_context:
+            chitchat_intent = "GREETING" if is_greeting else "CHITCHAT"
+            return IntentClassificationOutput(
+                primary_intent=IntentEnum.ACTION_RECOMMENDATION,
+                confidence_primary=1.0,
+                extracted_entities=ExtractedEntities(),
+                urgency="low",
+                scope="MIXED",
+                intent=chitchat_intent,
+                complexity="CONVERSATIONAL",
+                target_entities=[],
+                context_summary=f"Conversational: {chitchat_intent}"
+            )
 
         # ═══════════════════════════════════════════════════════════════
         # STEP 1: Deterministic Fast-Lane (Embeddings Cosine Similarity)
@@ -242,12 +258,16 @@ Output: {"intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "target_entity": "Wi
                 if filtered_words:
                     target_entities_val.append(" ".join(filtered_words))
         
-        # Carrying over active account from history if pronouns are used
-        if not target_entities_val and history:
-            pronouns = ["he", "she", "they", "them", "their", "that account", "it", "him", "her"]
-            if any(re.search(r'\b' + re.escape(p) + r'\b', query_lower) for p in pronouns):
+        # Carrying over active account from history if no account is specified and query is not global
+        if not target_entities_val:
+            global_indicators = ["portfolio", "all accounts", "across accounts", "every account", "entire portfolio", "global", "high risk accounts", "top opportunities"]
+            is_global = any(indicator in query_lower for indicator in global_indicators)
+            
+            if not is_global and active_account:
+                target_entities_val.append(active_account)
+            elif not is_global and history:
                 for msg in reversed(history):
-                    msg_text = msg.get("text", "").lower()
+                    msg_text = msg.get("content", msg.get("text", "")).lower()
                     found_acc = None
                     if self.known_accounts:
                         for acc in self.known_accounts:
@@ -274,8 +294,8 @@ Output: {"intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "target_entity": "Wi
             context_summary=f"APEX Router: {intent_val} ({complexity_val})"
         )
 
-    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 1500) -> str:
-        url = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 60) -> str:
+        url = os.getenv("LLM_URL", "")
         model = os.getenv("MODEL_NAME", "llama3.2:latest")
         
         if not self.is_local:

@@ -190,3 +190,156 @@
     @apply font-sans;
   }
 }
+
+@layer utilities {
+  .apex-recommended-actions {
+    margin-top: 20px;
+    padding-top: 12px;
+  }
+  
+  .apex-recommended-actions-divider {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05), transparent);
+    margin-bottom: 16px;
+  }
+  
+  .apex-recommended-actions-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  
+  .apex-action-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 13px;
+    color: rgb(212, 212, 216);
+    cursor: pointer;
+    transition: all 300ms ease-out;
+    white-space: nowrap;
+    font-family: var(--font-sans), sans-serif;
+    line-height: 1.5;
+  }
+  
+  .apex-action-chip:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.03);
+  }
+  
+  .apex-action-chip--high {
+    border-color: rgba(245, 158, 11, 0.3);
+    background-color: rgba(245, 158, 11, 0.03);
+    color: rgba(254, 243, 199, 0.9);
+  }
+  
+  .apex-action-chip--high:hover {
+    border-color: rgba(251, 191, 36, 0.5);
+    background-color: rgba(245, 158, 11, 0.06);
+    color: #fffbeb;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.08);
+  }
+  
+  .apex-action-chip-icon {
+    font-size: 12px;
+    font-family: var(--font-mono), monospace;
+    opacity: 0.8;
+    flex-shrink: 0;
+  }
+
+  /* Table Container */
+  .apex-widget-table {
+    margin: 12px 0;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.015);
+  }
+
+  /* Data grid */
+  .apex-data-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    font-family: var(--font-sans), sans-serif;
+  }
+
+  /* Headers */
+  .apex-data-grid thead tr {
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .apex-data-grid th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(161, 161, 170, 0.8);
+    white-space: nowrap;
+    font-family: var(--font-mono), monospace;
+  }
+
+  /* Rows */
+  .apex-data-grid tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    transition: background 150ms ease;
+  }
+
+  .apex-data-grid tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .apex-data-grid tbody tr:hover {
+    background: rgba(255, 255, 255, 0.025);
+  }
+
+  /* Cells */
+  .apex-data-grid td {
+    padding: 10px 14px;
+    color: rgba(228, 228, 231, 0.85);
+    vertical-align: middle;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Table Footer */
+  .apex-table-footer {
+    padding: 8px 14px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.01);
+  }
+
+  /* Table block wrapper card */
+  .apex-section-block:has(.apex-widget-table) {
+    background: rgba(255, 255, 255, 0.008);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  /* Section Labels */
+  .apex-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(161, 161, 170, 0.6);
+    margin-bottom: 8px;
+    font-family: var(--font-mono), monospace;
+  }
+}

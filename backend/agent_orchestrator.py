@@ -53,7 +53,7 @@ class DataRetrieval:
         if acc_row.empty:
             acc_id = None
             acc_name = acc_name or "Global Portfolio View"
-            health_score = 75.0
+            health_score = self.engine.calculate_portfolio_health_score()
         else:
             acc_id = str(acc_row.get('Account_ID', ''))
             acc_name = str(acc_row.get('Account_Name', ''))
@@ -120,6 +120,15 @@ class DataRetrieval:
                     "date": str(r.get('Activity_Date', ''))
                 })
                 
+        pipeline_breakdown = {}
+        if opps_list:
+            pipeline_breakdown = {
+                "total_usd": sum(o.get("amount_usd", 0.0) for o in opps_list),
+                "breakdown": [
+                    f"{o['opp_name']}: ${o['amount_usd']:,.0f}" for o in opps_list
+                ]
+            }
+
         return {
             "account_id": acc_id,
             "account_name": acc_name,
@@ -127,7 +136,8 @@ class DataRetrieval:
             "opportunities": opps_list,
             "contacts": contacts_list,
             "activities": activities_list,
-            "cases": cases_list
+            "cases": cases_list,
+            "pipeline_breakdown": pipeline_breakdown
         }
 
     def get_market_context(self) -> Dict[str, Any]:
@@ -218,14 +228,15 @@ class AccountPlanningAgent:
         query: str,
         user_role: str,
         recipient_roles: List[str] = ["am"],
-        history: Optional[List[Dict[str, str]]] = None
+        history: Optional[List[Dict[str, str]]] = None,
+        active_account: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         End-to-end account planning query processing.
         """
         # LAYER 1: Intent Classification
         print("[Layer 1] Classifying intent...")
-        intent = self.intent_classifier.classify(query, history, user_role)
+        intent = self.intent_classifier.classify(query, history, user_role, active_account)
         try:
             intent_data = intent.model_dump()
         except AttributeError:
@@ -238,11 +249,17 @@ class AccountPlanningAgent:
             import httpx
             
             system_prompt = (
-                "You are a friendly, experienced Account Planning expert. Welcome the user, "
-                "introduce your capabilities (account planning, growth strategies, stakeholder maps, "
-                "pipeline reviews) naturally, and encourage them to share details about their accounts, "
-                "goals, or challenges. Keep the interaction lightweight, human, and conversational (under 60 words). "
-                "Do not mention fallback logic, routing layers, or system internals."
+                "You are the APEX Account Planning AI Assistant — an expert strictly focused on "
+                "sales account planning, deal pipelines, stakeholder maps, opportunity reviews, "
+                "and customer support case management. "
+                "Rules you must never break: "
+                "1. If the user greets you, welcome them warmly and ask how you can help them "
+                "analyze accounts, pipelines, or deals today. "
+                "2. If the user says anything unrelated to account planning (jokes, general knowledge, "
+                "sports, weather, personal questions), politely decline to answer it and gently "
+                "guide them back to an account planning task. "
+                "3. Never break character. Never answer off-topic questions. "
+                "Keep all responses under 60 words. Be warm, professional, and helpful."
             )
             user_prompt = f"The user says: '{query}'. Respond to them naturally."
             
@@ -356,6 +373,59 @@ class AccountPlanningAgent:
             account_data = self.data_retrieval.expand_scope(account_data)
             print(f"[Layer 2 Input - Expanded Scope] Updated Account Data: {account_data}")
         
+        # Fast path for explicit generation tasks (Email, Agenda)
+        if intent.intent in ["DRAFT_EMAIL", "MEETING_AGENDA"]:
+            print(f"[Governance] {intent.intent} detected: Running targeted fast-path generation.")
+            import httpx
+            import json
+            
+            task_name = "email draft" if intent.intent == "DRAFT_EMAIL" else "meeting agenda"
+            system_prompt = (
+                f"You are a sales assistant. Create a professional {task_name} based on the provided account data. "
+                "Keep it concise, actionable, and grounded in the data. Output ONLY the drafted content."
+            )
+            user_prompt = f"User Request: {query}\n\nAccount Data: {json.dumps(account_data, indent=2)}"
+            
+            generated_content = ""
+            try:
+                payload = {
+                    "model": self.response_generator.model,
+                    "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}",
+                    "stream": False,
+                    "options": { "temperature": 0.5, "num_predict": 500 }
+                }
+                with httpx.Client(timeout=httpx.Timeout(20.0)) as client:
+                    response = client.post(self.response_generator.url, json=payload)
+                    if response.status_code == 200:
+                        generated_content = response.json().get("response", "").strip()
+            except Exception as e:
+                print(f"[Warning] Fast path generation failed: {e}")
+                
+            if not generated_content:
+                generated_content = f"Could not generate {task_name}. Please try again."
+                
+            # Synthesize a fast response
+            intent.complexity = "FACTUAL"
+            consensus = self.reasoning_engine.run_reasoning_threads(
+                account_data=account_data,
+                market_context={},
+                complexity="FACTUAL"
+            )
+            
+            responses = {role: {"narrative": generated_content, "why_this_matters": f"Generated {task_name} based on CRM context."} for role in recipient_roles}
+            
+            return {
+                "status": "SUCCESS",
+                "intent": intent,
+                "consensus": consensus,
+                "responses": responses,
+                "data_quality_score": data_quality_pct,
+                "confidence": 1.0,
+                "raw_reasoning_bucket": {},
+                "raw_response_bucket": {},
+                "account_data": account_data
+            }
+
         # Check if FACTUAL complexity
         if intent.complexity == "FACTUAL":
             print("[Governance] Resolving FACTUAL query directly in Python.")
@@ -432,7 +502,8 @@ class AccountPlanningAgent:
             total_timeout=600,
             local=self.is_local,
             complexity=intent.complexity,
-            requested_count=requested_count
+            requested_count=requested_count,
+            history=history
         )
         
         # Cap reasoning confidence scores based on data sufficiency

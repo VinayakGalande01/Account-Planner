@@ -88,6 +88,31 @@ const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
     </div>
   ),
 
+  BREAKDOWN: (content) => {
+    try {
+      const data = JSON.parse(content);
+      if (!data || !data.breakdown || data.breakdown.length === 0) return null;
+      return (
+        <div className="apex-breakdown bg-zinc-900/40 border border-white/5 rounded-xl p-4 my-3">
+          <div className="text-[11px] text-zinc-400 uppercase font-semibold tracking-wider mb-3 font-[family-name:var(--font-mono)] flex items-center justify-between">
+            <span>Pipeline Breakdown</span>
+            <span className="text-emerald-400 font-bold">${(data.total_usd || 0).toLocaleString()}</span>
+          </div>
+          <ul className="space-y-1.5">
+            {data.breakdown.map((item: string, i: number) => (
+              <li key={i} className="text-[13px] text-zinc-300 flex items-center gap-2">
+                <span className="w-1 h-1 rounded-full bg-zinc-600"></span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    } catch {
+      return null;
+    }
+  },
+
   ACTIONS: (content) => {
     const actions = content
       .split('\n')
@@ -172,25 +197,26 @@ export function ContractRenderer({ content, isStreaming, onActionClick }: Contra
   const tableReady = hasTableData && (!isStreaming || (headlineDone && summaryDone));
   const showTableSkeleton = isStreaming && !tableReady && (headlineDone || summaryDone || hasTableData);
 
-  const renderedSections: React.ReactNode[] = [];
+  const narrativeSections: React.ReactNode[] = [];
+  const dataSections: React.ReactNode[] = [];
+  const actionSections: React.ReactNode[] = [];
 
-  // Phase 1: Meta logs
-  if (metaLogs.length > 0) {
-    renderedSections.push(
-      <div key="apex-meta-logs" className="space-y-1 mb-2">
-        {metaLogs.map((log, i) => (
-          <div key={i} className="text-[12px] text-zinc-600 font-bold tracking-widest my-1 uppercase font-[family-name:var(--font-mono)]">
-            {log}
-          </div>
-        ))}
-      </div>
-    );
-  }
+  const getTargetGroup = (sectionName: string) => {
+    if (['HEADLINE', 'SUMMARY', 'DIRECT_ANSWER', 'EXECUTIVE_SUMMARY'].includes(sectionName)) {
+      return narrativeSections;
+    }
+    if (['ACTIONS', 'CRM_HYGIENE', 'CONFIDENCE', 'RECOMMENDED_ACTIONS'].includes(sectionName)) {
+      return actionSections;
+    }
+    return dataSections;
+  };
 
   // Phase 2: Sections in visual priority order
   for (const section of SECTION_RENDER_ORDER) {
     // INTENT is metadata, never rendered
     if (section === 'INTENT') continue;
+
+    const targetGroup = getTargetGroup(section);
 
     // ── Table sections (special choreography) ──────────────
     if (section === 'TABLE_DATA' || section === 'TABLE') {
@@ -203,7 +229,7 @@ export function ContractRenderer({ content, isStreaming, onActionClick }: Contra
         const sectionType = completedSections.has('TABLE_DATA') ? 'TABLE_DATA' : 'TABLE';
         const renderer = WIDGET_REGISTRY[sectionType];
         if (renderer && tableContent) {
-          renderedSections.push(
+          targetGroup.push(
             <div key="apex-table" className="apex-section-block animate-slide-up">
               {renderer(tableContent)}
             </div>
@@ -211,14 +237,14 @@ export function ContractRenderer({ content, isStreaming, onActionClick }: Contra
         }
       } else if (showTableSkeleton && section === 'TABLE_DATA') {
         // Show skeleton placeholder (tables NEVER stream row-by-row)
-        renderedSections.push(
+        targetGroup.push(
           <div key="apex-table-skeleton" className="apex-section-block">
             <TableSkeleton />
           </div>
         );
       } else if (activeSection === 'TABLE_DATA' || activeSection === 'TABLE') {
         // Table data is the active section (still arriving)
-        renderedSections.push(
+        targetGroup.push(
           <div key="apex-table-skeleton" className="apex-section-block">
             <TableSkeleton />
           </div>
@@ -233,7 +259,7 @@ export function ContractRenderer({ content, isStreaming, onActionClick }: Contra
         const raContent = completedSections.get('RECOMMENDED_ACTIONS')!;
         try {
           const actions = JSON.parse(raContent);
-          renderedSections.push(
+          targetGroup.push(
             <div key="apex-RECOMMENDED_ACTIONS" className="apex-section-block animate-slide-up">
               <RecommendedActionsWidget actions={actions} onActionClick={onActionClick} />
             </div>
@@ -250,7 +276,7 @@ export function ContractRenderer({ content, isStreaming, onActionClick }: Contra
       const sectionContent = completedSections.get(section)!;
       const renderer = WIDGET_REGISTRY[section];
       if (renderer && sectionContent) {
-        renderedSections.push(
+        targetGroup.push(
           <div key={`apex-${section}`} className="apex-section-block animate-slide-up">
             {renderer(sectionContent)}
           </div>
@@ -263,7 +289,7 @@ export function ContractRenderer({ content, isStreaming, onActionClick }: Contra
     if (section === activeSection && activeSectionContent.trim()) {
       const renderer = WIDGET_REGISTRY[section];
       if (renderer) {
-        renderedSections.push(
+        targetGroup.push(
           <div key={`apex-${section}`} className="apex-section-block">
             {renderer(activeSectionContent.trim())}
             {isStreaming && (
@@ -275,7 +301,28 @@ export function ContractRenderer({ content, isStreaming, onActionClick }: Contra
     }
   }
 
-  return <div className="apex-contract-response space-y-3">{renderedSections}</div>;
+  return (
+    <div className="apex-contract-response">
+      {metaLogs.length > 0 && (
+        <div className="space-y-1 mb-2">
+          {metaLogs.map((log, i) => (
+            <div key={i} className="text-[12px] text-zinc-600 font-bold tracking-widest my-1 uppercase font-[family-name:var(--font-mono)]">
+              {log}
+            </div>
+          ))}
+        </div>
+      )}
+      {narrativeSections.length > 0 && (
+        <div className="space-y-2">{narrativeSections}</div>
+      )}
+      {dataSections.length > 0 && (
+        <div className="mt-3 space-y-3">{dataSections}</div>
+      )}
+      {actionSections.length > 0 && (
+        <div className="mt-4 space-y-2">{actionSections}</div>
+      )}
+    </div>
+  );
 }
 
 // ── Finalized Contract Renderer ─────────────────────────────
@@ -297,78 +344,116 @@ interface FinalizedRendererProps {
 export function FinalizedContractRenderer({ contract, onActionClick }: FinalizedRendererProps) {
   if (!contract.isStructured) return null;
 
+  const narrativeSections: React.ReactNode[] = [];
+  const dataSections: React.ReactNode[] = [];
+  const actionSections: React.ReactNode[] = [];
+
+  if (contract.directAnswer) {
+    narrativeSections.push(
+      <div key="directAnswer" className="apex-section-block">
+        <div className="apex-direct-answer bg-primary/[0.04] border border-primary/10 p-4 rounded-xl mb-1">
+          <p className="text-[14px] text-zinc-800 dark:text-zinc-200 leading-[1.7] font-[family-name:var(--font-inter)]">
+            {renderInlineMarkdown(contract.directAnswer)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (contract.headline) {
+    narrativeSections.push(
+      <div key="headline" className="apex-section-block">
+        <HeadlineWidget content={contract.headline} />
+      </div>
+    );
+  }
+  if (contract.executiveSummary) {
+    narrativeSections.push(
+      <div key="executiveSummary" className="apex-section-block">
+        {WIDGET_REGISTRY['EXECUTIVE_SUMMARY'](contract.executiveSummary)}
+      </div>
+    );
+  }
+  if (contract.summary) {
+    narrativeSections.push(
+      <div key="summary" className="apex-section-block">
+        <SummaryWidget content={contract.summary} />
+      </div>
+    );
+  }
+  if (contract.tableData) {
+    dataSections.push(
+      <div key="tableData" className="apex-section-block">
+        <TableWidget data={contract.tableData} />
+      </div>
+    );
+  }
+  if (contract.tableMarkdown && !contract.tableData) {
+    dataSections.push(
+      <div key="tableMarkdown" className="apex-section-block">
+        <TableMarkdownWidget content={contract.tableMarkdown} />
+      </div>
+    );
+  }
+  if (contract.signals.length > 0) {
+    dataSections.push(
+      <div key="signals" className="apex-section-block">
+        <SignalsWidget signals={contract.signals} />
+      </div>
+    );
+  }
+  if (contract.whyThisMatters) {
+    dataSections.push(
+      <div key="whyThisMatters" className="apex-section-block">
+        <div className="apex-why-this-matters border border-violet-500/10 bg-violet-950/8 p-4 rounded-xl my-2">
+          <div className="text-[11px] font-semibold text-violet-400 uppercase tracking-widest mb-2 font-[family-name:var(--font-mono)] flex items-center gap-1.5">
+            <span className="text-[12px]">💡</span> Why This Matters
+          </div>
+          <p className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-[1.7] font-[family-name:var(--font-inter)]">
+            {renderInlineMarkdown(contract.whyThisMatters)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (contract.actions.length > 0) {
+    actionSections.push(
+      <div key="actions" className="apex-section-block">
+        <ActionsWidget actions={contract.actions} />
+      </div>
+    );
+  }
+  if (contract.crmWarnings.length > 0) {
+    actionSections.push(
+      <div key="crmWarnings" className="apex-section-block">
+        <CrmHygieneWidget warnings={contract.crmWarnings} />
+      </div>
+    );
+  }
+  if (contract.confidence) {
+    actionSections.push(
+      <div key="confidence" className="apex-section-block">
+        <ConfidenceWidget data={contract.confidence} />
+      </div>
+    );
+  }
+  if (contract.recommendedActions && contract.recommendedActions.length > 0) {
+    actionSections.push(
+      <div key="recommendedActions" className="apex-section-block">
+        <RecommendedActionsWidget actions={contract.recommendedActions} onActionClick={onActionClick} />
+      </div>
+    );
+  }
+
   return (
-    <div className="apex-contract-response space-y-4">
-      {contract.directAnswer && (
-        <div className="apex-section-block">
-          <div className="apex-direct-answer bg-primary/[0.04] border border-primary/10 p-4 rounded-xl mb-1">
-            <p className="text-[14px] text-zinc-800 dark:text-zinc-200 leading-[1.7] font-[family-name:var(--font-inter)]">
-              {renderInlineMarkdown(contract.directAnswer)}
-            </p>
-          </div>
-        </div>
+    <div className="apex-contract-response">
+      {narrativeSections.length > 0 && (
+        <div className="space-y-2">{narrativeSections}</div>
       )}
-      {contract.headline && (
-        <div className="apex-section-block">
-          <HeadlineWidget content={contract.headline} />
-        </div>
+      {dataSections.length > 0 && (
+        <div className="mt-3 space-y-3">{dataSections}</div>
       )}
-      {contract.executiveSummary && (
-        <div className="apex-section-block">
-          {WIDGET_REGISTRY['EXECUTIVE_SUMMARY'](contract.executiveSummary)}
-        </div>
-      )}
-      {contract.summary && (
-        <div className="apex-section-block">
-          <SummaryWidget content={contract.summary} />
-        </div>
-      )}
-      {contract.tableData && (
-        <div className="apex-section-block">
-          <TableWidget data={contract.tableData} />
-        </div>
-      )}
-      {contract.tableMarkdown && !contract.tableData && (
-        <div className="apex-section-block">
-          <TableMarkdownWidget content={contract.tableMarkdown} />
-        </div>
-      )}
-      {contract.signals.length > 0 && (
-        <div className="apex-section-block">
-          <SignalsWidget signals={contract.signals} />
-        </div>
-      )}
-      {contract.whyThisMatters && (
-        <div className="apex-section-block">
-          <div className="apex-why-this-matters border border-violet-500/10 bg-violet-950/8 p-4 rounded-xl my-2">
-            <div className="text-[11px] font-semibold text-violet-400 uppercase tracking-widest mb-2 font-[family-name:var(--font-mono)] flex items-center gap-1.5">
-              <span className="text-[12px]">💡</span> Why This Matters
-            </div>
-            <p className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-[1.7] font-[family-name:var(--font-inter)]">
-              {renderInlineMarkdown(contract.whyThisMatters)}
-            </p>
-          </div>
-        </div>
-      )}
-      {contract.actions.length > 0 && (
-        <div className="apex-section-block">
-          <ActionsWidget actions={contract.actions} />
-        </div>
-      )}
-      {contract.crmWarnings.length > 0 && (
-        <div className="apex-section-block">
-          <CrmHygieneWidget warnings={contract.crmWarnings} />
-        </div>
-      )}
-      {contract.confidence && (
-        <div className="apex-section-block">
-          <ConfidenceWidget data={contract.confidence} />
-        </div>
-      )}
-      {contract.recommendedActions && contract.recommendedActions.length > 0 && (
-        <div className="apex-section-block">
-          <RecommendedActionsWidget actions={contract.recommendedActions} onActionClick={onActionClick} />
-        </div>
+      {actionSections.length > 0 && (
+        <div className="mt-4 space-y-2">{actionSections}</div>
       )}
     </div>
   );

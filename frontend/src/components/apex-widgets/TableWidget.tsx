@@ -179,8 +179,80 @@ function isNumericColumn(col: string): boolean {
   return /Amount|USD|Score|Pct|Rank|Revenue|Value|Forecast/i.test(col);
 }
 
-function formatCell(value: string | number | boolean | null | undefined, column: string): string {
+function formatCell(value: string | number | boolean | null | undefined, column: string): React.ReactNode {
   if (value === null || value === undefined || value === '') return '—';
+
+  // 1. Classification & Risk Badge Pill Spans
+  if (/classification|risk_level|risk level/i.test(column)) {
+    const val = String(value).toLowerCase();
+    const isCritical = val.includes('critical');
+    const isHigh = val.includes('high');
+    const isMedium = val.includes('medium');
+    const isLow = val.includes('low');
+
+    let badgeStyle = {
+      color: 'rgba(161, 161, 170, 0.9)',
+      backgroundColor: 'rgba(161, 161, 170, 0.08)',
+      border: '1px solid rgba(161, 161, 170, 0.15)'
+    };
+
+    if (isCritical) {
+      badgeStyle = {
+        color: '#f97316',
+        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+        border: '1px solid rgba(249, 115, 22, 0.25)'
+      };
+    } else if (isHigh) {
+      badgeStyle = {
+        color: '#ef4444',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        border: '1px solid rgba(239, 68, 68, 0.25)'
+      };
+    } else if (isMedium) {
+      badgeStyle = {
+        color: '#eab308',
+        backgroundColor: 'rgba(234, 179, 8, 0.1)',
+        border: '1px solid rgba(234, 179, 8, 0.25)'
+      };
+    } else if (isLow) {
+      badgeStyle = {
+        color: '#22c55e',
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+        border: '1px solid rgba(34, 197, 94, 0.25)'
+      };
+    }
+
+    return (
+      <span
+        style={{
+          ...badgeStyle,
+          borderRadius: '9999px',
+          padding: '2px 8px',
+          fontSize: '10.5px',
+          fontWeight: 600,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          display: 'inline-block',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {String(value)}
+      </span>
+    );
+  }
+
+  // 2. Risk Score Color Tags
+  if (/^risk.*score$/i.test(column)) {
+    const num = Number(value);
+    if (!isNaN(num)) {
+      const color = num >= 10 ? '#ef4444' : num >= 7 ? '#f97316' : num >= 4 ? '#eab308' : '#22c55e';
+      return (
+        <span style={{ color, fontWeight: 700, fontFamily: 'var(--font-mono), monospace' }}>
+          {num.toFixed(1)}
+        </span>
+      );
+    }
+  }
 
   if (/Amount|USD|Revenue|Value|Forecast/i.test(column)) {
     const num = Number(value);

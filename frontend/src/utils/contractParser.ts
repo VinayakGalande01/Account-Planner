@@ -16,6 +16,7 @@ export function createEmptyContract(rawContent: string = ''): ResponseContract {
     confidence: null,
     recommendedActions: [],
     rawContent,
+    breakdown: null,
     isStructured: false,
   };
 }
@@ -125,6 +126,14 @@ export function parseResponseContract(content: string): ResponseContract {
         } catch {
           // If JSON parsing fails, ignore silently
           contract.recommendedActions = [];
+        }
+        break;
+
+      case 'BREAKDOWN':
+        try {
+          contract.breakdown = JSON.parse(sectionContent);
+        } catch {
+          contract.breakdown = null;
         }
         break;
 

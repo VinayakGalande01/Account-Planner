@@ -1721,12 +1721,12 @@ def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str,
 
 class ReasoningEngine:
     def __init__(self, model: Optional[str] = None, is_local: bool = True):
-        self.url = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
+        self.url = os.getenv("LLM_URL", "")
         self.model = model or os.getenv("MODEL_NAME", "llama3.2:latest")
         self.raw_reasoning_bucket = {}
         self.is_local = is_local
 
-    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 1500) -> str:
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 60) -> str:
         if not self.is_local:
             gemini_key = os.getenv("GEMINI_API_KEY")
             if gemini_key:
@@ -1852,7 +1852,8 @@ class ReasoningEngine:
         total_timeout: int = 600,
         local: bool = True,
         complexity: str = "EXECUTIVE",
-        requested_count: int = 5
+        requested_count: int = 5,
+        history: Optional[List[Dict[str, str]]] = None
     ) -> ConsensusOutput:
         """
         Run multi-persona reasoning.
@@ -1908,6 +1909,9 @@ You must adapt your output based on the provided [COMPLEXITY] variable.
             "Complexity Required": complexity,
             "Raw Database Context": json.dumps(account_data, indent=2)
         }
+        if history:
+            history_text = "\\n".join([f"{msg.get('role', msg.get('sender', 'user'))}: {msg.get('content', msg.get('text', ''))}" for msg in history])
+            context_payload["Conversation History"] = history_text
         
         user_prompt = f"""Analyze the database context. Output your analysis using the exact JSON schema below. Do not generate markdown backticks or conversational text outside the JSON block.
 
@@ -2414,12 +2418,12 @@ class SVPResponseOutput(BaseModel):
 
 class ResponseGenerator:
     def __init__(self, model: Optional[str] = None, is_local: bool = True):
-        self.url = os.getenv("LLM_URL", "http://192.168.135.105:8000/api/generate")
+        self.url = os.getenv("LLM_URL", "")
         self.model = model or os.getenv("MODEL_NAME", "llama3.2:latest")
         self.raw_response_bucket = {}
         self.is_local = is_local
 
-    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 1500) -> str:
+    def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 60) -> str:
         if not self.is_local:
             gemini_key = os.getenv("GEMINI_API_KEY")
             if gemini_key:

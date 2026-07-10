@@ -31,7 +31,7 @@ class LocalVectorStore:
                 self.chroma_client = chromadb.PersistentClient(path=self.db_path)
                 
                 # Load a fast, lightweight SentenceTransformer model (downloads on first run, ~90MB)
-                self.model = SentenceTransformer('all-MiniLM-L6-v2')
+                self.model = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
                 
                 # Get or create collection
                 self.collection = self.chroma_client.get_or_create_collection(
