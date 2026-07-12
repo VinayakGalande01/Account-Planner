@@ -235,8 +235,11 @@ class AccountPlanningAgent:
         End-to-end account planning query processing.
         """
         # LAYER 1: Intent Classification
+        from observability import TraceSpanContext
+        
         print("[Layer 1] Classifying intent...")
-        intent = self.intent_classifier.classify(query, history, user_role, active_account)
+        with TraceSpanContext("PLANNER"):
+            intent = self.intent_classifier.classify(query, history, user_role, active_account)
         try:
             intent_data = intent.model_dump()
         except AttributeError:
@@ -333,18 +336,19 @@ class AccountPlanningAgent:
         
         # LAYER 2: Data Retrieval
         print("[Layer 2] Retrieving data...")
-        account_data, data_quality = self.data_retrieval.fetch_with_quality_check(intent)
-        
-        # Local RAG Semantic Retrieval
-        try:
-            from vector_store import vector_store
-            acc_id = account_data.get("account_id")
-            semantic_matches = vector_store.search_activities(query, user_id=self.data_engine.user_id, account_id=acc_id, limit=3)
-            if semantic_matches:
-                account_data["semantic_activities"] = [m["text"] for m in semantic_matches]
-                print(f"[RAG] Appended {len(semantic_matches)} semantically relevant activities to context.")
-        except Exception as rag_err:
-            print(f"⚠️ Warning: Local RAG semantic search failed: {rag_err}")
+        with TraceSpanContext("RETRIEVER"):
+            account_data, data_quality = self.data_retrieval.fetch_with_quality_check(intent)
+            
+            # Local RAG Semantic Retrieval
+            try:
+                from vector_store import vector_store
+                acc_id = account_data.get("account_id")
+                semantic_matches = vector_store.search_activities(query, user_id=self.data_engine.user_id, account_id=acc_id, limit=3)
+                if semantic_matches:
+                    account_data["semantic_activities"] = [m["text"] for m in semantic_matches]
+                    print(f"[RAG] Appended {len(semantic_matches)} semantically relevant activities to context.")
+            except Exception as rag_err:
+                print(f"⚠️ Warning: Local RAG semantic search failed: {rag_err}")
         
         # Enabled reasoning on local (run sequential threads)
         # if self.is_local:
@@ -495,16 +499,17 @@ class AccountPlanningAgent:
             except Exception:
                 pass
         
-        consensus = self.reasoning_engine.run_reasoning_threads(
-            account_data=account_data,
-            market_context=market_context,
-            timeout_per_thread=300,
-            total_timeout=600,
-            local=self.is_local,
-            complexity=intent.complexity,
-            requested_count=requested_count,
-            history=history
-        )
+        with TraceSpanContext("REASONER"):
+            consensus = self.reasoning_engine.run_reasoning_threads(
+                account_data=account_data,
+                market_context=market_context,
+                timeout_per_thread=300,
+                total_timeout=600,
+                local=self.is_local,
+                complexity=intent.complexity,
+                requested_count=requested_count,
+                history=history
+            )
         
         # Cap reasoning confidence scores based on data sufficiency
         if data_quality_val < 0.4:
@@ -528,17 +533,18 @@ class AccountPlanningAgent:
         # LAYER 3: Response Generation (Role-specific)
         print("[Layer 3] Generating responses...")
         responses = {}
-        for role in recipient_roles:
-            print(f"[Layer 3 Input] Generating response for role: {role.upper()}")
-            responses[role] = self.response_generator.generate_response(
-                consensus,
-                recipient_role=role
-            )
-            try:
-                resp_data = responses[role].model_dump()
-            except AttributeError:
-                resp_data = responses[role].dict()
-            print(f"[Layer 3 Output] Response for {role.upper()}: {resp_data}")
+        with TraceSpanContext("NARRATOR"):
+            for role in recipient_roles:
+                print(f"[Layer 3 Input] Generating response for role: {role.upper()}")
+                responses[role] = self.response_generator.generate_response(
+                    consensus,
+                    recipient_role=role
+                )
+                try:
+                    resp_data = responses[role].model_dump()
+                except AttributeError:
+                    resp_data = responses[role].dict()
+                print(f"[Layer 3 Output] Response for {role.upper()}: {resp_data}")
         
         # Print raw LLM output buckets for under-the-hood debugging
         print(f"[Layer 2 Raw LLM Output Bucket] {self.reasoning_engine.raw_reasoning_bucket}")

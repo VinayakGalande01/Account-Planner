@@ -2,6 +2,12 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 import os
 import contextvars
+from dotenv import load_dotenv
+
+# Ensure the .env configuration is loaded before checking env variables
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(backend_dir, ".env")
+load_dotenv(dotenv_path=env_path, override=True)
 
 # Context variable to hold current user ID for RLS
 current_user_id_var = contextvars.ContextVar("current_user_id", default="")

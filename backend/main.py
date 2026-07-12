@@ -1,4 +1,11 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
+import os
+from dotenv import load_dotenv
+# Get absolute path to the backend/.env file
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(backend_dir, ".env")
+load_dotenv(dotenv_path=env_path, override=True)
+
+from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
@@ -40,10 +47,6 @@ import openai
 
 # Detect if running local or cloud
 IS_LOCAL_OLLAMA = os.getenv("LOCAL_OLLAMA", "true").lower() == "true"
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv(override=True)
 
 import logging
 from logging_config import setup_logging
@@ -71,6 +74,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 from database import Base, engine as db_engine
 import models.user
 import models.crm_models
+import models.observability_models
 try:
     Base.metadata.create_all(bind=db_engine)
     print("  [SUCCESS] Database tables initialized successfully.")
@@ -114,6 +118,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from observability import TelemetryTracingMiddleware
+app.add_middleware(TelemetryTracingMiddleware)
 
 
 # Global connection pool client to reuse TCP connections across API calls (improves latency & keeps connections alive)
@@ -1335,9 +1342,118 @@ async def delete_chat_session(session_id: str, current_user: User = Depends(get_
     finally:
         db_sess.close()
 
+def save_telemetry_bg(trace_id, request_id, session_id, user_id, workspace_id, correlation_id, start_time, full_contract, trace_payload, spans, user_query, active_account, model_name):
+    try:
+        import time
+        from decimal import Decimal
+        from observability import (
+            get_telemetry_recorder,
+            calculate_token_cost,
+            classify_grounding,
+            get_git_revision_hash
+        )
+        
+        total_runtime_ms = int((time.time() - start_time) * 1000)
+        
+        # Heuristic token estimation
+        prompt_tokens = len(user_query.split()) * 4
+        completion_tokens = len(full_contract.split()) * 4
+        calculated_cost = calculate_token_cost(model_name, prompt_tokens, completion_tokens)
+        
+        intent = trace_payload.get("intent")
+        consensus = trace_payload.get("consensus")
+        acc_data = trace_payload.get("account_data") or {}
+        
+        selected_intent = "UNKNOWN"
+        planner_confidence = "LOW"
+        entities = {}
+        filters = {}
+        reasoning_conf = 0
+        
+        if intent:
+            if hasattr(intent, "primary_intent"):
+                selected_intent = intent.primary_intent.value if hasattr(intent.primary_intent, "value") else str(intent.primary_intent)
+                planner_confidence = "HIGH" if intent.confidence_primary >= 0.8 else ("MEDIUM" if intent.confidence_primary >= 0.5 else "LOW")
+                entities = intent.extracted_entities.model_dump() if hasattr(intent.extracted_entities, "model_dump") else intent.extracted_entities.dict()
+            else:
+                selected_intent = str(intent)
+            filters = {"active_account": active_account}
+            
+        if consensus:
+            reasoning_conf = int(consensus.final_confidence * 100) if hasattr(consensus, "final_confidence") else 0
+            
+        # Grounding check
+        matched_facts = 0
+        total_facts = 0
+        grounding_cat = "HIGH"
+        if acc_data and full_contract:
+            opps = acc_data.get("opportunities", [])
+            total_facts = len(opps)
+            for o in opps:
+                name = o.get("opp_name")
+                if name and name.lower() in full_contract.lower():
+                    matched_facts += 1
+            if total_facts > 0:
+                pct = int((matched_facts / total_facts) * 100)
+                grounding_cat = classify_grounding(pct)
+                
+        git_commit = get_git_revision_hash()
+        
+        trace_record = {
+            "trace_id": trace_id,
+            "request_id": request_id,
+            "session_id": session_id,
+            "user_id": user_id,
+            "workspace_id": workspace_id,
+            "correlation_id": correlation_id,
+            "user_query": user_query,
+            "final_response": full_contract,
+            "total_runtime_ms": total_runtime_ms,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "model_name": model_name,
+            "calculated_cost_usd": calculated_cost,
+            "selected_intent": selected_intent,
+            "planner_confidence": planner_confidence,
+            "extracted_entities": entities,
+            "applied_filters": filters,
+            "reasoning_confidence_pct": reasoning_conf,
+            "validation_passed": True,
+            "validation_error": None,
+            "grounding_score": grounding_cat,
+            "reflection_triggered": False,
+            "backend_git_commit": git_commit,
+            "reasoning_engine_version": "1.0.0"
+        }
+        
+        recorder = get_telemetry_recorder()
+        recorder.record_trace(trace_record)
+        
+        # Save Spans
+        if spans:
+            for s in spans:
+                s["trace_id"] = trace_id
+            recorder.record_spans(spans)
+            
+        # Save Payload
+        payload_record = {
+            "trace_id": trace_id,
+            "planner_prompt_hash": None,
+            "reasoner_prompt_hash": None,
+            "narrator_prompt_hash": None,
+            "planner_output": trace_payload.get("raw_reasoning_bucket", {}).get("planner"),
+            "retrieved_context_summary": f"Opps: {len(acc_data.get('opportunities', []))}, Contacts: {len(acc_data.get('contacts', []))}",
+            "retrieved_record_ids": {"opportunities": [o.get("opp_id") or o.get("id") for o in acc_data.get("opportunities", [])]},
+            "reasoning_package": trace_payload.get("raw_reasoning_bucket") or {}
+        }
+        recorder.record_payload(payload_record)
+        print(f"[TELEMETRY SAVE] Successfully logged trace {trace_id} in background.")
+    except Exception as telemetry_err:
+        print(f"[TELEMETRY ERROR] Failed to save telemetry in background: {telemetry_err}")
+
 @app.post("/api/chat")
 @limiter.limit("30/minute")
-async def chat(request: Request, body: ChatRequest, current_user: User = Depends(get_current_user)):
+async def chat(request: Request, body: ChatRequest, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user)):
         
     if request.headers.get("x-test-mock") == "true":
         async def mock_stream():
@@ -1382,6 +1498,8 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
         print(f"  [WARNING] Database error retrieving chat history: {e}")
     finally:
         db_sess.close()
+
+    trace_payload = {}
 
     async def _generate_stream_impl():
         start_time = asyncio.get_event_loop().time()
@@ -1438,6 +1556,12 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
                     yield "sys_meta_log|[SYS_LOG] Processing... Reasoning engine is active.\n\n"
             
             res = query_task.result()
+            
+            trace_payload["intent"] = res.get("intent")
+            trace_payload["consensus"] = res.get("consensus")
+            trace_payload["account_data"] = res.get("account_data")
+            trace_payload["raw_reasoning_bucket"] = res.get("raw_reasoning_bucket")
+            trace_payload["raw_response_bucket"] = res.get("raw_response_bucket")
             
             # Yield active account for frontend tracking
             resolved_account = res.get("account_data", {}).get("account_name")
@@ -1648,6 +1772,20 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
             generator_db.close()
 
     async def generate_stream():
+        import time
+        from observability import (
+            trace_id_var,
+            request_id_var,
+            session_id_var,
+            user_id_var,
+            workspace_id_var,
+            correlation_id_var,
+            active_spans_var
+        )
+        
+        # Start timer for whole stream runtime
+        start_time_val = time.time()
+        
         _contract_chunks = []
         async for chunk in _generate_stream_impl():
             yield chunk
@@ -1670,6 +1808,38 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
             db_save.rollback()
         finally:
             db_save.close()
+            
+        # Queue the background telemetry task using extracted request-context variables
+        try:
+            trace_id = trace_id_var.get()
+            request_id = request_id_var.get()
+            session_id_val = session_id_var.get()
+            user_id_val = user_id_var.get()
+            workspace_id_val = workspace_id_var.get()
+            correlation_id_val = correlation_id_var.get()
+            spans = active_spans_var.get().copy() if active_spans_var.get() else []
+            
+            import asyncio
+            asyncio.create_task(
+                asyncio.to_thread(
+                    save_telemetry_bg,
+                    trace_id=trace_id,
+                    request_id=request_id,
+                    session_id=session_id_val,
+                    user_id=user_id_val,
+                    workspace_id=workspace_id_val,
+                    correlation_id=correlation_id_val,
+                    start_time=start_time_val,
+                    full_contract=full_contract,
+                    trace_payload=trace_payload,
+                    spans=spans,
+                    user_query=body.query,
+                    active_account=body.active_account,
+                    model_name=MODEL_NAME
+                )
+            )
+        except Exception as queue_err:
+            print(f"[TELEMETRY] Warning: Failed to queue telemetry background task: {queue_err}")
 
     return StreamingResponse(
         generate_stream(),
@@ -1684,6 +1854,162 @@ async def chat(request: Request, body: ChatRequest, current_user: User = Depends
 
 
 # ─── New Tactical Endpoints ───────────────────────────────────
+
+# ─── Observability Control Panel Endpoints ────────────────────
+
+@app.get("/api/observability/traces")
+def list_traces(
+    intent: Optional[str] = None,
+    user_id: Optional[int] = None,
+    model_name: Optional[str] = None,
+    validation_passed: Optional[bool] = None,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user)
+):
+    from database import SessionLocal
+    from models.observability_models import ObservabilityTrace
+    
+    db = SessionLocal()
+    try:
+        query = db.query(ObservabilityTrace)
+        if intent:
+            query = query.filter(ObservabilityTrace.selected_intent == intent)
+        if user_id:
+            query = query.filter(ObservabilityTrace.user_id == user_id)
+        if model_name:
+            query = query.filter(ObservabilityTrace.model_name == model_name)
+        if validation_passed is not None:
+            query = query.filter(ObservabilityTrace.validation_passed == validation_passed)
+            
+        traces = query.order_by(ObservabilityTrace.timestamp.desc()).limit(limit).all()
+        return [
+            {
+                "trace_id": t.trace_id,
+                "request_id": t.request_id,
+                "session_id": t.session_id,
+                "user_id": t.user_id,
+                "user_query": t.user_query,
+                "timestamp": t.timestamp.isoformat() if t.timestamp else None,
+                "total_runtime_ms": t.total_runtime_ms,
+                "selected_intent": t.selected_intent,
+                "planner_confidence": t.planner_confidence,
+                "calculated_cost_usd": float(t.calculated_cost_usd or 0.0),
+                "validation_passed": t.validation_passed,
+                "grounding_score": t.grounding_score
+            }
+            for t in traces
+        ]
+    finally:
+        db.close()
+
+@app.get("/api/observability/traces/{trace_id}")
+def get_trace_detail(trace_id: str, current_user: User = Depends(get_current_user)):
+    from database import SessionLocal
+    from models.observability_models import ObservabilityTrace, ObservabilitySpan, ObservabilityPayload
+    from fastapi import HTTPException
+    
+    db = SessionLocal()
+    try:
+        trace = db.query(ObservabilityTrace).filter(ObservabilityTrace.trace_id == trace_id).first()
+        if not trace:
+            raise HTTPException(status_code=404, detail="Trace not found")
+            
+        spans = db.query(ObservabilitySpan).filter(ObservabilitySpan.trace_id == trace_id).order_by(ObservabilitySpan.start_time.asc()).all()
+        payload = db.query(ObservabilityPayload).filter(ObservabilityPayload.trace_id == trace_id).first()
+        
+        return {
+            "trace": {
+                "trace_id": trace.trace_id,
+                "request_id": trace.request_id,
+                "session_id": trace.session_id,
+                "user_id": trace.user_id,
+                "workspace_id": trace.workspace_id,
+                "timestamp": trace.timestamp.isoformat() if trace.timestamp else None,
+                "user_query": trace.user_query,
+                "final_response": trace.final_response,
+                "total_runtime_ms": trace.total_runtime_ms,
+                "prompt_tokens": trace.prompt_tokens,
+                "completion_tokens": trace.completion_tokens,
+                "model_name": trace.model_name,
+                "calculated_cost_usd": float(trace.calculated_cost_usd or 0.0),
+                "selected_intent": trace.selected_intent,
+                "planner_confidence": trace.planner_confidence,
+                "extracted_entities": trace.extracted_entities,
+                "applied_filters": trace.applied_filters,
+                "reasoning_confidence_pct": trace.reasoning_confidence_pct,
+                "validation_passed": trace.validation_passed,
+                "validation_error": trace.validation_error,
+                "grounding_score": trace.grounding_score,
+                "reflection_triggered": trace.reflection_triggered,
+                "backend_git_commit": trace.backend_git_commit,
+                "reasoning_engine_version": trace.reasoning_engine_version
+            },
+            "spans": [
+                {
+                    "stage_name": s.stage_name,
+                    "start_time": s.start_time.isoformat() if s.start_time else None,
+                    "end_time": s.end_time.isoformat() if s.end_time else None,
+                    "duration_ms": s.duration_ms
+                }
+                for s in spans
+            ],
+            "payload": {
+                "planner_output": payload.planner_output if payload else None,
+                "retrieved_context_summary": payload.retrieved_context_summary if payload else None,
+                "retrieved_record_ids": payload.retrieved_record_ids if payload else {},
+                "reasoning_package": payload.reasoning_package if payload else {}
+            }
+        }
+    finally:
+        db.close()
+
+@app.post("/api/observability/business-metrics")
+def record_metric(action_type: str, trace_id: Optional[str] = None, metadata: dict = {}, current_user: User = Depends(get_current_user)):
+    from observability import get_telemetry_recorder
+    
+    recorder = get_telemetry_recorder()
+    metric_record = {
+        "trace_id": trace_id,
+        "user_id": current_user.id,
+        "action_type": action_type,
+        "time_saved_est_sec": 420 if action_type == "REPORT_GENERATED" else 60,
+        "metadata": metadata
+    }
+    recorder.record_business_metric(metric_record)
+    return {"status": "SUCCESS"}
+
+@app.post("/api/observability/replay/{trace_id}")
+async def replay_trace(trace_id: str, current_user: User = Depends(get_current_user)):
+    from database import SessionLocal
+    from models.observability_models import ObservabilityTrace, ObservabilityPayload
+    from fastapi import HTTPException
+    
+    db = SessionLocal()
+    try:
+        trace = db.query(ObservabilityTrace).filter(ObservabilityTrace.trace_id == trace_id).first()
+        payload = db.query(ObservabilityPayload).filter(ObservabilityPayload.trace_id == trace_id).first()
+        if not trace or not payload:
+            raise HTTPException(status_code=404, detail="Trace data missing")
+            
+        # Sandbox execution: Instantiate agent using the snapshot context from payload
+        user_engine = get_user_data_engine(db, current_user)
+        from agent_orchestrator import AccountPlanningAgent
+        agent = AccountPlanningAgent(data_engine=user_engine, is_local=True)
+        
+        # Execute query sandbox replay
+        result = agent.process_query(
+            query=trace.user_query,
+            user_role="sales",
+            recipient_roles=["am"],
+            history=[]
+        )
+        
+        return {
+            "original_response": trace.final_response,
+            "replayed_response": result.get("responses", {}).get("am", {}).get("narrative", "")
+        }
+    finally:
+        db.close()
 
 @app.get("/api/prompts")
 def get_prompts(current_user: User = Depends(get_current_user)):

@@ -2626,7 +2626,7 @@ class ResponseGenerator:
             stakeholder_sequence=stakeholder_sequence,
             risks_and_mitigations=risks_and_mitigations,
             confidence_in_playbook=0.85,
-            why_this_matters=exec_brief.get("macro_summary", "Strategic review required.")[:150]
+            why_this_matters=exec_brief.get("macro_summary", "Strategic review required.")[:500]
         )
 
     def _map_vp_from_crucible(self, crucible_data: Dict[str, Any]) -> VPResponseOutput:
@@ -2644,7 +2644,7 @@ class ResponseGenerator:
         
         market_signal = MarketSignal(
             is_market_wide=False,
-            competitor_threat=persona_insights.get("strategic_director", "")[:150],
+            competitor_threat=persona_insights.get("strategic_director", "")[:500],
             strategic_implication="Immediate client relationship touchpoint needed to defend revenue."
         )
         
