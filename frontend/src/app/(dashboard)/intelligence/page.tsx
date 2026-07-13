@@ -64,6 +64,7 @@ export default function IntelligencePage() {
   const { activeSessionId, loadSessions } = useSidebar()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
+  const [persona, setPersona] = useState<'account_manager' | 'vp_sales' | 'executive'>('account_manager')
   const [isLoading, setIsLoading] = useState(false)
   const [isSessionLoading, setIsSessionLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -153,6 +154,7 @@ export default function IntelligencePage() {
           query: text,
           session_id: activeSessionId || 'default_session',
           active_account: activeAccount,
+          persona: persona,
           chat_history: messages.slice(-10).map(m => ({
             role: m.role,
             content: m.content
@@ -266,7 +268,9 @@ export default function IntelligencePage() {
                       <div
                         className={`px-4 py-2 rounded-lg ${message.role === 'user'
                           ? 'max-w-lg bg-primary text-primary-foreground'
-                          : 'max-w-3xl bg-secondary/50 text-foreground border border-border w-full'
+                          : (message.contract || message.content.includes('__SECTION_'))
+                            ? 'max-w-6xl bg-secondary/50 text-foreground border border-border w-full'
+                            : 'max-w-2xl bg-secondary/50 text-foreground border border-border w-fit'
                           }`}
                       >
                         {message.role === 'assistant' ? (
@@ -276,10 +280,22 @@ export default function IntelligencePage() {
                             <ContractRenderer content={message.content} isStreaming={isLoading && index === messages.length - 1} onActionClick={handleActionClick} />
                           ) : (
                             <div className="text-sm leading-relaxed">
-                              <RenderMessageLines content={message.content} />
-                              {isLoading && index === messages.length - 1 && (
-                                <span className="inline-block w-[2px] h-4 bg-primary ml-0.5 animate-pulse align-middle rounded-full" />
-                              )}
+                              {(() => {
+                                try {
+                                  const p = JSON.parse(message.content);
+                                  if (p.type === 'conversational' || p.type === 'clarification') {
+                                    return <FinalizedContractRenderer contract={{ isStructured: true, type: p.type, conversationalData: p } as any} onActionClick={handleActionClick} />;
+                                  }
+                                } catch (e) { }
+                                return (
+                                  <>
+                                    <RenderMessageLines content={message.content} />
+                                    {isLoading && index === messages.length - 1 && (
+                                      <span className="inline-block w-[2px] h-4 bg-primary ml-0.5 animate-pulse align-middle rounded-full" />
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           )
                         ) : (
@@ -343,24 +359,60 @@ export default function IntelligencePage() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15, duration: 0.4 }}
-              className="flex gap-3"
+              className="flex flex-col gap-2 w-full"
             >
-              <input
-                type="text"
-                placeholder="Ask a question about your accounts..."
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                disabled={isLoading}
-                className="flex-1 bg-secondary border border-border rounded-lg px-4 py-2.5 text-sm placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors disabled:opacity-50"
-              />
-              <button
-                onClick={() => handleSendMessage()}
-                disabled={isLoading || !inputValue.trim()}
-                className="px-4 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Send className="w-4 h-4" />
-              </button>
+              {/* Persona Selector */}
+              <div className="flex gap-2 mb-1">
+                <button
+                  onClick={() => setPersona('account_manager')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                    persona === 'account_manager'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-border text-muted-foreground hover:bg-secondary/50'
+                  }`}
+                >
+                  Account Manager
+                </button>
+                <button
+                  onClick={() => setPersona('vp_sales')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                    persona === 'vp_sales'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-border text-muted-foreground hover:bg-secondary/50'
+                  }`}
+                >
+                  VP Sales
+                </button>
+                <button
+                  onClick={() => setPersona('executive')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                    persona === 'executive'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-border text-muted-foreground hover:bg-secondary/50'
+                  }`}
+                >
+                  Executive
+                </button>
+              </div>
+
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="Ask a question about your accounts..."
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  disabled={isLoading}
+                  className="flex-1 bg-secondary border border-border rounded-lg px-4 py-2.5 text-sm placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors disabled:opacity-50"
+                />
+                <button
+                  onClick={() => handleSendMessage()}
+                  disabled={isLoading || !inputValue.trim()}
+                  className="px-4 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
             </motion.div>
           </div>
         </main>

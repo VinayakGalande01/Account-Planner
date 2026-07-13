@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import sys
+from response_formatter import format_response_for_user
 
 # Force Hugging Face offline mode to prevent network hangs on import/initialization
 os.environ["HF_HUB_OFFLINE"] = "1"
@@ -258,6 +259,7 @@ class ChatRequest(BaseModel):
     chat_history: Optional[List[Dict[str, str]]] = []
     response_format: Optional[str] = "markdown"  # "markdown" or "json"
     response_mode: Optional[str] = "operational"  # "executive", "operational", "analyst"
+    persona: Optional[str] = "account_manager"
 
 
 BASE_PROMPT = """You are APEX — Account Planning & Execution Intelligence.
@@ -1454,6 +1456,31 @@ def save_telemetry_bg(trace_id, request_id, session_id, user_id, workspace_id, c
 @app.post("/api/chat")
 @limiter.limit("30/minute")
 async def chat(request: Request, body: ChatRequest, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user)):
+    from query_classifier import classify_query
+    from conversational_handler import handle_conversational_query
+    
+    query_type = classify_query(body.query)
+    
+    if query_type == "GENERAL":
+        result = handle_conversational_query(body.query)
+        # Yield the JSON string directly as a "stream" so frontend text decoder matches it
+        async def conv_stream():
+            yield json.dumps(result)
+        return StreamingResponse(conv_stream(), media_type="text/event-stream")
+        
+    if query_type == "UNCLEAR":
+        result = {
+            "type": "clarification",
+            "message": "I want to make sure I help you correctly. Are you looking for data about your accounts, or do you have a general question about how APEX works?",
+            "suggestions": [
+                "Show me my accounts",
+                "Explain how APEX works",
+                "Analyze my pipeline"
+            ]
+        }
+        async def clear_stream():
+            yield json.dumps(result)
+        return StreamingResponse(clear_stream(), media_type="text/event-stream")
         
     if request.headers.get("x-test-mock") == "true":
         async def mock_stream():
@@ -1793,16 +1820,43 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
                 _contract_chunks.append(chunk)
         
         full_contract = "".join(_contract_chunks)
+        
+        # Call response formatter
+        formatted_json = full_contract
+        try:
+            persona = body.persona if body.persona else "account_manager"
+            chat_history = body.chat_history if body.chat_history else []
+            
+            # Call the formatter
+            formatted_json = await format_response_for_user(
+                raw_output=full_contract, 
+                persona=persona,
+                conversation_history=chat_history
+            )
+            
+            # If the formatter returned something different than full_contract (meaning it succeeded),
+            # yield it with the separator.
+            if formatted_json != full_contract:
+                yield f"\n__SECTION_FORMATTED_JSON__\n{formatted_json}\n"
+        except Exception as formatter_err:
+            print(f"[FORMATTER ERROR] Failed to format response: {formatter_err}")
+            formatted_json = full_contract
+
         db_save = SessionLocal()
         db_save.info["user_id"] = str(current_user.id)
         try:
             user_msg = ChatMessage(session_id=session_id, sender="user", text=body.query, user_id=current_user.id)
             db_save.add(user_msg)
-            if full_contract.strip():
-                assistant_msg = ChatMessage(session_id=session_id, sender="assistant", text=full_contract, user_id=current_user.id)
+            
+            to_save = full_contract
+            if formatted_json != full_contract:
+                to_save = f"{full_contract}\n__SECTION_FORMATTED_JSON__\n{formatted_json}\n"
+                
+            if to_save.strip():
+                assistant_msg = ChatMessage(session_id=session_id, sender="assistant", text=to_save, user_id=current_user.id)
                 db_save.add(assistant_msg)
             db_save.commit()
-            print(f"[DB SAVE] Saved full contract ({len(full_contract)} chars) to session {session_id}")
+            print(f"[DB SAVE] Saved contract ({len(to_save)} chars) to session {session_id}")
         except Exception as save_err:
             print(f"  [WARNING] Failed to save chat history: {save_err}")
             db_save.rollback()

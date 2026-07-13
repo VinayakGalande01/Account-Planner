@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import type { ResponseContract, SectionName, RecommendedAction } from '../../types/responseContract';
+import type { ResponseContract, SectionName, RecommendedAction, FormattedJsonResponse } from '../../types/responseContract';
 import { SECTION_RENDER_ORDER } from '../../types/responseContract';
 import { parseStreamingSections, parseResponseContract } from '../../utils/contractParser';
 import { renderInlineMarkdown } from '../../utils/inlineMarkdown';
@@ -13,6 +13,211 @@ import { ActionsWidget } from './ActionsWidget';
 import { CrmHygieneWidget } from './CrmHygieneWidget';
 import { ConfidenceWidget } from './ConfidenceWidget';
 import { RecommendedActionsWidget } from './RecommendedActionsWidget';
+
+// ── Formatted Response Renderer ─────────────────────────────
+
+interface FormattedResponseRendererProps {
+  data: FormattedJsonResponse;
+  onActionClick?: (action: RecommendedAction) => void;
+}
+
+export function FormattedResponseRenderer({ data, onActionClick }: FormattedResponseRendererProps) {
+  const urgencyColors = {
+    P1: 'bg-red-600 text-white font-semibold px-2 py-0.5 rounded text-xs flex items-center gap-1.5 w-fit',
+    P2: 'bg-amber-500 text-zinc-950 font-semibold px-2 py-0.5 rounded text-xs flex items-center gap-1.5 w-fit',
+    P3: 'bg-emerald-500 text-zinc-950 font-semibold px-2 py-0.5 rounded text-xs flex items-center gap-1.5 w-fit'
+  };
+
+  const getUrgencyText = (urgency: string) => {
+    if (urgency === 'P1') return '🔴 P1 — Urgent';
+    if (urgency === 'P2') return '🟡 P2 — Watch';
+    if (urgency === 'P3') return '🟢 P3 — On Track';
+    return urgency;
+  };
+
+  const badgeClass = urgencyColors[data.urgency as keyof typeof urgencyColors] || urgencyColors.P2;
+
+  const tableData = useMemo(() => {
+    if (!data.opportunities || data.opportunities.length === 0) return null;
+    return {
+      columns: ['Opp ID', 'Name', 'Stage', 'Amount', 'Probability', 'Insight'],
+      rows: data.opportunities.map((opp: { id: string; name: string; stage: string; amount: string; probability: string; insight: string; }) => ({
+        'Opp ID': opp.id,
+        'Name': opp.name,
+        'Stage': opp.stage,
+        'Amount': opp.amount,
+        'Probability': opp.probability,
+        'Insight': opp.insight
+      }))
+    };
+  }, [data.opportunities]);
+
+  const suggestions = useMemo(() => {
+    if (!data.next_steps_suggestions || data.next_steps_suggestions.length === 0) return [];
+    return data.next_steps_suggestions.map((s: string) => ({
+      title: s,
+      action: s
+    }));
+  }, [data.next_steps_suggestions]);
+
+  const getRoleBadge = (role: string) => {
+    if (role === 'Account Manager') {
+      return (
+        <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] px-1.5 py-0.2 rounded-full font-semibold">
+          AM
+        </span>
+      );
+    }
+    if (role === 'VP Sales') {
+      return (
+        <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] px-1.5 py-0.2 rounded-full font-semibold">
+          VP
+        </span>
+      );
+    }
+    if (role === 'Executive') {
+      return (
+        <span className="bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 text-[10px] px-1.5 py-0.2 rounded-full font-semibold">
+          Exec
+        </span>
+      );
+    }
+    return (
+      <span className="bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 text-[10px] px-1.5 py-0.2 rounded-full font-semibold">
+        {role}
+      </span>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Urgency Badge */}
+      <div className="flex items-center">
+        <span className={badgeClass}>
+          {getUrgencyText(data.urgency)}
+        </span>
+      </div>
+
+      {/* Headline */}
+      <h2 className="text-[1.25rem] font-bold text-zinc-900 dark:text-zinc-50 leading-snug">
+        {data.headline}
+      </h2>
+
+      {/* Summary */}
+      <p className="text-[0.95rem] text-zinc-600 dark:text-zinc-300 leading-relaxed">
+        {data.summary}
+      </p>
+
+      {/* Two Column Layout on Desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Table & Suggestions */}
+        <div className="lg:col-span-8 space-y-4">
+          {/* Opportunities Table */}
+          {tableData && (
+            <div>
+              <TableWidget data={tableData} />
+            </div>
+          )}
+          
+          {/* Next steps suggestions */}
+          {suggestions.length > 0 && (
+            <div className="pt-2">
+              <RecommendedActionsWidget actions={suggestions} onActionClick={onActionClick} />
+            </div>
+          )}
+        </div>
+
+        {/* Right Column: Flags, Risks & Recommended Actions */}
+        <div className="lg:col-span-4 space-y-4">
+          {/* Flag Section */}
+          {data.flag && (
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-bold text-amber-500 uppercase tracking-widest font-[family-name:var(--font-mono)]">
+                ONE THING I'D FLAG
+              </div>
+              <div className="border-l-4 border-l-amber-500 bg-zinc-900/40 p-4 rounded-r-xl flex items-start gap-3">
+                <span className="text-lg flex-shrink-0">💡</span>
+                <p className="text-sm text-zinc-300">
+                  {data.flag}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Risks Section */}
+          {data.risks && data.risks.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[11px] font-bold text-red-500 uppercase tracking-widest font-[family-name:var(--font-mono)]">
+                RISKS TO WATCH
+              </div>
+              <div className="space-y-3">
+                {data.risks.map((risk: { type: string; account: string; action: string; }, index: number) => (
+                  <div 
+                    key={index}
+                    className="border-l-[3px] border-l-red-600 bg-zinc-900/40 p-4 rounded-r-xl flex flex-col"
+                  >
+                    <div className="text-sm font-bold text-zinc-100">
+                      {risk.type}
+                    </div>
+                    <div className="text-xs text-zinc-400 mt-0.5">
+                      Account: {risk.account}
+                    </div>
+                    <div className="text-sm text-white mt-2 font-medium">
+                      → {risk.action}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recommended Actions */}
+          {data.recommended_actions && data.recommended_actions.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest font-[family-name:var(--font-mono)]">
+                RECOMMENDED ACTIONS
+              </div>
+              <ol className="space-y-3">
+                {data.recommended_actions.map((act: { priority: number; role: 'Account Manager' | 'VP Sales' | 'Executive'; action: string; }, index: number) => (
+                  <li key={index} className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center font-bold text-xs mt-0.5">
+                      {index + 1}
+                    </span>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        {getRoleBadge(act.role)}
+                        <span className="text-[10px] text-zinc-400 font-semibold uppercase">
+                          Priority {act.priority}
+                        </span>
+                      </div>
+                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                        {act.action}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Closing Question */}
+      {data.closing_question && (
+        <p className="text-sm italic text-zinc-500 dark:text-zinc-400 mt-4 leading-relaxed">
+          {data.closing_question}
+        </p>
+      )}
+
+      {/* Next steps suggestions */}
+      {suggestions.length > 0 && (
+        <div className="mt-4 pt-2">
+          <RecommendedActionsWidget actions={suggestions} onActionClick={onActionClick} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Widget Registry ─────────────────────────────────────────
 // Registry-driven component mapping. Extensible: add new sections
@@ -343,6 +548,30 @@ interface FinalizedRendererProps {
  */
 export function FinalizedContractRenderer({ contract, onActionClick }: FinalizedRendererProps) {
   if (!contract.isStructured) return null;
+
+  if (contract.type === 'conversational' || contract.type === 'clarification') {
+    return (
+      <div className="space-y-4">
+        <div className="bg-primary/[0.04] border border-primary/10 p-4 rounded-xl mb-1">
+          <p className="text-[14px] text-zinc-800 dark:text-zinc-200 leading-[1.7] font-[family-name:var(--font-inter)]">
+            {contract.conversationalData?.message}
+          </p>
+        </div>
+        {contract.conversationalData?.suggestions && contract.conversationalData.suggestions.length > 0 && (
+          <div className="pt-2">
+            <RecommendedActionsWidget 
+              actions={contract.conversationalData.suggestions.map(s => ({ title: s, action: s }))} 
+              onActionClick={onActionClick} 
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (contract.formattedJson) {
+    return <FormattedResponseRenderer data={contract.formattedJson} onActionClick={onActionClick} />;
+  }
 
   const narrativeSections: React.ReactNode[] = [];
   const dataSections: React.ReactNode[] = [];

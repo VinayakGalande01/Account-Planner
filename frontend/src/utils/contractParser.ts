@@ -18,6 +18,7 @@ export function createEmptyContract(rawContent: string = ''): ResponseContract {
     rawContent,
     breakdown: null,
     isStructured: false,
+    formattedJson: undefined,
   };
 }
 
@@ -38,6 +39,17 @@ export function parseResponseContract(content: string): ResponseContract {
     .join('\n');
 
   if (!cleanContent.includes('__SECTION_')) {
+    try {
+      const parsed = JSON.parse(cleanContent);
+      if (parsed.type === 'conversational' || parsed.type === 'clarification') {
+        contract.isStructured = true;
+        contract.type = parsed.type;
+        contract.conversationalData = parsed;
+        return contract;
+      }
+    } catch (e) {
+      // not JSON, fallback to standard raw text
+    }
     return contract;
   }
 
@@ -134,6 +146,14 @@ export function parseResponseContract(content: string): ResponseContract {
           contract.breakdown = JSON.parse(sectionContent);
         } catch {
           contract.breakdown = null;
+        }
+        break;
+
+      case 'FORMATTED_JSON':
+        try {
+          contract.formattedJson = JSON.parse(sectionContent);
+        } catch {
+          contract.formattedJson = undefined;
         }
         break;
 

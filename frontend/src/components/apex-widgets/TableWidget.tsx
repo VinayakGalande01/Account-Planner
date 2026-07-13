@@ -182,6 +182,10 @@ function isNumericColumn(col: string): boolean {
 function formatCell(value: string | number | boolean | null | undefined, column: string): React.ReactNode {
   if (value === null || value === undefined || value === '') return '—';
 
+  if (/insight/i.test(column)) {
+    return <span className="italic text-zinc-500 dark:text-zinc-400">{String(value)}</span>;
+  }
+
   // 1. Classification & Risk Badge Pill Spans
   if (/classification|risk_level|risk level/i.test(column)) {
     const val = String(value).toLowerCase();

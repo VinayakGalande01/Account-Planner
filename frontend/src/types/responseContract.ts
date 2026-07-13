@@ -74,6 +74,39 @@ export interface ResponseContract {
   breakdown: { total_usd: number; breakdown: string[] } | null;
   /** Whether the response contains structured __SECTION_*__ tags */
   isStructured: boolean;
+  /** The new Response Formatting Layer JSON schema */
+  formattedJson?: FormattedJsonResponse;
+  /** Response routing type */
+  type?: 'conversational' | 'clarification' | 'data';
+  /** Plain conversational payload when type is conversational or clarification */
+  conversationalData?: { type: string; message: string; suggestions: string[] };
+}
+
+export interface FormattedJsonResponse {
+  headline: string;
+  urgency: 'P1' | 'P2' | 'P3';
+  summary: string;
+  opportunities: {
+    id: string;
+    name: string;
+    stage: string;
+    amount: string;
+    probability: string;
+    insight: string;
+  }[];
+  risks: {
+    type: string;
+    account: string;
+    action: string;
+  }[];
+  recommended_actions: {
+    priority: number;
+    role: 'Account Manager' | 'VP Sales' | 'Executive';
+    action: string;
+  }[];
+  flag: string;
+  closing_question: string;
+  next_steps_suggestions: string[];
 }
 
 // ── Section Transport Protocol ──────────────────────────────
@@ -94,6 +127,7 @@ export type SectionName =
   | 'CRM_HYGIENE'
   | 'CONFIDENCE'
   | 'RECOMMENDED_ACTIONS'
+  | 'FORMATTED_JSON'
   | 'END';
 
 /**
