@@ -16,6 +16,14 @@ sleep 0.4
 echo "[SUCCESS] Environment Loaded"
 echo ""
 
+echo "[SERVICE] Local LLM Server"
+echo "├─ Path: /Users/theabhijitjagtap/Local_server-main"
+echo "└─ Status: STARTING"
+osascript -e "tell application \"Terminal\" to activate" -e "tell application \"Terminal\" to do script \"cd '/Users/theabhijitjagtap/Local_server-main' && ./start.sh\"" > /dev/null
+echo ""
+
+sleep 1.5
+
 echo "[SERVICE] Auth System"
 echo "├─ Port: 8001"
 echo "├─ URL : http://localhost:8001"
