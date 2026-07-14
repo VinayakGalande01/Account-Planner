@@ -151,7 +151,7 @@ IMPORTANT: Do not output any preamble, markdown code fences, or explanation. Out
     }
 
     try:
-        limits = httpx.Timeout(timeout=10.0, connect=2.0)
+        limits = httpx.Timeout(timeout=25.0, connect=5.0)
         async with httpx.AsyncClient(timeout=limits) as client:
             response = await client.post(url, json=payload)
             if response.status_code == 200:

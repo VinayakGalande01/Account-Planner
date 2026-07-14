@@ -1,0 +1,43 @@
+import os
+import sys
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+
+# Ensure the backend directory is in the python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Load environment variables from .env file
+load_dotenv()
+
+from database import Base, get_engine, DATABASE_URL
+import models.eval_models
+
+def main():
+    print("=== APEX EVALUATION / LAYER 2 TABLE INITIALIZER ===")
+    
+    # Check if target is postgres and use admin_url if so, similar to rebuild_db.py
+    if DATABASE_URL.startswith("postgresql") or "aws-1-ap-southeast-2.pooler.supabase.com" in DATABASE_URL:
+        admin_url = "postgresql://postgres.hqofkucrppxzgtajpjxh:APEX%242026006@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres"
+        print("[INFO] PostgreSQL detected. Using admin credentials for table creation...")
+        engine = create_engine(admin_url)
+    else:
+        engine = get_engine()
+    
+    # Print the database destination (redacting password for security)
+    url_repr = str(engine.url)
+    if "@" in url_repr:
+        db_part = url_repr.split("@")[-1]
+        scheme_part = url_repr.split("://")[0]
+        print(f"[INFO] Connecting to: {scheme_part}://****@{db_part}")
+    else:
+        print(f"[INFO] Connecting to: {url_repr}")
+        
+    try:
+        # Create all tables defined in models.eval_models
+        Base.metadata.create_all(bind=engine)
+        print("[SUCCESS] Layer 2 evaluation tables created/verified successfully on the target database!")
+    except Exception as e:
+        print(f"[ERROR] Failed to create tables: {e}")
+
+if __name__ == "__main__":
+    main()

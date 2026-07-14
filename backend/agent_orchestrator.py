@@ -396,7 +396,7 @@ class AccountPlanningAgent:
                     "model": self.response_generator.model,
                     "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}",
                     "stream": False,
-                    "options": { "temperature": 0.5, "num_predict": 500 }
+                    "options": { "temperature": 0.5, "num_predict": 200 }
                 }
                 with httpx.Client(timeout=httpx.Timeout(20.0)) as client:
                     response = client.post(self.response_generator.url, json=payload)
@@ -503,8 +503,8 @@ class AccountPlanningAgent:
             consensus = self.reasoning_engine.run_reasoning_threads(
                 account_data=account_data,
                 market_context=market_context,
-                timeout_per_thread=300,
-                total_timeout=600,
+                timeout_per_thread=45,
+                total_timeout=90,
                 local=self.is_local,
                 complexity=intent.complexity,
                 requested_count=requested_count,

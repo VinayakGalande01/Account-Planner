@@ -102,6 +102,10 @@ except Exception as db_err:
 from auth.router import router as auth_router
 app.include_router(auth_router)
 
+from api.golden_dataset import router as golden_dataset_router
+app.include_router(golden_dataset_router)
+
+
 from database import get_db
 from sqlalchemy.orm import Session
 from auth.dependencies import get_current_user
@@ -1796,7 +1800,11 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             yield f"__SECTION_SUMMARY__\nAn error occurred while generating the response: {str(e)}"
             yield "__SECTION_END__"
         finally:
-            generator_db.close()
+            try:
+                generator_db.close()
+            except Exception as close_err:
+                print(f"[API Warning] Failed to close database session cleanly: {close_err}")
+
 
     async def generate_stream():
         import time

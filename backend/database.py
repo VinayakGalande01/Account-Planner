@@ -23,7 +23,14 @@ def get_engine():
         return create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
     try:
         # Test connection with a short 3s timeout to avoid startup lockup
-        temp_engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args={"connect_timeout": 3})
+        temp_engine = create_engine(
+            DATABASE_URL, 
+            pool_pre_ping=True, 
+            pool_recycle=1800,  # Recycle connections every 30 minutes
+            pool_size=10,       # Keep up to 10 persistent connections
+            max_overflow=20,    # Allow bursting up to 20 temporary connections
+            connect_args={"connect_timeout": 3}
+        )
         with temp_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         print("  [SUCCESS] PostgreSQL/Supabase connection verified successfully.")

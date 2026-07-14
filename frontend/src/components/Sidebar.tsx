@@ -19,6 +19,7 @@ import {
   MoreVertical,
   Trash2,
   AlertTriangle,
+  Database,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
@@ -31,8 +32,10 @@ const navigation = [
   { name: 'Accounts', icon: Briefcase, href: '/accounts' },
   { name: 'Pipeline', icon: TrendingUp, href: '/pipeline' },
   { name: 'Intelligence', icon: Brain, href: '/intelligence' },
+  { name: 'Golden Dataset', icon: Database, href: '/datasets' },
   { name: 'Settings', icon: Settings, href: '/settings' },
 ]
+
 
 export function Sidebar() {
   const router = useRouter()
