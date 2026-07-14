@@ -13,6 +13,7 @@ import { ActionsWidget } from './ActionsWidget';
 import { CrmHygieneWidget } from './CrmHygieneWidget';
 import { ConfidenceWidget } from './ConfidenceWidget';
 import { RecommendedActionsWidget } from './RecommendedActionsWidget';
+import { ExecEmailCard, MeetingAgendaCard, StakeholderMapCard, RiskReviewCard } from '../quick-actions/QuickActionCards';
 
 // ── Formatted Response Renderer ─────────────────────────────
 
@@ -227,13 +228,37 @@ export function FormattedResponseRenderer({ data, onActionClick }: FormattedResp
 type WidgetRenderer = (content: string) => React.ReactNode;
 
 const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
-  DIRECT_ANSWER: (content) => (
-    <div className="apex-direct-answer bg-primary/[0.04] border border-primary/10 p-4 rounded-xl mb-1">
-      <p className="text-[14px] text-zinc-800 dark:text-zinc-200 leading-[1.7] font-[family-name:var(--font-inter)]">
-        {renderInlineMarkdown(content)}
-      </p>
-    </div>
-  ),
+  DIRECT_ANSWER: (content) => {
+    try {
+      const trimmed = content.trim();
+      if (trimmed.startsWith('{')) {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && parsed.type) {
+          if (parsed.type === 'EXEC_EMAIL') {
+            return <ExecEmailCard data={parsed} />;
+          }
+          if (parsed.type === 'MEETING_AGENDA') {
+            return <MeetingAgendaCard data={parsed} />;
+          }
+          if (parsed.type === 'STAKEHOLDERS') {
+            return <StakeholderMapCard data={parsed} />;
+          }
+          if (parsed.type === 'RISK_REVIEW') {
+            return <RiskReviewCard data={parsed} />;
+          }
+        }
+      }
+    } catch (e) {
+      // Fallback
+    }
+    return (
+      <div className="apex-direct-answer bg-primary/[0.04] border border-primary/10 p-4 rounded-xl mb-1">
+        <p className="text-[14px] text-zinc-800 dark:text-zinc-200 leading-[1.7] font-[family-name:var(--font-inter)]">
+          {renderInlineMarkdown(content)}
+        </p>
+      </div>
+    );
+  },
 
   HEADLINE: (content) => <HeadlineWidget content={content} />,
 
@@ -578,15 +603,39 @@ export function FinalizedContractRenderer({ contract, onActionClick }: Finalized
   const actionSections: React.ReactNode[] = [];
 
   if (contract.directAnswer) {
-    narrativeSections.push(
-      <div key="directAnswer" className="apex-section-block">
-        <div className="apex-direct-answer bg-primary/[0.04] border border-primary/10 p-4 rounded-xl mb-1">
-          <p className="text-[14px] text-zinc-800 dark:text-zinc-200 leading-[1.7] font-[family-name:var(--font-inter)]">
-            {renderInlineMarkdown(contract.directAnswer)}
-          </p>
+    try {
+      const trimmed = contract.directAnswer.trim();
+      if (trimmed.startsWith('{')) {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && parsed.type) {
+          if (parsed.type === 'EXEC_EMAIL') {
+            narrativeSections.push(<div key="directAnswer" className="apex-section-block"><ExecEmailCard data={parsed} /></div>);
+          } else if (parsed.type === 'MEETING_AGENDA') {
+            narrativeSections.push(<div key="directAnswer" className="apex-section-block"><MeetingAgendaCard data={parsed} /></div>);
+          } else if (parsed.type === 'STAKEHOLDERS') {
+            narrativeSections.push(<div key="directAnswer" className="apex-section-block"><StakeholderMapCard data={parsed} /></div>);
+          } else if (parsed.type === 'RISK_REVIEW') {
+            narrativeSections.push(<div key="directAnswer" className="apex-section-block"><RiskReviewCard data={parsed} /></div>);
+          } else {
+            throw new Error('Fallback');
+          }
+        } else {
+          throw new Error('Fallback');
+        }
+      } else {
+        throw new Error('Fallback');
+      }
+    } catch {
+      narrativeSections.push(
+        <div key="directAnswer" className="apex-section-block">
+          <div className="apex-direct-answer bg-primary/[0.04] border border-primary/10 p-4 rounded-xl mb-1">
+            <p className="text-[14px] text-zinc-800 dark:text-zinc-200 leading-[1.7] font-[family-name:var(--font-inter)]">
+              {renderInlineMarkdown(contract.directAnswer)}
+            </p>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
   }
   if (contract.headline) {
     narrativeSections.push(

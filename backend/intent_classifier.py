@@ -27,6 +27,8 @@ class IntentEnum(str, Enum):
     PIPELINE_SUMMARY = "pipeline_summary"
     DRAFT_EMAIL = "draft_email"
     MEETING_AGENDA = "meeting_agenda"
+    SHOW_STAKEHOLDERS = "show_stakeholders"
+    REVIEW_RISKS = "review_risks"
 
 class ExtractedEntities(BaseModel):
     account: Optional[str] = None
@@ -49,7 +51,7 @@ class IntentClassificationOutput(BaseModel):
     target_entities: List[str] = []
 
 class RouterOutput(BaseModel):
-    intent: Literal["ACT_REVIEW", "RISK_TRIAGE", "DEAL_VELOCITY", "DRAFT_EMAIL", "MEETING_AGENDA"]
+    intent: Literal["ACT_REVIEW", "RISK_TRIAGE", "DEAL_VELOCITY", "DRAFT_EMAIL", "MEETING_AGENDA", "SHOW_STAKEHOLDERS", "REVIEW_RISKS"]
     complexity: Literal["TACTICAL", "STRATEGIC", "EXECUTIVE"]
     target_entity: Optional[str] = None
     focus_area: Optional[str] = None
@@ -90,6 +92,16 @@ SEED_QUERIES = [
     {"query": "TCS largest deals in negotiation", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
     {"query": "Wipro close rate and deal velocity", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
     {"query": "forecast summary for the quarter", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+    
+    # SHOW_STAKEHOLDERS
+    {"query": "show stakeholders", "intent": "SHOW_STAKEHOLDERS", "complexity": "TACTICAL", "primary_intent": IntentEnum.SHOW_STAKEHOLDERS},
+    {"query": "who are the key contacts", "intent": "SHOW_STAKEHOLDERS", "complexity": "TACTICAL", "primary_intent": IntentEnum.SHOW_STAKEHOLDERS},
+    {"query": "show me the decision makers", "intent": "SHOW_STAKEHOLDERS", "complexity": "TACTICAL", "primary_intent": IntentEnum.SHOW_STAKEHOLDERS},
+    
+    # REVIEW_RISKS
+    {"query": "review risks", "intent": "REVIEW_RISKS", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.REVIEW_RISKS},
+    {"query": "what are the account risks", "intent": "REVIEW_RISKS", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.REVIEW_RISKS},
+    {"query": "show me deal risks", "intent": "REVIEW_RISKS", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.REVIEW_RISKS},
 ]
 
 class IntentClassifier:
@@ -223,6 +235,14 @@ Output: {"intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "target_entity": "Wi
                     primary_intent_val = IntentEnum.RISK_ASSESSMENT
                 elif intent_val == "DEAL_VELOCITY":
                     primary_intent_val = IntentEnum.PIPELINE_SUMMARY
+                elif intent_val == "SHOW_STAKEHOLDERS":
+                    primary_intent_val = IntentEnum.SHOW_STAKEHOLDERS
+                elif intent_val == "REVIEW_RISKS":
+                    primary_intent_val = IntentEnum.REVIEW_RISKS
+                elif intent_val == "DRAFT_EMAIL":
+                    primary_intent_val = IntentEnum.DRAFT_EMAIL
+                elif intent_val == "MEETING_AGENDA":
+                    primary_intent_val = IntentEnum.MEETING_AGENDA
                 else:
                     primary_intent_val = IntentEnum.ACTION_RECOMMENDATION
                     

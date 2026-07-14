@@ -38,6 +38,16 @@ async def format_response_for_user(
     if not raw_output or not raw_output.strip():
         return raw_output
 
+    # Detect if raw_output is already a quick-action JSON payload and bypass formatting
+    trimmed = raw_output.strip()
+    if trimmed.startswith("{"):
+        try:
+            parsed = json.loads(trimmed)
+            if "type" in parsed and parsed["type"] in ["EXEC_EMAIL", "MEETING_AGENDA", "STAKEHOLDERS", "RISK_REVIEW"]:
+                return trimmed
+        except Exception:
+            pass
+
     url, model = get_active_llm_config()
 
     # STEP 2 — PERSONA LAYER

@@ -229,7 +229,8 @@ class AccountPlanningAgent:
         user_role: str,
         recipient_roles: List[str] = ["am"],
         history: Optional[List[Dict[str, str]]] = None,
-        active_account: Optional[str] = None
+        active_account: Optional[str] = None,
+        action_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         End-to-end account planning query processing.
@@ -237,9 +238,32 @@ class AccountPlanningAgent:
         # LAYER 1: Intent Classification
         from observability import TraceSpanContext
         
-        print("[Layer 1] Classifying intent...")
-        with TraceSpanContext("PLANNER"):
-            intent = self.intent_classifier.classify(query, history, user_role, active_account)
+        if action_type:
+            from intent_classifier import IntentClassificationOutput, ExtractedEntities, IntentEnum
+            
+            enum_map = {
+                "EXEC_EMAIL": IntentEnum.DRAFT_EMAIL,
+                "DRAFT_EMAIL": IntentEnum.DRAFT_EMAIL,
+                "MEETING_AGENDA": IntentEnum.MEETING_AGENDA,
+                "SHOW_STAKEHOLDERS": IntentEnum.SHOW_STAKEHOLDERS,
+                "REVIEW_RISKS": IntentEnum.REVIEW_RISKS
+            }
+            
+            intent = IntentClassificationOutput(
+                primary_intent=enum_map.get(action_type, IntentEnum.ACTION_RECOMMENDATION),
+                confidence_primary=1.0,
+                extracted_entities=ExtractedEntities(account=active_account),
+                urgency="medium",
+                scope="ENTITY",
+                intent=action_type,
+                complexity="FACTUAL" if action_type in ["SHOW_STAKEHOLDERS", "REVIEW_RISKS"] else "TACTICAL",
+                target_entities=[active_account] if active_account else []
+            )
+            print(f"[Orchestrator] Bypassing intent classifier for action_type: {action_type}")
+        else:
+            print("[Layer 1] Classifying intent...")
+            with TraceSpanContext("PLANNER"):
+                intent = self.intent_classifier.classify(query, history, user_role, active_account)
         try:
             intent_data = intent.model_dump()
         except AttributeError:
@@ -377,38 +401,23 @@ class AccountPlanningAgent:
             account_data = self.data_retrieval.expand_scope(account_data)
             print(f"[Layer 2 Input - Expanded Scope] Updated Account Data: {account_data}")
         
-        # Fast path for explicit generation tasks (Email, Agenda)
-        if intent.intent in ["DRAFT_EMAIL", "MEETING_AGENDA"]:
-            print(f"[Governance] {intent.intent} detected: Running targeted fast-path generation.")
-            import httpx
+        # Fast path for explicit quick-action tasks
+        QUICK_ACTION_INTENTS = {"DRAFT_EMAIL", "EXEC_EMAIL", "MEETING_AGENDA", "SHOW_STAKEHOLDERS", "REVIEW_RISKS"}
+        if intent.intent in QUICK_ACTION_INTENTS:
+            print(f"[Governance] {intent.intent} detected: Running targeted quick-action dispatch.")
             import json
+            from quick_actions_handler import dispatch_quick_action
             
-            task_name = "email draft" if intent.intent == "DRAFT_EMAIL" else "meeting agenda"
-            system_prompt = (
-                f"You are a sales assistant. Create a professional {task_name} based on the provided account data. "
-                "Keep it concise, actionable, and grounded in the data. Output ONLY the drafted content."
+            action_result = dispatch_quick_action(
+                action_type=intent.intent,
+                account_data=account_data,
+                query=query,
+                active_account=active_account,
+                is_local=self.is_local
             )
-            user_prompt = f"User Request: {query}\n\nAccount Data: {json.dumps(account_data, indent=2)}"
             
-            generated_content = ""
-            try:
-                payload = {
-                    "model": self.response_generator.model,
-                    "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}",
-                    "stream": False,
-                    "options": { "temperature": 0.5, "num_predict": 200 }
-                }
-                with httpx.Client(timeout=httpx.Timeout(20.0)) as client:
-                    response = client.post(self.response_generator.url, json=payload)
-                    if response.status_code == 200:
-                        generated_content = response.json().get("response", "").strip()
-            except Exception as e:
-                print(f"[Warning] Fast path generation failed: {e}")
-                
-            if not generated_content:
-                generated_content = f"Could not generate {task_name}. Please try again."
-                
-            # Synthesize a fast response
+            serialized_narrative = json.dumps(action_result)
+            
             intent.complexity = "FACTUAL"
             consensus = self.reasoning_engine.run_reasoning_threads(
                 account_data=account_data,
@@ -416,7 +425,7 @@ class AccountPlanningAgent:
                 complexity="FACTUAL"
             )
             
-            responses = {role: {"narrative": generated_content, "why_this_matters": f"Generated {task_name} based on CRM context."} for role in recipient_roles}
+            responses = {role: {"narrative": serialized_narrative, "why_this_matters": f"Quick action {intent.intent} executed."} for role in recipient_roles}
             
             return {
                 "status": "SUCCESS",

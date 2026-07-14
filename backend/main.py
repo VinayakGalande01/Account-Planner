@@ -264,6 +264,7 @@ class ChatRequest(BaseModel):
     response_format: Optional[str] = "markdown"  # "markdown" or "json"
     response_mode: Optional[str] = "operational"  # "executive", "operational", "analyst"
     persona: Optional[str] = "account_manager"
+    action_type: Optional[str] = None
 
 
 BASE_PROMPT = """You are APEX — Account Planning & Execution Intelligence.
@@ -1460,31 +1461,34 @@ def save_telemetry_bg(trace_id, request_id, session_id, user_id, workspace_id, c
 @app.post("/api/chat")
 @limiter.limit("30/minute")
 async def chat(request: Request, body: ChatRequest, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user)):
-    from query_classifier import classify_query
-    from conversational_handler import handle_conversational_query
+    is_quick_action = body.action_type is not None and body.action_type.strip() != ""
     
-    query_type = classify_query(body.query)
-    
-    if query_type == "GENERAL":
-        result = handle_conversational_query(body.query)
-        # Yield the JSON string directly as a "stream" so frontend text decoder matches it
-        async def conv_stream():
-            yield json.dumps(result)
-        return StreamingResponse(conv_stream(), media_type="text/event-stream")
+    if not is_quick_action:
+        from query_classifier import classify_query
+        from conversational_handler import handle_conversational_query
         
-    if query_type == "UNCLEAR":
-        result = {
-            "type": "clarification",
-            "message": "I want to make sure I help you correctly. Are you looking for data about your accounts, or do you have a general question about how APEX works?",
-            "suggestions": [
-                "Show me my accounts",
-                "Explain how APEX works",
-                "Analyze my pipeline"
-            ]
-        }
-        async def clear_stream():
-            yield json.dumps(result)
-        return StreamingResponse(clear_stream(), media_type="text/event-stream")
+        query_type = classify_query(body.query)
+        
+        if query_type == "GENERAL":
+            result = handle_conversational_query(body.query)
+            # Yield the JSON string directly as a "stream" so frontend text decoder matches it
+            async def conv_stream():
+                yield json.dumps(result)
+            return StreamingResponse(conv_stream(), media_type="text/event-stream")
+            
+        if query_type == "UNCLEAR":
+            result = {
+                "type": "clarification",
+                "message": "I want to make sure I help you correctly. Are you looking for data about your accounts, or do you have a general question about how APEX works?",
+                "suggestions": [
+                    "Show me my accounts",
+                    "Explain how APEX works",
+                    "Analyze my pipeline"
+                ]
+            }
+            async def clear_stream():
+                yield json.dumps(result)
+            return StreamingResponse(clear_stream(), media_type="text/event-stream")
         
     if request.headers.get("x-test-mock") == "true":
         async def mock_stream():
@@ -1575,7 +1579,8 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
                     user_role="sales", # Default
                     recipient_roles=[target_role],
                     history=body.chat_history if body.chat_history else chat_history,
-                    active_account=body.active_account
+                    active_account=body.active_account,
+                    action_type=body.action_type
                 )
             )
             
