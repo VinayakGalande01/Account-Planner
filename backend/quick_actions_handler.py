@@ -24,7 +24,17 @@ class ExecEmailHandler:
         
         raw_output = ""
         try:
-            raw_output = generator._call_llm(system_prompt, user_prompt, timeout=30)
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            if gemini_key:
+                try:
+                    print("[Cloud Route] Routing quick action EXEC_EMAIL to Google Gemini API...")
+                    from reasoning_engine import call_gemini_api
+                    raw_output = call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=1024, timeout=15)
+                except Exception as cloud_err:
+                    print(f"[Cloud Route Error] Gemini EXEC_EMAIL call failed: {cloud_err}. Falling back...")
+            
+            if not raw_output:
+                raw_output = generator._call_llm(system_prompt, user_prompt, timeout=30)
             parsed = clean_and_parse_json(raw_output)
             parsed["type"] = "EXEC_EMAIL"
             if "suggested_recipients" not in parsed:
@@ -41,7 +51,7 @@ class ExecEmailHandler:
                 "suggested_recipients": [{"name": c.get("name"), "role": c.get("role")} for c in contacts[:2]],
                 "send_later_hint": "Send manually during business hours."
             }
-
+ 
 class MeetingAgendaHandler:
     @staticmethod
     def handle(account_data: Dict[str, Any], query: str, active_account: Optional[str] = None, is_local: bool = True) -> Dict[str, Any]:
@@ -63,7 +73,17 @@ class MeetingAgendaHandler:
         
         raw_output = ""
         try:
-            raw_output = generator._call_llm(system_prompt, user_prompt, timeout=30)
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            if gemini_key:
+                try:
+                    print("[Cloud Route] Routing quick action MEETING_AGENDA to Google Gemini API...")
+                    from reasoning_engine import call_gemini_api
+                    raw_output = call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=1024, timeout=15)
+                except Exception as cloud_err:
+                    print(f"[Cloud Route Error] Gemini MEETING_AGENDA call failed: {cloud_err}. Falling back...")
+            
+            if not raw_output:
+                raw_output = generator._call_llm(system_prompt, user_prompt, timeout=30)
             parsed = clean_and_parse_json(raw_output)
             parsed["type"] = "MEETING_AGENDA"
             return parsed

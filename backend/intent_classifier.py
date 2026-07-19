@@ -107,11 +107,14 @@ SEED_QUERIES = [
 class IntentClassifier:
     """Hybrid intent classifier combining embeddings and LLM routing."""
     
-    def __init__(self, known_accounts: Optional[List[str]] = None, is_local: bool = True):
+    def __init__(self, known_accounts: Optional[List[str]] = None, known_opportunities: Optional[Dict[str, str]] = None, is_local: bool = True, **kwargs):
         self.known_accounts = known_accounts or []
+        self.known_opportunities = known_opportunities or {}
         self.is_local = is_local
         self.embedding_model = None
         self.seed_embeddings = None
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     def _init_embeddings(self):
         """Lazy load sentence transformers and calculate seed embeddings."""
@@ -133,10 +136,28 @@ class IntentClassifier:
         
         # Default fallback values (derived from legacy rules)
         scope_val = self._detect_scope(query_lower)
-        complexity_val = "STRATEGIC"
-        intent_val = "ACT_REVIEW"
         primary_intent_val = self._detect_intent(query_lower)
         confidence_val = self._calculate_confidence(query_lower, primary_intent_val)
+        
+        # Legacy to Skills Mapper for fallback defaults
+        complexity_val = "STRATEGIC"
+        intent_val = "ACT_REVIEW"
+        if primary_intent_val == IntentEnum.RELATIONSHIP_ANALYSIS:
+            intent_val = "CONTACT_LOOKUP"
+            complexity_val = "FACTUAL"
+        elif primary_intent_val == IntentEnum.PIPELINE_SUMMARY:
+            intent_val = "OPPORTUNITY_RANKING"
+            complexity_val = "OPERATIONAL"
+        elif primary_intent_val == IntentEnum.RISK_ASSESSMENT:
+            intent_val = "RISK_ANALYSIS"
+            complexity_val = "OPERATIONAL"
+        elif primary_intent_val == IntentEnum.ACTION_RECOMMENDATION:
+            if "brief" in query_lower or "executive" in query_lower:
+                intent_val = "EXECUTIVE_BRIEFING"
+                complexity_val = "EXECUTIVE"
+            else:
+                intent_val = "ACCOUNT_PLAN"
+                complexity_val = "STRATEGIC"
         
         # Check for Conversational Greetings and Chitchat first
         GREETING_PATTERN = r"\b(hello|hi|hey|what's up|howdy|anyone there|how are you|can you help|good morning|good afternoon|good evening|thanks|thank you|bye|goodbye)\b"
@@ -159,6 +180,93 @@ class IntentClassifier:
                 complexity="CONVERSATIONAL",
                 target_entities=[],
                 context_summary=f"Conversational: {chitchat_intent}"
+            )
+
+        # Entity extraction (using robust legacy rules)
+        entities = self._extract_entities(query, primary_intent_val)
+        urgency = self._detect_urgency(query_lower)
+        
+        # Extract target entities from database
+        target_entities_val = []
+        
+        # Look for opportunity ID in query to resolve target account
+        opp_id_match = re.search(r'\b(\d+_OPP\d+|OPP\d+)\b', query, re.IGNORECASE)
+        if opp_id_match and getattr(self, 'known_opportunities', None):
+            matched_opp_id = opp_id_match.group(1).lower()
+            resolved_acc = self.known_opportunities.get(matched_opp_id)
+            if resolved_acc:
+                target_entities_val.append(resolved_acc)
+                
+        if not target_entities_val and self.known_accounts:
+            for acc in self.known_accounts:
+                pattern = r'\b' + re.escape(acc.lower()) + r'\b'
+                if re.search(pattern, query_lower):
+                    target_entities_val.append(acc)
+        
+        # Contiguous capitalized word fallback
+        if not target_entities_val:
+            noise = {'Top', 'Show', 'Give', 'Get', 'Review', 'Evaluate', 'Provide', 'Who', 'What', 'Where', 'When', 'Why', 'How', 'Which', 'Are', 'Is', 'They', 'Them', 'Our', 'Your', 'Please', 'Traced'}
+            matches = re.findall(r'\b[A-Z][a-zA-Z0-9]*(?:\s+[A-Z][a-zA-Z0-9]*)*\b', query)
+            for m in matches:
+                m_words = m.split()
+                filtered_words = [w for w in m_words if w not in noise]
+                if filtered_words:
+                    target_entities_val.append(" ".join(filtered_words))
+        
+        # Carrying over active account from history if no account is specified and query is not global
+        if not target_entities_val:
+            global_indicators = ["portfolio", "all accounts", "across accounts", "every account", "entire portfolio", "global", "high risk accounts", "top opportunities"]
+            is_global = any(indicator in query_lower for indicator in global_indicators)
+            
+            if not is_global and active_account:
+                target_entities_val.append(active_account)
+            elif not is_global and history:
+                for msg in reversed(history):
+                    msg_text = msg.get("content", msg.get("text", "")).lower()
+                    found_acc = None
+                    if self.known_accounts:
+                        for acc in self.known_accounts:
+                            pattern = r'\b' + re.escape(acc.lower()) + r'\b'
+                            if re.search(pattern, msg_text):
+                                found_acc = acc
+                                break
+                    if found_acc:
+                        target_entities_val.append(found_acc)
+                        break
+        
+        if target_entities_val:
+            entities.account = target_entities_val[0]
+
+        # Conversational query detection bypass
+        conversational_keywords = ["hello", "hi", "hii", "hey", "greetings", "what can you do for me", "help me", "who are you"]
+        is_conversational = any(kw == query_lower or query_lower.startswith(kw + " ") for kw in conversational_keywords)
+        if is_conversational:
+            return IntentClassificationOutput(
+                primary_intent=IntentEnum.ACTION_RECOMMENDATION,
+                confidence_primary=1.0,
+                extracted_entities=entities,
+                urgency="low",
+                scope="MIXED",
+                intent="GREETING",
+                complexity="CONVERSATIONAL",
+                target_entities=[],
+                context_summary="APEX Router: Conversational Bypass (GREETING)"
+            )
+
+        # Factual query detection bypass
+        factual_keywords = ["who is", "who are", "what is", "where is", "how many", "list of", "show me contacts", "get contacts", "decision maker", "contact details"]
+        is_factual = any(kw in query_lower for kw in factual_keywords)
+        if is_factual:
+            return IntentClassificationOutput(
+                primary_intent=primary_intent_val,
+                confidence_primary=1.0,
+                extracted_entities=entities,
+                urgency=urgency,
+                scope=scope_val,
+                intent=intent_val,
+                complexity="FACTUAL",
+                target_entities=target_entities_val,
+                context_summary=f"APEX Router: Factual Bypass ({primary_intent_val})"
             )
 
         # ═══════════════════════════════════════════════════════════════
@@ -230,77 +338,58 @@ Output: {"intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "target_entity": "Wi
                 complexity_val = validated.complexity
                 confidence_val = 0.90
                 
-                # Map to legacy enum
-                if intent_val == "RISK_TRIAGE":
-                    primary_intent_val = IntentEnum.RISK_ASSESSMENT
-                elif intent_val == "DEAL_VELOCITY":
+                # Map to legacy / skills enums
+                if intent_val == "DEAL_VELOCITY":
                     primary_intent_val = IntentEnum.PIPELINE_SUMMARY
+                    intent_val = "OPPORTUNITY_RANKING"
+                    complexity_val = "OPERATIONAL"
+                elif intent_val == "RISK_TRIAGE":
+                    primary_intent_val = IntentEnum.RISK_ASSESSMENT
+                    intent_val = "RISK_ANALYSIS"
+                    complexity_val = "OPERATIONAL"
                 elif intent_val == "SHOW_STAKEHOLDERS":
                     primary_intent_val = IntentEnum.SHOW_STAKEHOLDERS
+                    intent_val = "CONTACT_LOOKUP"
+                    complexity_val = "FACTUAL"
                 elif intent_val == "REVIEW_RISKS":
                     primary_intent_val = IntentEnum.REVIEW_RISKS
+                    intent_val = "RISK_ANALYSIS"
+                    complexity_val = "OPERATIONAL"
                 elif intent_val == "DRAFT_EMAIL":
                     primary_intent_val = IntentEnum.DRAFT_EMAIL
                 elif intent_val == "MEETING_AGENDA":
                     primary_intent_val = IntentEnum.MEETING_AGENDA
                 else:
                     primary_intent_val = IntentEnum.ACTION_RECOMMENDATION
+                    if complexity_val == "EXECUTIVE":
+                        intent_val = "EXECUTIVE_BRIEFING"
+                    else:
+                        intent_val = "ACCOUNT_PLAN"
+                        complexity_val = "STRATEGIC"
                     
                 print(f"[Router LLM] Output verified: {intent_val} / {complexity_val}")
                 
             except (ValidationError, Exception) as err:
                 # Intercept error and fallback gracefully to default values without raising exceptions
                 print(f"[Router Guardrail] Validation or LLM error: {err}. Safe fallback applied.")
-                intent_val = "ACT_REVIEW"
-                complexity_val = "STRATEGIC"
-                primary_intent_val = IntentEnum.ACTION_RECOMMENDATION
+                primary_intent_val = self._detect_intent(query_lower)
                 confidence_val = 0.50
-
-        # Entity extraction (using robust legacy rules)
-        entities = self._extract_entities(query, primary_intent_val)
-        urgency = self._detect_urgency(query_lower)
-        
-        # Extract target entities from database
-        target_entities_val = []
-        if self.known_accounts:
-            for acc in self.known_accounts:
-                pattern = r'\b' + re.escape(acc.lower()) + r'\b'
-                if re.search(pattern, query_lower):
-                    target_entities_val.append(acc)
-        
-        # Contiguous capitalized word fallback
-        if not target_entities_val:
-            noise = {'Top', 'Show', 'Give', 'Get', 'Review', 'Evaluate', 'Provide', 'Who', 'What', 'Where', 'When', 'Why', 'How', 'Which', 'Are', 'Is', 'They', 'Them', 'Our', 'Your', 'Please', 'Traced'}
-            matches = re.findall(r'\b[A-Z][a-zA-Z0-9]*(?:\s+[A-Z][a-zA-Z0-9]*)*\b', query)
-            for m in matches:
-                m_words = m.split()
-                filtered_words = [w for w in m_words if w not in noise]
-                if filtered_words:
-                    target_entities_val.append(" ".join(filtered_words))
-        
-        # Carrying over active account from history if no account is specified and query is not global
-        if not target_entities_val:
-            global_indicators = ["portfolio", "all accounts", "across accounts", "every account", "entire portfolio", "global", "high risk accounts", "top opportunities"]
-            is_global = any(indicator in query_lower for indicator in global_indicators)
-            
-            if not is_global and active_account:
-                target_entities_val.append(active_account)
-            elif not is_global and history:
-                for msg in reversed(history):
-                    msg_text = msg.get("content", msg.get("text", "")).lower()
-                    found_acc = None
-                    if self.known_accounts:
-                        for acc in self.known_accounts:
-                            pattern = r'\b' + re.escape(acc.lower()) + r'\b'
-                            if re.search(pattern, msg_text):
-                                found_acc = acc
-                                break
-                    if found_acc:
-                        target_entities_val.append(found_acc)
-                        break
-        
-        if target_entities_val:
-            entities.account = target_entities_val[0]
+                if primary_intent_val == IntentEnum.RELATIONSHIP_ANALYSIS:
+                    intent_val = "CONTACT_LOOKUP"
+                    complexity_val = "FACTUAL"
+                elif primary_intent_val == IntentEnum.PIPELINE_SUMMARY:
+                    intent_val = "OPPORTUNITY_RANKING"
+                    complexity_val = "OPERATIONAL"
+                elif primary_intent_val == IntentEnum.RISK_ASSESSMENT:
+                    intent_val = "RISK_ANALYSIS"
+                    complexity_val = "OPERATIONAL"
+                else:
+                    if "brief" in query_lower or "executive" in query_lower:
+                        intent_val = "EXECUTIVE_BRIEFING"
+                        complexity_val = "EXECUTIVE"
+                    else:
+                        intent_val = "ACCOUNT_PLAN"
+                        complexity_val = "STRATEGIC"
             
         return IntentClassificationOutput(
             primary_intent=primary_intent_val,
@@ -315,54 +404,67 @@ Output: {"intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "target_entity": "Wi
         )
 
     def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 60) -> str:
-        url = os.getenv("LLM_URL", "")
-        model = os.getenv("MODEL_NAME", "llama3.2:latest")
+        # Check for Gemini API integration (Primary Cloud Route)
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                print("[Cloud Route] Routing Layer 1 Intent Classification call to Google Gemini API...")
+                # Groq/Gemini call helper is in reasoning_engine
+                from reasoning_engine import call_gemini_api
+                # Limit output response size using max_tokens=1024 and enforce a 10s connection limit
+                return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=1024, timeout=10)
+            except Exception as e:
+                print(f"[Cloud Route Error] Gemini API intent routing failed: {e}. Falling back...")
+
+        # --- LOCAL LLM EXECUTION CODE (COMMENTED OUT FOR PERFORMANCE) ---
+        # model = os.getenv("MODEL_NAME", "llama3.2:latest")
+        # url = os.getenv("LLM_URL", "")
+        # import httpx
+        # payload = {
+        #     "model": model,
+        #     "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON.",
+        #     "stream": False,
+        #     "options": {
+        #         "temperature": 0.0,
+        #         "num_predict": 128
+        #     }
+        # }
+        # httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
+        # print(f"  [LLM CONNECT] Attempting connection to: {url} (model: {model})")
+        # with httpx.Client(timeout=httpx_timeout) as client:
+        #     print(f"  [LLM REQUEST] Sending query payload to: {url}...")
+        #     response = client.post(url, json=payload)
+        #     print(f"  [LLM RESPONSE] Received status {response.status_code} from: {url}")
+        #     if response.status_code == 200:
+        #         return response.json().get("response", "").strip()
+        #     else:
+        #         raise Exception(f"HTTP error {response.status_code}")
         
-        if not self.is_local:
-            gemini_key = os.getenv("GEMINI_API_KEY")
-            if gemini_key:
-                try:
-                    from reasoning_engine import call_gemini_api
-                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=256, timeout=min(timeout, 1500))
-                except Exception as e:
-                    print(f"[Router LLM] Gemini API fallback failed: {e}. Falling back to local model...")
-        
-        import httpx
-        payload = {
-            "model": model,
-            "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON.",
-            "stream": False,
-            "options": {
-                "temperature": 0.0,
-                "num_predict": 128
-            }
-        }
-        httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
-        print(f"  [LLM CONNECT] Attempting connection to: {url} (model: {model})")
-        with httpx.Client(timeout=httpx_timeout) as client:
-            print(f"  [LLM REQUEST] Sending query payload to: {url}...")
-            response = client.post(url, json=payload)
-            print(f"  [LLM RESPONSE] Received status {response.status_code} from: {url}")
-            if response.status_code == 200:
-                return response.json().get("response", "").strip()
-            else:
-                raise Exception(f"HTTP error {response.status_code}")
+        # Raise timeout error if no cloud api credentials found to activate local fallback logic
+        raise TimeoutError("Local model execution bypassed. Please configure Gemini credentials in your environment.")
+
 
     def _clean_and_parse_json(self, text: str) -> dict:
         text = text.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        elif text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
+        # Remove markdown wrapper blocks
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
         text = text.strip()
         
+        # Robustly find the outermost JSON structure
         start = text.find('{')
         end = text.rfind('}')
         if start != -1 and end != -1:
-            text = text[start:end+1]
-        return json.loads(text)
+            json_str = text[start:end+1]
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                # If standard parse fails, try basic regex cleanup for common LLM syntax anomalies
+                # (e.g. unescaped newlines, trailing commas)
+                cleaned = re.sub(r',\s*([\]}])', r'\1', json_str)
+                return json.loads(cleaned)
+        raise ValueError(f"No valid JSON structure found in LLM output: {text[:200]}")
+
 
     def _has_word(self, query: str, words: list) -> bool:
         for w in words:

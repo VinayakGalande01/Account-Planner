@@ -249,11 +249,15 @@ LLM_URL = normalize_url(os.getenv("LLM_URL", ""))
 if not LLM_URL:
     raise RuntimeError("[STARTUP ERROR] LLM_URL is not set in .env. Please configure it before starting the server.")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2:latest")
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 print("\n=============================================")
 print("  [STARTUP] APEX INTELLIGENCE SYSTEM STARTING UP")
-print(f"  [URL] LLM URL    : {LLM_URL}")
-print(f"  [MODEL] LLM Model  : {MODEL_NAME}")
+if GEMINI_KEY:
+    print("  [MODE] Primary Routing: Google Gemini Cloud API (Active)")
+else:
+    print(f"  [URL] LLM URL    : {LLM_URL}")
+    print(f"  [MODEL] LLM Model  : {MODEL_NAME}")
 print("=============================================\n")
 
 class ChatRequest(BaseModel):
@@ -566,6 +570,7 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
     intent_str = intent.value if hasattr(intent, "value") else str(intent)
     intent_map = {
         "risk_assessment": "RISK_ANALYSIS_QUERY",
+        "review_risks": "RISK_ANALYSIS_QUERY",
         "relationship_analysis": "CONTACT_QUERY",
         "pipeline_summary": "PIPELINE_SUMMARY_QUERY",
         "opportunity_expansion": "GLOBAL_LIST_QUERY",
@@ -1390,19 +1395,15 @@ def save_telemetry_bg(trace_id, request_id, session_id, user_id, workspace_id, c
             reasoning_conf = int(consensus.final_confidence * 100) if hasattr(consensus, "final_confidence") else 0
             
         # Grounding check
-        matched_facts = 0
-        total_facts = 0
         grounding_cat = "HIGH"
         if acc_data and full_contract:
-            opps = acc_data.get("opportunities", [])
-            total_facts = len(opps)
-            for o in opps:
-                name = o.get("opp_name")
-                if name and name.lower() in full_contract.lower():
-                    matched_facts += 1
-            if total_facts > 0:
-                pct = int((matched_facts / total_facts) * 100)
-                grounding_cat = classify_grounding(pct)
+            try:
+                from grounding_verifier import compute_grounding_score, score_to_label
+                g_score = compute_grounding_score(full_contract, acc_data)
+                grounding_cat = score_to_label(g_score)
+            except Exception as ge:
+                print(f"[Telemetry Warning] Grounding score computation failed: {ge}")
+                grounding_cat = "HIGH"
                 
         git_commit = get_git_revision_hash()
         
@@ -1448,9 +1449,12 @@ def save_telemetry_bg(trace_id, request_id, session_id, user_id, workspace_id, c
             "planner_prompt_hash": None,
             "reasoner_prompt_hash": None,
             "narrator_prompt_hash": None,
-            "planner_output": trace_payload.get("raw_reasoning_bucket", {}).get("planner"),
+            "planner_output": trace_payload.get("raw_reasoning_bucket", {}).get("reasoning_plan") or trace_payload.get("raw_reasoning_bucket", {}).get("planner"),
             "retrieved_context_summary": f"Opps: {len(acc_data.get('opportunities', []))}, Contacts: {len(acc_data.get('contacts', []))}",
-            "retrieved_record_ids": {"opportunities": [o.get("opp_id") or o.get("id") for o in acc_data.get("opportunities", [])]},
+            "retrieved_record_ids": {
+                "opportunities": [o.get("opp_id") or o.get("id") for o in acc_data.get("opportunities", [])],
+                "evidence_scope": trace_payload.get("raw_reasoning_bucket", {}).get("evidence_bundle", {}).get("query_scope")
+            },
             "reasoning_package": trace_payload.get("raw_reasoning_bucket") or {}
         }
         recorder.record_payload(payload_record)
@@ -1744,24 +1748,24 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             response_obj = res["responses"][target_role]
             consensus = res["consensus"]
             data_sufficiency_score = res["data_quality_score"]
-            
-            # Yield pre-computed table data if available
+            # Yield pre-computed table data if available (skip for simple conversational greetings)
             account_id = res.get("account_data", {}).get("account_id")
+            complexity_val = res.get("intent").complexity if hasattr(res.get("intent"), "complexity") else None
             
-            # Use original table generator just to keep UI tables working
-            try:
-                # Need to synthesize p1_json structure for compute_table_for_intent
-                p1_json = {
-                    "extracted_intent": intent,
-                    "query_parameters": {
-                        "target_accounts": [res.get("account_data", {}).get("account_name", "")]
+            if complexity_val != "CONVERSATIONAL":
+                try:
+                    # Need to synthesize p1_json structure for compute_table_for_intent
+                    p1_json = {
+                        "extracted_intent": intent,
+                        "query_parameters": {
+                            "target_accounts": [res.get("account_data", {}).get("account_name", "")]
+                        }
                     }
-                }
-                table_data = compute_table_for_intent(user_engine, intent, account_id, body.query, p1_json)
-                if table_data:
-                    yield f"__SECTION_TABLE_DATA__\n{json.dumps(table_data)}\n"
-            except Exception as e:
-                print(f"[API Warning] Could not generate table data: {e}")
+                    table_data = compute_table_for_intent(user_engine, intent, account_id, body.query, p1_json)
+                    if table_data:
+                        yield f"__SECTION_TABLE_DATA__\n{json.dumps(table_data)}\n"
+                except Exception as e:
+                    print(f"[API Warning] Could not generate table data: {e}")
                 
             yield f"sys_meta_log|[SYS_LOG] Reasoning completed. Confidence: {consensus.final_confidence * 100:.0f}%\n\n"
             await asyncio.sleep(0.05)

@@ -1606,16 +1606,47 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
     # Format prompts nicely
     full_prompt = f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON."
     
+    # Map schemas dynamically to enforce JSON output constraints on Gemini API
+    # 1. Layer 1 Intent Matrix Router Schema
+    router_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "intent": {
+                "type": "STRING",
+                "enum": ["ACT_REVIEW", "RISK_TRIAGE", "DEAL_VELOCITY", "DRAFT_EMAIL", "MEETING_AGENDA", "SHOW_STAKEHOLDERS", "REVIEW_RISKS"]
+            },
+            "complexity": {
+                "type": "STRING",
+                "enum": ["TACTICAL", "STRATEGIC", "EXECUTIVE"]
+            },
+            "target_entity": {"type": "STRING"},
+            "focus_area": {"type": "STRING"}
+        },
+        "required": ["intent", "complexity"]
+    }
+    
+    generation_config = {
+        "temperature": 0.0,
+        "maxOutputTokens": max_tokens,
+        "responseMimeType": "application/json"
+    }
+
+    # If the system prompt requests Matrix Routing, enforce the schema
+    if "APEX Matrix Router" in system_prompt:
+        generation_config["responseSchema"] = router_schema
+
     payload = {
         "contents": [{
-            "parts": [{"text": full_prompt}]
+            "parts": [{"text": user_prompt}]
         }],
-        "generationConfig": {
-            "temperature": 0.0,
-            "maxOutputTokens": max_tokens,
-            "responseMimeType": "application/json"
-        }
+        "systemInstruction": {
+            "parts": [{"text": system_prompt}]
+        },
+        "generationConfig": generation_config
     }
+
+
+
     
     httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
     print(f"  [LLM CONNECT] Attempting Gemini proxy connection to: {url}")
@@ -1636,22 +1667,71 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
 
 def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str, Any]:
     """Programmatically constructs natural, professional fallback narratives from data."""
-    account_name = account_data.get("account_name") or "Global Portfolio"
-    health_score = account_data.get("health_score") or 80.0
-    opps = account_data.get("opportunities") or []
-    contacts = account_data.get("contacts") or []
-    cases = account_data.get("cases") or []
+    # =========================================================================
+    # CODE DRIFT TO CLOUD LLM FOR UNDERSTANDING OLD CODE
+    # -------------------------------------------------------------------------
+    # Transition History:
+    # Previously, this function constructed simple string templates reflecting 
+    # raw database stats (e.g. "x opportunities worth $y"). 
+    # This was a temporary workaround when local LLMs timed out on CPU.
+    #
+    # Drift Detail:
+    # Instead of raw templating, we now invoke `IntelligenceEngine.compute(account_data)`
+    # to extract deep, evidence-based alerts (stale deals, single-threaded risk,
+    # and open ticket overrides) deterministically. The old template code has been
+    # retained below as comments to guide future LLM fine-tuning or cloud fallbacks.
+    # =========================================================================
     
+    # --- BEGIN OLD TEMPLATED FALLBACK CODE (PRESERVED FOR CODE DRIFT / STUDY) ---
+    # account_name = account_data.get("account_name") or "Global Portfolio"
+    # health_score = account_data.get("health_score") or 80.0
+    # opps = account_data.get("opportunities") or []
+    # contacts = account_data.get("contacts") or []
+    # cases = account_data.get("cases") or []
+    # 
+    # num_opps = len(opps)
+    # total_rev = sum(opp.get("amount_usd", 0.0) or opp.get("amount", 0.0) for opp in opps)
+    # num_contacts = len(contacts)
+    # num_cases = len(cases)
+    # 
+    # rev_str = f"${total_rev:,.2f}"
+    # macro_summary = f"Reviewing the database metrics for {account_name}, we see {num_opps} active opportunities worth {rev_str}. The current client health score is recorded at {health_score:.1f}%."
+    # if num_cases > 0:
+    #     macro_summary += f" Attention is recommended to address {num_cases} open support tickets."
+    #     
+    # ae_insight = f"Based on the {num_contacts} registered stakeholders in the system, we should coordinate a sync with key contacts to reaffirm our commitment."
+    # if contacts:
+    #     top_contact = contacts[0].get("name", "stakeholders")
+    #     role = contacts[0].get("role", "Key Contact")
+    #     ae_insight += f" The primary contact is listed as {top_contact} ({role})."
+    #     
+    # director_insight = f"No critical blockers are currently preventing opportunity progression in our systems."
+    # if num_cases > 0:
+    #     top_case = cases[0].get("subject", "support case")
+    #     sev = cases[0].get("severity", "medium")
+    #     director_insight = f"Critical focus should be placed on resolving the open ticket '{top_case}' which is marked with severity '{sev}'."
+    # 
+    # (Other playbook generation lines were kept here in template format)
+    # --- END OLD TEMPLATED FALLBACK CODE ---
+
+    from intelligence_engine import IntelligenceEngine
+    signals = IntelligenceEngine.compute(account_data)
+    
+    bullets = signals.get("narrative_bullets", [])
+    account_name = account_data.get("account_name") or "Global Portfolio"
+    opps = account_data.get("opportunities") or []
     num_opps = len(opps)
     total_rev = sum(opp.get("amount_usd", 0.0) or opp.get("amount", 0.0) for opp in opps)
+    rev_str = f"${total_rev:,.2f}"
+    health_score = account_data.get("health_score") or 80.0
+    macro_prefix = f"Reviewing the database metrics for {account_name}, we see {num_opps} active opportunities worth {rev_str}. The current client health score is recorded at {health_score:.1f}%."
+    macro_summary = macro_prefix + (" " + " ".join(bullets[:3]) if bullets else "")
+    
+    contacts = account_data.get("contacts") or []
     num_contacts = len(contacts)
+    cases = account_data.get("cases") or []
     num_cases = len(cases)
     
-    rev_str = f"${total_rev:,.2f}"
-    macro_summary = f"Reviewing the database metrics for {account_name}, we see {num_opps} active opportunities worth {rev_str}. The current client health score is recorded at {health_score:.1f}%."
-    if num_cases > 0:
-        macro_summary += f" Attention is recommended to address {num_cases} open support tickets."
-        
     ae_insight = f"Based on the {num_contacts} registered stakeholders in the system, we should coordinate a sync with key contacts to reaffirm our commitment."
     if contacts:
         top_contact = contacts[0].get("name", "stakeholders")
@@ -1663,7 +1743,8 @@ def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str,
         top_case = cases[0].get("subject", "support case")
         sev = cases[0].get("severity", "medium")
         director_insight = f"Critical focus should be placed on resolving the open ticket '{top_case}' which is marked with severity '{sev}'."
-        
+    
+    # Re-use signal alerts to build high-quality fallback playbook items
     tactical_playbook = []
     day_cnt = 1
     
@@ -1697,7 +1778,7 @@ def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str,
             "success_metric": "Case resolution plan updated"
         })
         day_cnt += 2
-        
+
     if not tactical_playbook:
         tactical_playbook.append({
             "day": 1,
@@ -1705,11 +1786,16 @@ def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str,
             "owner": "Account Manager",
             "success_metric": "Initial contact list populated"
         })
-        
+
+    opps = account_data.get("opportunities", [])
+    total_rev = sum(opp.get("amount_usd", 0.0) or opp.get("amount", 0.0) for opp in opps)
+    rev_str = f"${total_rev:,.2f}"
+
     return {
         "executive_brief": {
             "revenue_at_stake": rev_str,
-            "macro_summary": macro_summary
+            "macro_summary": macro_summary,
+            "headline": bullets[0] if bullets else "Strategic plan initiated."
         },
         "persona_insights": {
             "enterprise_ae": ae_insight,
@@ -1727,37 +1813,45 @@ class ReasoningEngine:
         self.is_local = is_local
 
     def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 60) -> str:
-        if not self.is_local:
-            gemini_key = os.getenv("GEMINI_API_KEY")
-            if gemini_key:
-                try:
-                    print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
-                    # Use a reasonable token limit for Gemini to avoid truncating JSON outputs
-                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 1500))
-                except Exception as e:
-                    print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
+        # Check for Gemini API integration (Cloud Primary)
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                print(f"[Cloud Route] Routing LLM call to Google Gemini API (model: {self.model})...")
+                # Import the helper that communicates with Gemini
+                from intent_classifier import call_gemini_api
+                # Enforce a 10s strict timeout for responsive user experience
+                return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=10)
+            except Exception as e:
+                print(f"[Cloud Route Error] Gemini API call failed: {e}. Falling back...")
 
-        # Enforce conciseness for resource-constrained systems
-        system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. Total JSON output must be under 200 tokens."
-        payload = {
-            "model": self.model,
-            "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON.",
-            "stream": False,
-            "options": {
-                "temperature": 0,
-                "num_predict": 400
-            }
-        }
-        httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
-        print(f"  [LLM CONNECT] Attempting Crucible thread connection to: {self.url} (model: {self.model})")
-        with httpx.Client(timeout=httpx_timeout) as client:
-            print(f"  [LLM REQUEST] Sending Crucible thread query payload to: {self.url}...")
-            response = client.post(self.url, json=payload)
-            print(f"  [LLM RESPONSE] Received Crucible thread status {response.status_code} from: {self.url}")
-            if response.status_code == 200:
-                return response.json().get("response", "").strip()
-            else:
-                raise Exception(f"HTTP error {response.status_code}")
+        # --- LOCAL LLM EXECUTION CODE (COMMENTED OUT FOR PERFORMANCE) ---
+        # # Enforce conciseness for resource-constrained systems
+        # system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. Total JSON output must be under 200 tokens."
+        # payload = {
+        #     "model": self.model,
+        #     "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON.",
+        #     "stream": False,
+        #     "options": {
+        #         "temperature": 0,
+        #         "num_predict": 400
+        #     }
+        # }
+        # httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
+        # print(f"  [LLM CONNECT] Attempting Crucible thread connection to: {self.url} (model: {self.model})")
+        # with httpx.Client(timeout=httpx_timeout) as client:
+        #     print(f"  [LLM REQUEST] Sending Crucible thread query payload to: {self.url}...")
+        #     response = client.post(self.url, json=payload)
+        #     print(f"  [LLM RESPONSE] Received Crucible thread status {response.status_code} from: {self.url}")
+        #     if response.status_code == 200:
+        #         return response.json().get("response", "").strip()
+        #     else:
+        #         raise Exception(f"HTTP error {response.status_code}")
+        
+        # Raise exception to trigger the deterministic fallback engine if no cloud API is active
+        raise TimeoutError("Local model execution bypassed. Please configure Gemini credentials in your environment.")
+
+
 
     def _repair_json_string(self, text: str) -> str:
         return repair_json_string(text)
@@ -1853,7 +1947,10 @@ class ReasoningEngine:
         local: bool = True,
         complexity: str = "EXECUTIVE",
         requested_count: int = 5,
-        history: Optional[List[Dict[str, str]]] = None
+        history: Optional[List[Dict[str, str]]] = None,
+        user_query: str = "",
+        intent_json: dict = None,
+        response_mode: str = "operational"
     ) -> ConsensusOutput:
         """
         Run multi-persona reasoning.
@@ -1891,9 +1988,89 @@ class ReasoningEngine:
                 final_confidence=1.0
             )
 
+        # 2. Handle OPERATIONAL complexity level (Bypass LLM consensus synthesis)
+        if complexity == "OPERATIONAL":
+            print("[Governance] OPERATIONAL complexity detected: Bypassing LLM consensus synthesis.")
+            return ConsensusOutput(
+                consensus_recommendation={
+                    "action": "Displaying data quality and core metrics.",
+                    "confidence": 0.3,
+                    "rationale": "Operational details retrieved."
+                },
+                thread_agreement={"data": 0.3},
+                agreement_score=1.0,
+                dissenting_views=[],
+                confidence_limiting_factors=[],
+                final_confidence=0.3
+            )
+
         # Summarize large dataset to protect context windows
         account_data = summarize_large_dataset(account_data, requested_count)
         
+        # ── PRE-REASONING INTELLIGENCE LAYER ──────────────────────────────────────
+        # Runs for TACTICAL, ANALYTICAL, STRATEGIC complexity only.
+        # Skipped for FACTUAL / CONVERSATIONAL / OPERATIONAL (they return early above).
+        # ------------------------------------------------------------------
+        pre_reasoning_telemetry = {}
+        evidence_bundle = None
+        intelligence_brief = None
+        reasoning_plan = None
+
+        try:
+            from pre_reasoning_layer import (
+                EvidenceSelectorAgent, IntelligenceBriefAgent,
+                ReasoningPlannerAgent, build_consensus_from_plan
+            )
+
+            # Get pre-computed signals if available
+            intelligence_signals = account_data.get("intelligence_signals", {})
+            semantic_activities = account_data.get("semantic_activities", [])
+            data_sufficiency_score = float(account_data.get("health_score", 80.0)) / 100.0
+
+            # STEP 1: Evidence Selection
+            print("[Pre-Reasoning] Running Evidence Selection...")
+            evidence_bundle, ev_telemetry = EvidenceSelectorAgent().run(
+                user_query=user_query or "Plan active accounts",
+                intent_json=intent_json or {},
+                retrieved_context_json=account_data,
+                semantic_activities_json=semantic_activities,
+                data_sufficiency_score=data_sufficiency_score
+            )
+            pre_reasoning_telemetry['evidence_selection'] = ev_telemetry
+            self.raw_reasoning_bucket['evidence_bundle'] = evidence_bundle.dict()
+
+            # STEP 2: Intelligence Brief
+            print("[Pre-Reasoning] Running Intelligence Brief Builder...")
+            intelligence_brief, ib_telemetry = IntelligenceBriefAgent().run(
+                user_query=user_query or "Plan active accounts",
+                intent_json=intent_json or {},
+                evidence_bundle=evidence_bundle,
+                intelligence_signals=intelligence_signals,
+                data_sufficiency_score=data_sufficiency_score
+            )
+            pre_reasoning_telemetry['intelligence_brief'] = ib_telemetry
+            self.raw_reasoning_bucket['intelligence_brief'] = intelligence_brief.dict()
+
+            # STEP 3: Reasoning Plan
+            print("[Pre-Reasoning] Running Reasoning Planner...")
+            reasoning_plan, rp_telemetry = ReasoningPlannerAgent().run(
+                user_query=user_query or "Plan active accounts",
+                response_mode=response_mode,
+                intent_json=intent_json or {},
+                intelligence_brief=intelligence_brief
+            )
+            pre_reasoning_telemetry['reasoning_plan'] = rp_telemetry
+            self.raw_reasoning_bucket['reasoning_plan'] = reasoning_plan.dict()
+            self.raw_reasoning_bucket['pre_reasoning_telemetry'] = pre_reasoning_telemetry
+
+            # STEP 4: Short-circuit if DIRECT answer_mode
+            if reasoning_plan.answer_mode == "DIRECT":
+                print("[Pre-Reasoning] answer_mode=DIRECT: short-circuiting Crucible execution.")
+                return build_consensus_from_plan(reasoning_plan, intelligence_brief)
+
+        except Exception as pre_reasoning_err:
+            print(f"[Pre-Reasoning Error] Pipeline execution failed: {pre_reasoning_err}")
+
         target_entity = account_data.get("account_name", "Global Portfolio")
         
         # Prepare crucible LLM prompts
@@ -1904,14 +2081,32 @@ You must adapt your output based on the provided [COMPLEXITY] variable.
 - If STRATEGIC: Focus on Enterprise AE playbooks and Strategic Director risk mitigation.
 - If EXECUTIVE: Focus entirely on CRO-level revenue summaries."""
 
+        # Get pre-computed signals if available
+        intelligence_signals = account_data.get("intelligence_signals", {})
+        narrative_bullets = intelligence_signals.get("narrative_bullets", [])
+        
         context_payload = {
             "Target Entity": target_entity,
             "Complexity Required": complexity,
-            "Raw Database Context": json.dumps(account_data, indent=2)
+            "Pre-Computed Intelligence Signals": narrative_bullets,
+            "Raw Database Context Summary": {
+                "health_score": account_data.get("health_score", 80.0),
+                "num_opportunities": len(account_data.get("opportunities", [])),
+                "num_contacts": len(account_data.get("contacts", [])),
+                "num_cases": len(account_data.get("cases", []))
+            }
         }
+        if evidence_bundle:
+            context_payload["Pre-Computed Evidence Bundle"] = evidence_bundle.dict()
+        if intelligence_brief:
+            context_payload["Intelligence Brief"] = intelligence_brief.dict()
+        if reasoning_plan:
+            context_payload["Reasoning Plan"] = reasoning_plan.dict()
+
         if history:
-            history_text = "\\n".join([f"{msg.get('role', msg.get('sender', 'user'))}: {msg.get('content', msg.get('text', ''))}" for msg in history])
+            history_text = "\n".join([f"{msg.get('role', msg.get('sender', 'user'))}: {msg.get('content', msg.get('text', ''))}" for msg in history])
             context_payload["Conversation History"] = history_text
+
         
         user_prompt = f"""Analyze the database context. Output your analysis using the exact JSON schema below. Do not generate markdown backticks or conversational text outside the JSON block.
 
@@ -2424,36 +2619,40 @@ class ResponseGenerator:
         self.is_local = is_local
 
     def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 60) -> str:
-        if not self.is_local:
-            gemini_key = os.getenv("GEMINI_API_KEY")
-            if gemini_key:
-                try:
-                    print("[Governance] Routing LLM call to Google Gemini API (Cloud Fallback)...")
-                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 1500))
-                except Exception as e:
-                    print(f"[Governance] Gemini API fallback failed: {e}. Falling back to local model...")
+        # Check for Gemini API integration (Cloud Primary Route)
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                print("[Governance] Routing ResponseGenerator LLM call directly to Google Gemini API (Cloud Route)...")
+                return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 1500))
+            except Exception as e:
+                print(f"[Governance Warning] Gemini API routing failed: {e}. Falling back to local model...")
 
-        # Enforce conciseness for resource-constrained systems
-        system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. The narrative response must be under 150 words."
-        payload = {
-            "model": self.model,
-            "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON.",
-            "stream": False,
-            "options": {
-                "temperature": 0,
-                "num_predict": 512
-            }
-        }
-        httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
-        print(f"  [LLM CONNECT] Attempting single-pass Crucible connection to: {self.url} (model: {self.model})")
-        with httpx.Client(timeout=httpx_timeout) as client:
-            print(f"  [LLM REQUEST] Sending single-pass Crucible query payload to: {self.url}...")
-            response = client.post(self.url, json=payload)
-            print(f"  [LLM RESPONSE] Received single-pass Crucible status {response.status_code} from: {self.url}")
-            if response.status_code == 200:
-                return response.json().get("response", "").strip()
-            else:
-                raise Exception(f"HTTP error {response.status_code}")
+        # --- LOCAL LLM EXECUTION CODE (COMMENTED OUT FOR PERFORMANCE) ---
+        # # Enforce conciseness for resource-constrained systems
+        # system_prompt = system_prompt + "\nCRITICAL: Keep output extremely concise. The narrative response must be under 150 words."
+        # payload = {
+        #     "model": self.model,
+        #     "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON.",
+        #     "stream": False,
+        #     "options": {
+        #         "temperature": 0,
+        #         "num_predict": 512
+        #     }
+        # }
+        # httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
+        # print(f"  [LLM CONNECT] Attempting single-pass Crucible connection to: {self.url} (model: {self.model})")
+        # with httpx.Client(timeout=httpx_timeout) as client:
+        #     print(f"  [LLM REQUEST] Sending single-pass Crucible query payload to: {self.url}...")
+        #     response = client.post(self.url, json=payload)
+        #     print(f"  [LLM RESPONSE] Received single-pass Crucible status {response.status_code} from: {self.url}")
+        #     if response.status_code == 200:
+        #         return response.json().get("response", "").strip()
+        #     else:
+        #         raise Exception(f"HTTP error {response.status_code}")
+        
+        # Raise timeout error if no cloud api credentials found to activate local fallback logic
+        raise TimeoutError("Local model execution bypassed. Please configure Gemini credentials in your environment.")
 
     def _repair_json_string(self, text: str) -> str:
         return repair_json_string(text)
@@ -2519,9 +2718,11 @@ class ResponseGenerator:
             
         try:
             clean_text = text.strip()
+            # Remove markdown wrapper blocks
             clean_text = re.sub(r"^```(?:json)?\s*", "", clean_text)
             clean_text = re.sub(r"\s*```$", "", clean_text)
             clean_text = clean_text.strip()
+            
             start = clean_text.find("{")
             end = clean_text.rfind("}")
             if start != -1 and end != -1:
@@ -2535,9 +2736,16 @@ class ResponseGenerator:
                 return self._apply_defaults(parsed, role)
             except Exception as e2:
                 try:
-                    return self._extract_fallback_fields(text, role)
+                    # Apply regex cleanup pass for syntax anomalies
+                    cleaned = re.sub(r',\s*([\]}])', r'\1', clean_text)
+                    parsed = json.loads(cleaned)
+                    return self._apply_defaults(parsed, role)
                 except Exception:
-                    return self._extract_fallback_fields("", role)
+                    try:
+                        return self._extract_fallback_fields(text, role)
+                    except Exception:
+                        return self._extract_fallback_fields("", role)
+
 
 
     def generate_response(
@@ -2626,7 +2834,7 @@ class ResponseGenerator:
             stakeholder_sequence=stakeholder_sequence,
             risks_and_mitigations=risks_and_mitigations,
             confidence_in_playbook=0.85,
-            why_this_matters=exec_brief.get("macro_summary", "Strategic review required.")[:500]
+            why_this_matters=persona_insights.get("enterprise_ae", "Strategic review required.")[:500]
         )
 
     def _map_vp_from_crucible(self, crucible_data: Dict[str, Any]) -> VPResponseOutput:

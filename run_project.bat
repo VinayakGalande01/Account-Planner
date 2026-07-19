@@ -29,8 +29,8 @@ echo [SERVICE] Backend Server
 echo ├─ Port: 8002
 echo ├─ URL : http://localhost:8002
 echo └─ Status: STARTING
-start "APEX Backend (8002)" cmd /k "cd backend && uvicorn main:app --reload --reload-exclude "llm_cache.json" --port 8002"
-echo.
+start "APEX Backend (8002)" cmd /k "cd backend && uvicorn main:app --reload --reload-exclude \"llm_cache.json\" --port 8002"
+
 
 timeout /t 1 >nul
 

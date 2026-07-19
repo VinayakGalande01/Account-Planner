@@ -212,12 +212,30 @@ class AccountPlanningAgent:
             self.data_engine = data_engine
 
         known_accounts = []
+        known_opportunities = {}
         if self.data_engine and self.data_engine.data:
             accounts_df = self.data_engine.data.get('account')
             if accounts_df is not None and not accounts_df.empty and 'Account_Name' in accounts_df.columns:
                 known_accounts = accounts_df['Account_Name'].dropna().unique().tolist()
+                
+            opps_df = self.data_engine.data.get('opportunity')
+            if opps_df is not None and not opps_df.empty and accounts_df is not None and not accounts_df.empty:
+                try:
+                    # Merge opportunities and accounts to build Opp_ID -> Account_Name mapping
+                    merged = opps_df.merge(accounts_df, on='Account_ID', how='inner')
+                    for _, r in merged.iterrows():
+                        opp_id = r.get('Opp_ID')
+                        acc_name = r.get('Account_Name')
+                        if opp_id and acc_name:
+                            known_opportunities[str(opp_id).lower()] = str(acc_name)
+                except Exception as merge_err:
+                    print(f"Warning: Failed to merge opportunities and accounts: {merge_err}")
         
-        self.intent_classifier = IntentClassifier(known_accounts=known_accounts, is_local=is_local)
+        self.intent_classifier = IntentClassifier(
+            known_accounts=known_accounts,
+            known_opportunities=known_opportunities,
+            is_local=is_local
+        )
             
         self.data_retrieval = DataRetrieval(self.data_engine)
         self.reasoning_engine = ReasoningEngine(is_local=is_local)
@@ -292,23 +310,34 @@ class AccountPlanningAgent:
             
             welcome_text = ""
             try:
-                payload = {
-                    "model": self.response_generator.model,
-                    "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}",
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.7,
-                        "num_predict": 150
-                    }
-                }
-                httpx_timeout = httpx.Timeout(15.0, connect=5.0)
-                print(f"  [LLM CONNECT] Attempting greeting connection to: {self.response_generator.url}")
-                with httpx.Client(timeout=httpx_timeout) as client:
-                    print(f"  [LLM REQUEST] Sending greeting query payload to: {self.response_generator.url}...")
-                    response = client.post(self.response_generator.url, json=payload)
-                    print(f"  [LLM RESPONSE] Received greeting status {response.status_code} from: {self.response_generator.url}")
-                    if response.status_code == 200:
-                        welcome_text = response.json().get("response", "").strip()
+                gemini_key = os.getenv("GEMINI_API_KEY")
+                if gemini_key:
+                    try:
+                        print("[Cloud Route] Routing conversational greeting to Google Gemini API...")
+                        from reasoning_engine import call_gemini_api
+                        welcome_text = call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=150, timeout=10)
+                    except Exception as cloud_err:
+                        print(f"[Cloud Route Error] Gemini greeting call failed: {cloud_err}. Falling back...")
+                
+                # --- LOCAL GREETING LLM ROUTE (COMMENTED DOWN FOR PERFORMANCE) ---
+                # if not welcome_text:
+                #     payload = {
+                #         "model": self.response_generator.model,
+                #         "prompt": f"System: {system_prompt}\n\nUser Prompt: {user_prompt}",
+                #         "stream": False,
+                #         "options": {
+                #             "temperature": 0.7,
+                #             "num_predict": 150
+                #         }
+                #     }
+                #     httpx_timeout = httpx.Timeout(15.0, connect=5.0)
+                #     print(f"  [LLM CONNECT] Attempting greeting connection to: {self.response_generator.url}")
+                #     with httpx.Client(timeout=httpx_timeout) as client:
+                #         print(f"  [LLM REQUEST] Sending greeting query payload to: {self.response_generator.url}...")
+                #         response = client.post(self.response_generator.url, json=payload)
+                #         print(f"  [LLM RESPONSE] Received greeting status {response.status_code} from: {self.response_generator.url}")
+                #         if response.status_code == 200:
+                #             welcome_text = response.json().get("response", "").strip()
             except Exception as e:
                 print(f"[Warning] LLM call failed for conversational greeting: {e}")
                 
@@ -388,6 +417,11 @@ class AccountPlanningAgent:
         #     }
             
         market_context = self.data_retrieval.get_market_context()
+        
+        # Enrich account data with computed intelligence signals
+        from intelligence_engine import IntelligenceEngine
+        signals = IntelligenceEngine.compute(account_data)
+        account_data["intelligence_signals"] = signals
         
         data_quality_val = data_quality.overall_sufficiency
         data_quality_pct = data_quality_val * 100.0
@@ -509,6 +543,13 @@ class AccountPlanningAgent:
                 pass
         
         with TraceSpanContext("REASONER"):
+            # Extract target response mode
+            target_response_mode = recipient_roles[0] if recipient_roles else "am"
+            try:
+                intent_json = intent.model_dump()
+            except AttributeError:
+                intent_json = intent.dict()
+                
             consensus = self.reasoning_engine.run_reasoning_threads(
                 account_data=account_data,
                 market_context=market_context,
@@ -517,7 +558,10 @@ class AccountPlanningAgent:
                 local=self.is_local,
                 complexity=intent.complexity,
                 requested_count=requested_count,
-                history=history
+                history=history,
+                user_query=query,
+                intent_json=intent_json,
+                response_mode=target_response_mode
             )
         
         # Cap reasoning confidence scores based on data sufficiency
