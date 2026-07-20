@@ -22,7 +22,7 @@ try:
     sys.stderr.reconfigure(encoding='utf-8')
 except AttributeError:
     pass # fallback for older python versions
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 import httpx
 import json
 import asyncio
@@ -54,6 +54,8 @@ from logging_config import setup_logging
 setup_logging()
 logger = logging.getLogger("backend")
 frontend_logger = logging.getLogger("frontend")
+
+session_checkpoints: Dict[str, Any] = {}
 
 app = FastAPI(title="Account Planner Agent API")
 
@@ -1573,6 +1575,32 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             
             target_role = role_map.get(body.response_mode, "am")
             
+            pre_built_intent = None
+            if session_id in session_checkpoints:
+                cached_res = session_checkpoints.pop(session_id, None)
+                if cached_res:
+                    cached_intent = cached_res.get("intent")
+                    if cached_intent:
+                        if hasattr(cached_intent, "extracted_entities") and cached_intent.extracted_entities:
+                            cached_intent.extracted_entities.account = body.query
+                        elif isinstance(cached_intent, dict) and "extracted_entities" in cached_intent:
+                            cached_intent["extracted_entities"]["account"] = body.query
+                        
+                        if hasattr(cached_intent, "target_entities"):
+                            cached_intent.target_entities = [body.query]
+                        elif isinstance(cached_intent, dict):
+                            cached_intent["target_entities"] = [body.query]
+                        
+                        pre_built_intent = cached_intent
+                        yield f"sys_meta_log|[SYS_LOG] Resuming session checkpoint. Account resolved: {body.query}✓\n\n"
+                        await asyncio.sleep(0.05)
+            
+            # Setup thread-safe progress callback queue
+            progress_queue = asyncio.Queue()
+            loop = asyncio.get_running_loop()
+            def on_progress(label: str):
+                loop.call_soon_threadsafe(progress_queue.put_nowait, label)
+            
             yield f"sys_meta_log|[SYS_LOG] Processing query for role: {target_role.upper()}...\n\n"
             await asyncio.sleep(0.05)
             # Run the 3-Layer pipeline in a task so we can stream keep-alive heartbeats in the meantime
@@ -1584,18 +1612,40 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
                     recipient_roles=[target_role],
                     history=body.chat_history if body.chat_history else chat_history,
                     active_account=body.active_account,
-                    action_type=body.action_type
+                    action_type=body.action_type,
+                    pre_built_intent=pre_built_intent,
+                    progress_callback=on_progress
                 )
             )
             
             while not query_task.done():
+                # Non-blocking draining of progress callback messages
+                while not progress_queue.empty():
+                    progress_label = progress_queue.get_nowait()
+                    yield f"sys_meta_log|⚙️ {progress_label}\n\n"
+                    await asyncio.sleep(0.02)
                 try:
-                    await asyncio.wait_for(asyncio.shield(query_task), timeout=5.0)
+                    await asyncio.wait_for(asyncio.shield(query_task), timeout=0.2)
                 except asyncio.TimeoutError:
-                    # Yield a keep-alive log chunk to reset the browser idle timer
-                    yield "sys_meta_log|[SYS_LOG] Processing... Reasoning engine is active.\n\n"
+                    pass
             
+            # Final drain check
+            while not progress_queue.empty():
+                progress_label = progress_queue.get_nowait()
+                yield f"sys_meta_log|⚙️ {progress_label}\n\n"
+                await asyncio.sleep(0.02)
+                
             res = query_task.result()
+            
+            if res.get("status") == "CLARIFICATION_REQUIRED":
+                session_checkpoints[session_id] = res
+                clarification_payload = {
+                    "type": "clarification",
+                    "message": res.get("question"),
+                    "suggestions": res.get("suggested_options", [])
+                }
+                yield json.dumps(clarification_payload)
+                return
             
             trace_payload["intent"] = res.get("intent")
             trace_payload["consensus"] = res.get("consensus")
@@ -1755,10 +1805,29 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             if complexity_val != "CONVERSATIONAL":
                 try:
                     # Need to synthesize p1_json structure for compute_table_for_intent
+                    limit_val = None
+                    intent_obj = res.get("intent")
+                    if intent_obj and hasattr(intent_obj, "extracted_entities") and intent_obj.extracted_entities.metric:
+                        import re
+                        metric_str = str(intent_obj.extracted_entities.metric)
+                        digit_match = re.search(r'\d+', metric_str)
+                        if digit_match:
+                            limit_val = int(digit_match.group())
+                    if not limit_val:
+                        import re
+                        digit_match = re.search(r'\b(top|limit|show|first)\s+(\d+)\b', body.query.lower())
+                        if digit_match:
+                            limit_val = int(digit_match.group(2))
+                        else:
+                            any_digit = re.search(r'\b\d+\b', body.query)
+                            if any_digit:
+                                limit_val = int(any_digit.group())
+
                     p1_json = {
                         "extracted_intent": intent,
                         "query_parameters": {
-                            "target_accounts": [res.get("account_data", {}).get("account_name", "")]
+                            "target_accounts": [res.get("account_data", {}).get("account_name", "")],
+                            "limit": limit_val
                         }
                     }
                     table_data = compute_table_for_intent(user_engine, intent, account_id, body.query, p1_json)

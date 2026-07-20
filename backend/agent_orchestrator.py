@@ -248,7 +248,9 @@ class AccountPlanningAgent:
         recipient_roles: List[str] = ["am"],
         history: Optional[List[Dict[str, str]]] = None,
         active_account: Optional[str] = None,
-        action_type: Optional[str] = None
+        action_type: Optional[str] = None,
+        pre_built_intent: Optional[Any] = None,
+        progress_callback: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         End-to-end account planning query processing.
@@ -256,7 +258,10 @@ class AccountPlanningAgent:
         # LAYER 1: Intent Classification
         from observability import TraceSpanContext
         
-        if action_type:
+        if pre_built_intent:
+            intent = pre_built_intent
+            print(f"[Orchestrator] Bypassing intent classifier (Resuming with pre-built intent: {intent})")
+        elif action_type:
             from intent_classifier import IntentClassificationOutput, ExtractedEntities, IntentEnum
             
             enum_map = {
@@ -389,6 +394,56 @@ class AccountPlanningAgent:
         
         # LAYER 2: Data Retrieval
         print("[Layer 2] Retrieving data...")
+        
+        # Check if query requires clarification due to ambiguous or missing account
+        extracted_acc = intent.extracted_entities.account if hasattr(intent, 'extracted_entities') and intent.extracted_entities else None
+        needs_clarification = False
+        if not extracted_acc:
+            planning_indicators = ["lose", "churn", "renewal", "competitor", "stuck", "expansion", "feature", "usage"]
+            if any(ind in query.lower() for ind in planning_indicators):
+                needs_clarification = True
+        else:
+            accounts_df = self.data_engine.data.get('account') if self.data_engine else None
+            exists = False
+            if accounts_df is not None and not accounts_df.empty:
+                matching = accounts_df[
+                    accounts_df['Account_Name'].str.lower().str.contains(extracted_acc.lower(), na=False) |
+                    accounts_df['Account_ID'].str.lower().str.contains(extracted_acc.lower(), na=False)
+                ]
+                exists = not matching.empty
+            if not exists:
+                needs_clarification = True
+                
+        if needs_clarification:
+            print("[Governance] Step 1/2 failure detected: Triggering HITL clarification state.")
+            from clarification_builder import build_clarification_prompt, extract_candidate_options
+            
+            known_accounts = []
+            accounts_df = self.data_engine.data.get('account') if self.data_engine else None
+            if accounts_df is not None and not accounts_df.empty:
+                known_accounts = accounts_df['Account_Name'].dropna().unique().tolist()
+                
+            question = build_clarification_prompt(query, history, known_accounts)
+            options = extract_candidate_options(known_accounts, query)
+            
+            return {
+                "status": "CLARIFICATION_REQUIRED",
+                "message": question,
+                "question": question,
+                "suggested_options": options,
+                "intent": intent,
+                "responses": {
+                    "am": {
+                        "narrative": question,
+                        "playbook_7day": [],
+                        "stakeholder_sequence": [],
+                        "risks_and_mitigations": [],
+                        "confidence_in_playbook": 0.0,
+                        "why_this_matters": "Clarification needed."
+                    }
+                }
+            }
+
         with TraceSpanContext("RETRIEVER"):
             account_data, data_quality = self.data_retrieval.fetch_with_quality_check(intent)
             
@@ -561,7 +616,8 @@ class AccountPlanningAgent:
                 history=history,
                 user_query=query,
                 intent_json=intent_json,
-                response_mode=target_response_mode
+                response_mode=target_response_mode,
+                progress_callback=progress_callback
             )
         
         # Cap reasoning confidence scores based on data sufficiency
@@ -591,7 +647,8 @@ class AccountPlanningAgent:
                 print(f"[Layer 3 Input] Generating response for role: {role.upper()}")
                 responses[role] = self.response_generator.generate_response(
                     consensus,
-                    recipient_role=role
+                    recipient_role=role,
+                    account_data=account_data
                 )
                 try:
                     resp_data = responses[role].model_dump()

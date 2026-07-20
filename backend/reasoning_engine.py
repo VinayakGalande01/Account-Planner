@@ -42,6 +42,17 @@ import re
 # ═══════════════════════════════════════════════════════════════
 
 @dataclass
+class PipelineState:
+    stage_reached: int = 0  # 1-6
+    intent: Optional[dict] = None
+    evidence: Optional[dict] = None
+    intelligence_brief: Optional[dict] = None
+    reasoning_plan: Optional[dict] = None
+    crucible_output: Optional[dict] = None
+    partial_data_mode: bool = False  # True when any stage failed
+    failure_reason: Optional[str] = None
+
+@dataclass
 class DecisionContext:
     """Structured business decision inference — replaces plain string.
 
@@ -1648,21 +1659,25 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
 
 
     
-    httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
-    print(f"  [LLM CONNECT] Attempting Gemini proxy connection to: {url}")
-    with httpx.Client(timeout=httpx_timeout) as client:
-        print(f"  [LLM REQUEST] Sending Gemini proxy payload to: {url}...")
-        headers = {"Content-Type": "application/json"}
-        response = client.post(url, json=payload, headers=headers)
-        print(f"  [LLM RESPONSE] Received Gemini proxy status {response.status_code} from: {url}")
-        if response.status_code == 200:
-            res_json = response.json()
-            try:
-                return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-            except (KeyError, IndexError):
-                raise Exception(f"Unexpected Gemini API response structure: {res_json}")
-        else:
-            raise Exception(f"Gemini API error {response.status_code}: {response.text}")
+    def _execute_api_call():
+        httpx_timeout = httpx.Timeout(timeout=float(timeout), connect=5.0)
+        print(f"  [LLM CONNECT] Attempting Gemini proxy connection to: {url}")
+        with httpx.Client(timeout=httpx_timeout) as client:
+            print(f"  [LLM REQUEST] Sending Gemini proxy payload to: {url}...")
+            headers = {"Content-Type": "application/json"}
+            response = client.post(url, json=payload, headers=headers)
+            print(f"  [LLM RESPONSE] Received Gemini proxy status {response.status_code} from: {url}")
+            if response.status_code == 200:
+                res_json = response.json()
+                try:
+                    return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                except (KeyError, IndexError):
+                    raise Exception(f"Unexpected Gemini API response structure: {res_json}")
+            else:
+                raise Exception(f"Gemini API error {response.status_code}: {response.text}")
+
+    from api_retry import call_with_backoff
+    return call_with_backoff(_execute_api_call, max_retries=3, base_delay=1.5)
 
 
 def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1950,12 +1965,23 @@ class ReasoningEngine:
         history: Optional[List[Dict[str, str]]] = None,
         user_query: str = "",
         intent_json: dict = None,
-        response_mode: str = "operational"
+        response_mode: str = "operational",
+        progress_callback: Optional[Any] = None
     ) -> ConsensusOutput:
         """
         Run multi-persona reasoning.
         APEX Architecture: Runs a single-pass Multi-Persona Crucible LLM call to save latency.
         """
+        # Initialize PipelineState
+        state = PipelineState(stage_reached=0)
+
+        def report_progress(label: str):
+            if progress_callback:
+                try:
+                    progress_callback(label)
+                except Exception:
+                    pass
+
         # 1. Handle FACTUAL complexity level
         if complexity == "FACTUAL":
             print("[Governance] FACTUAL complexity detected: Bypassing LLM reasoning threads.")
@@ -1994,92 +2020,146 @@ class ReasoningEngine:
             return ConsensusOutput(
                 consensus_recommendation={
                     "action": "Displaying data quality and core metrics.",
-                    "confidence": 0.3,
-                    "rationale": "Operational details retrieved."
+                    "confidence": 0.9,
+                    "rationale": "Operational details retrieved.",
+                    "retrieved_crm_data": account_data
                 },
-                thread_agreement={"data": 0.3},
+                thread_agreement={"data": 0.9},
                 agreement_score=1.0,
                 dissenting_views=[],
                 confidence_limiting_factors=[],
-                final_confidence=0.3
+                final_confidence=0.9
             )
 
         # Summarize large dataset to protect context windows
         account_data = summarize_large_dataset(account_data, requested_count)
         
+        # ── LAYER 1.5 & LAYER 2.5: DECISION FRAMER & NARRATIVE BUILDER ──────────────
+        frame_result = None
+        narrative_result = None
+        
+        # Stage 1: Decision Framing
+        try:
+            from decision_framer import DecisionFramer
+            framer = DecisionFramer()
+            frame_result = framer.frame_decision(user_query or "Assess health", account_data)
+            print(f"[Governance] Decision Frame classified: {frame_result.get('frame')} (via {frame_result.get('method')})")
+            state.intent = frame_result
+            state.stage_reached = 1
+            report_progress("Stage 1/6: Decision Framing Complete ✓")
+        except Exception as df_err:
+            print(f"[Governance Warning] Decision framing failed: {df_err}")
+            state.partial_data_mode = True
+            state.failure_reason = f"Decision framing failed: {df_err}"
+
+        # Stage 2: Frame-Aware Signal Filtering & Narrative Building
+        if not state.partial_data_mode and state.stage_reached >= 1:
+            try:
+                from narrative_builder import NarrativeBuilder
+                priority_signals = frame_result.get("signals", [])
+                raw_signals = account_data.get("intelligence_signals", {})
+                focused_signals = {}
+                for sig in priority_signals:
+                    if sig in raw_signals:
+                        focused_signals[sig] = raw_signals[sig]
+                    elif sig == "engagement_trend":
+                        focused_signals["engagement_trend"] = raw_signals.get("narrative_bullets", [])
+                    else:
+                        focused_signals[sig] = raw_signals.get(sig) or "Review database records"
+                
+                state.evidence = focused_signals
+                
+                builder = NarrativeBuilder()
+                narrative_result = builder.build_narrative(focused_signals, frame_result.get("frame"), account_data)
+                print(f"[Governance] Strategic narrative generated. Confidence: {narrative_result.get('confidence', 0.5)}")
+                state.intelligence_brief = narrative_result
+                state.stage_reached = 2
+                report_progress("Stage 2/6: Strategic Narrative Built ✓")
+            except Exception as nb_err:
+                print(f"[Governance Warning] Narrative building failed: {nb_err}")
+                state.partial_data_mode = True
+                state.failure_reason = f"Narrative building failed: {nb_err}"
+
         # ── PRE-REASONING INTELLIGENCE LAYER ──────────────────────────────────────
         # Runs for TACTICAL, ANALYTICAL, STRATEGIC complexity only.
-        # Skipped for FACTUAL / CONVERSATIONAL / OPERATIONAL (they return early above).
-        # ------------------------------------------------------------------
         pre_reasoning_telemetry = {}
         evidence_bundle = None
         intelligence_brief = None
         reasoning_plan = None
 
-        try:
-            from pre_reasoning_layer import (
-                EvidenceSelectorAgent, IntelligenceBriefAgent,
-                ReasoningPlannerAgent, build_consensus_from_plan
-            )
+        if not state.partial_data_mode and state.stage_reached >= 2:
+            try:
+                from pre_reasoning_layer import (
+                    EvidenceSelectorAgent, IntelligenceBriefAgent,
+                    ReasoningPlannerAgent, build_consensus_from_plan
+                )
 
-            # Get pre-computed signals if available
-            intelligence_signals = account_data.get("intelligence_signals", {})
-            semantic_activities = account_data.get("semantic_activities", [])
-            data_sufficiency_score = float(account_data.get("health_score", 80.0)) / 100.0
+                # Get pre-computed signals if available
+                intelligence_signals = account_data.get("intelligence_signals", {})
+                semantic_activities = account_data.get("semantic_activities", [])
+                data_sufficiency_score = float(account_data.get("health_score", 80.0)) / 100.0
 
-            # STEP 1: Evidence Selection
-            print("[Pre-Reasoning] Running Evidence Selection...")
-            evidence_bundle, ev_telemetry = EvidenceSelectorAgent().run(
-                user_query=user_query or "Plan active accounts",
-                intent_json=intent_json or {},
-                retrieved_context_json=account_data,
-                semantic_activities_json=semantic_activities,
-                data_sufficiency_score=data_sufficiency_score
-            )
-            pre_reasoning_telemetry['evidence_selection'] = ev_telemetry
-            self.raw_reasoning_bucket['evidence_bundle'] = evidence_bundle.dict()
+                # STEP 1: Evidence Selection (Stage 3)
+                print("[Pre-Reasoning] Running Evidence Selection...")
+                evidence_bundle, ev_telemetry = EvidenceSelectorAgent().run(
+                    user_query=user_query or "Plan active accounts",
+                    intent_json=intent_json or {},
+                    retrieved_context_json=account_data,
+                    semantic_activities_json=semantic_activities,
+                    data_sufficiency_score=data_sufficiency_score
+                )
+                pre_reasoning_telemetry['evidence_selection'] = ev_telemetry
+                self.raw_reasoning_bucket['evidence_bundle'] = evidence_bundle.dict()
+                state.stage_reached = 3
+                report_progress("Stage 3/6: CRM Evidence Selected ✓")
 
-            # STEP 2: Intelligence Brief
-            print("[Pre-Reasoning] Running Intelligence Brief Builder...")
-            intelligence_brief, ib_telemetry = IntelligenceBriefAgent().run(
-                user_query=user_query or "Plan active accounts",
-                intent_json=intent_json or {},
-                evidence_bundle=evidence_bundle,
-                intelligence_signals=intelligence_signals,
-                data_sufficiency_score=data_sufficiency_score
-            )
-            pre_reasoning_telemetry['intelligence_brief'] = ib_telemetry
-            self.raw_reasoning_bucket['intelligence_brief'] = intelligence_brief.dict()
+                # STEP 2: Intelligence Brief (Stage 4)
+                print("[Pre-Reasoning] Running Intelligence Brief Builder...")
+                intelligence_brief, ib_telemetry = IntelligenceBriefAgent().run(
+                    user_query=user_query or "Plan active accounts",
+                    intent_json=intent_json or {},
+                    evidence_bundle=evidence_bundle,
+                    intelligence_signals=intelligence_signals,
+                    data_sufficiency_score=data_sufficiency_score
+                )
+                pre_reasoning_telemetry['intelligence_brief'] = ib_telemetry
+                self.raw_reasoning_bucket['intelligence_brief'] = intelligence_brief.dict()
+                state.stage_reached = 4
+                report_progress("Stage 4/6: Intelligence Brief Compiled ✓")
 
-            # STEP 3: Reasoning Plan
-            print("[Pre-Reasoning] Running Reasoning Planner...")
-            reasoning_plan, rp_telemetry = ReasoningPlannerAgent().run(
-                user_query=user_query or "Plan active accounts",
-                response_mode=response_mode,
-                intent_json=intent_json or {},
-                intelligence_brief=intelligence_brief
-            )
-            pre_reasoning_telemetry['reasoning_plan'] = rp_telemetry
-            self.raw_reasoning_bucket['reasoning_plan'] = reasoning_plan.dict()
-            self.raw_reasoning_bucket['pre_reasoning_telemetry'] = pre_reasoning_telemetry
+                # STEP 3: Reasoning Plan (Stage 5)
+                print("[Pre-Reasoning] Running Reasoning Planner...")
+                reasoning_plan, rp_telemetry = ReasoningPlannerAgent().run(
+                    user_query=user_query or "Plan active accounts",
+                    response_mode=response_mode,
+                    intent_json=intent_json or {},
+                    intelligence_brief=intelligence_brief
+                )
+                pre_reasoning_telemetry['reasoning_plan'] = rp_telemetry
+                self.raw_reasoning_bucket['reasoning_plan'] = reasoning_plan.dict()
+                self.raw_reasoning_bucket['pre_reasoning_telemetry'] = pre_reasoning_telemetry
+                state.stage_reached = 5
+                report_progress("Stage 5/6: Reasoning Plan Generated ✓")
 
-            # STEP 4: Short-circuit if DIRECT answer_mode
-            if reasoning_plan.answer_mode == "DIRECT":
-                print("[Pre-Reasoning] answer_mode=DIRECT: short-circuiting Crucible execution.")
-                return build_consensus_from_plan(reasoning_plan, intelligence_brief)
+                # STEP 4: Short-circuit if DIRECT answer_mode
+                if reasoning_plan.answer_mode == "DIRECT":
+                    print("[Pre-Reasoning] answer_mode=DIRECT: short-circuiting Crucible execution.")
+                    return build_consensus_from_plan(reasoning_plan, intelligence_brief)
 
-        except Exception as pre_reasoning_err:
-            print(f"[Pre-Reasoning Error] Pipeline execution failed: {pre_reasoning_err}")
+            except Exception as pre_reasoning_err:
+                print(f"[Pre-Reasoning Error] Pipeline execution failed: {pre_reasoning_err}")
+                state.partial_data_mode = True
+                state.failure_reason = f"Pre-reasoning pipeline failed: {pre_reasoning_err}"
 
         target_entity = account_data.get("account_name", "Global Portfolio")
         
         # Prepare crucible LLM prompts
         system_rules = f"""You are the APEX Multi-Persona Crucible. You must synthesize a comprehensive account playbook by simulating the perspectives of different enterprise experts within a single JSON response.
 
-You must adapt your output based on the provided [COMPLEXITY] variable.
-- If TACTICAL: Focus on immediate SMB AE and SDR actions.
-- If STRATEGIC: Focus on Enterprise AE playbooks and Strategic Director risk mitigation.
-- If EXECUTIVE: Focus entirely on CRO-level revenue summaries."""
+Instead of debating raw metrics (numbers), you must validate whether the suggested action plan is strategic and executable:
+- Account Manager: Confirm relationship execution viability, next-steps, and resource gaps.
+- Strategic Director: Evaluate plan alignment, competitive risks, and mitigations.
+- CRO / Executive: Assess ARR at stake, budget alignment, and approve executive triggers."""
 
         # Get pre-computed signals if available
         intelligence_signals = account_data.get("intelligence_signals", {})
@@ -2096,6 +2176,11 @@ You must adapt your output based on the provided [COMPLEXITY] variable.
                 "num_cases": len(account_data.get("cases", []))
             }
         }
+        if frame_result:
+            context_payload["Decision Frame"] = frame_result
+        if narrative_result:
+            context_payload["Strategic Narrative Builder Output"] = narrative_result
+            
         if evidence_bundle:
             context_payload["Pre-Computed Evidence Bundle"] = evidence_bundle.dict()
         if intelligence_brief:
@@ -2132,28 +2217,35 @@ Context Payload:
         crucible_data = None
         raw_llm_output = ""
         
-        # Call Crucible LLM
-        try:
-            print("[Crucible] Initiating single-pass multi-persona crucible...")
-            raw_llm_output = self._call_llm(system_rules, user_prompt, timeout=timeout_per_thread)
-            self.raw_reasoning_bucket['consensus'] = raw_llm_output
-            
-            # Clean and parse JSON
-            parsed_json = self._clean_and_parse(raw_llm_output)
-            
-            # Basic schema validation
-            if "executive_brief" in parsed_json and "persona_insights" in parsed_json:
-                crucible_data = parsed_json
-                print("[Crucible] Successfully parsed single-pass JSON output.")
-            else:
-                raise ValueError("JSON parsed successfully but missing required Crucible schema keys.")
+        # Call Crucible LLM if not in partial_data_mode
+        if not state.partial_data_mode:
+            try:
+                print("[Crucible] Initiating single-pass multi-persona crucible...")
+                raw_llm_output = self._call_llm(system_rules, user_prompt, timeout=timeout_per_thread)
+                self.raw_reasoning_bucket['consensus'] = raw_llm_output
                 
-        except Exception as e:
-            print(f"[Crucible Warning] Crucible execution or parsing failed: {e}. Generating context-aware fallback data.")
-            if 'consensus' not in self.raw_reasoning_bucket:
-                self.raw_reasoning_bucket['consensus'] = f"Error or parsing issue: {e}. Raw text: {raw_llm_output[:200]}"
-            
-            # Context-Aware Natural Fallback Engine (Task 5)
+                # Clean and parse JSON
+                parsed_json = self._clean_and_parse(raw_llm_output)
+                
+                # Basic schema validation
+                if "executive_brief" in parsed_json and "persona_insights" in parsed_json:
+                    crucible_data = parsed_json
+                    print("[Crucible] Successfully parsed single-pass JSON output.")
+                    state.stage_reached = 6  # All 6 stages completed successfully!
+                    report_progress("Stage 6/6: Expert Crucible Formed ✓")
+                else:
+                    raise ValueError("JSON parsed successfully but missing required Crucible schema keys.")
+                    
+            except Exception as e:
+                print(f"[Crucible Warning] Crucible execution or parsing failed: {e}. Generating context-aware fallback data.")
+                if 'consensus' not in self.raw_reasoning_bucket:
+                    self.raw_reasoning_bucket['consensus'] = f"Error or parsing issue: {e}. Raw text: {raw_llm_output[:200]}"
+                state.partial_data_mode = True
+                state.failure_reason = f"Crucible failed: {e}"
+        
+        # Route to Context-Aware Fallback Engine if any stage failed
+        if state.partial_data_mode or not crucible_data:
+            print("[Governance] Routing directly to context-aware fallback engine due to partial pipeline state.")
             crucible_data = generate_contextual_fallback_data(account_data)
 
         # Build ConsensusOutput in Python
@@ -2163,15 +2255,16 @@ Context Payload:
         consensus = ConsensusOutput(
             consensus_recommendation={
                 "action": "Proceed with Crucible recommendations.",
-                "confidence": 0.85,
+                "confidence": 0.85 if not state.partial_data_mode else 0.5,
                 "rationale": macro_summary,
-                "crucible_data": crucible_data  # Save the crucible data for Layer 3 Response Generation
+                "crucible_data": crucible_data,  # Save the crucible data for Layer 3 Response Generation
+                "pipeline_state": state.__dict__  # Pass the state packet downstream
             },
             thread_agreement={"am": 0.85, "vp": 0.85, "svp": 0.85, "data": 0.90},
             agreement_score=0.85,
             dissenting_views=[],
             confidence_limiting_factors=[],
-            final_confidence=0.85
+            final_confidence=0.85 if not state.partial_data_mode else 0.5
         )
         
         return consensus
@@ -2751,31 +2844,37 @@ class ResponseGenerator:
     def generate_response(
         self,
         consensus: ConsensusOutput,
-        recipient_role: str
+        recipient_role: str,
+        account_data: Dict[str, Any] = None
     ) -> Union[AMResponseOutput, VPResponseOutput, SVPResponseOutput]:
         """
         Generate role-specific response from consensus reasoning.
+        account_data is injected here to ground ALL narrator LLM calls with
+        real CRM names, deal values, and contact details (Context Blindness fix).
         """
+        account_data = account_data or {}
         self.raw_response_bucket[recipient_role] = "Pending generation..."
         
         # Check if the consensus has our new single-pass crucible data embedded
         crucible_data = None
+        pipeline_state = {}
         if hasattr(consensus, "consensus_recommendation") and isinstance(consensus.consensus_recommendation, dict):
             crucible_data = consensus.consensus_recommendation.get("crucible_data")
+            pipeline_state = consensus.consensus_recommendation.get("pipeline_state") or {}
             
         if crucible_data:
             print(f"[ResponseGenerator] Mapping role response dynamically for: {recipient_role.upper()}")
             try:
                 if recipient_role == "am":
-                    resp = self._map_am_from_crucible(crucible_data)
+                    resp = self._map_am_from_crucible(crucible_data, account_data, pipeline_state)
                     self.raw_response_bucket[recipient_role] = "Mapped dynamically from Crucible (zero LLM latency)"
                     return resp
                 elif recipient_role == "vp":
-                    resp = self._map_vp_from_crucible(crucible_data)
+                    resp = self._map_vp_from_crucible(crucible_data, account_data, pipeline_state)
                     self.raw_response_bucket[recipient_role] = "Mapped dynamically from Crucible (zero LLM latency)"
                     return resp
                 elif recipient_role == "svp":
-                    resp = self._map_svp_from_crucible(crucible_data)
+                    resp = self._map_svp_from_crucible(crucible_data, account_data, pipeline_state)
                     self.raw_response_bucket[recipient_role] = "Mapped dynamically from Crucible (zero LLM latency)"
                     return resp
             except Exception as map_err:
@@ -2783,77 +2882,211 @@ class ResponseGenerator:
                 
         # Legacy fallback if crucible data is not available or mapping fails
         if recipient_role == "am":
-            return self._generate_am_response(consensus)
+            return self._generate_am_response(consensus, account_data, pipeline_state)
         elif recipient_role == "vp":
-            return self._generate_vp_response(consensus)
+            return self._generate_vp_response(consensus, account_data, pipeline_state)
         elif recipient_role == "svp":
-            return self._generate_svp_response(consensus)
+            return self._generate_svp_response(consensus, account_data, pipeline_state)
         else:
             raise ValueError(f"Unknown role: {recipient_role}")
 
-    def _map_am_from_crucible(self, crucible_data: Dict[str, Any]) -> AMResponseOutput:
+    def _build_crm_grounding_context(self, account_data: Dict[str, Any]) -> str:
+        """Build a compact, name-rich CRM context string for grounding Narrator LLM prompts."""
+        lines = []
+        account_name = account_data.get("account_name", "")
+        if account_name:
+            lines.append(f"Account: {account_name}")
+        
+        contacts = account_data.get("contacts", [])
+        if contacts:
+            contact_lines = []
+            for c in contacts[:5]:
+                name = c.get("name", c.get("contact_name", ""))
+                role = c.get("title", c.get("role", ""))
+                email = c.get("email", "")
+                if name:
+                    contact_lines.append(f"  - {name} ({role}){', email: ' + email if email else ''}")
+            if contact_lines:
+                lines.append("Key Contacts:")
+                lines.extend(contact_lines)
+        
+        opportunities = account_data.get("opportunities", [])
+        if opportunities:
+            opp_lines = []
+            for o in opportunities[:5]:
+                opp_id = o.get("opportunity_id", o.get("id", ""))
+                name = o.get("name", o.get("opportunity_name", ""))
+                value = o.get("value", o.get("amount", o.get("deal_value", "")))
+                stage = o.get("stage", o.get("status", ""))
+                opp_lines.append(f"  - [{opp_id}] {name}: ${value} | Stage: {stage}")
+            lines.append("Open Opportunities:")
+            lines.extend(opp_lines)
+        
+        cases = account_data.get("cases", [])
+        if cases:
+            case_lines = []
+            for cs in cases[:3]:
+                case_id = cs.get("case_id", cs.get("id", ""))
+                subject = cs.get("subject", cs.get("description", ""))
+                priority = cs.get("priority", "")
+                case_lines.append(f"  - [{case_id}] {subject} (Priority: {priority})")
+            lines.append("Open Cases:")
+            lines.extend(case_lines)
+        
+        health = account_data.get("health_score", None)
+        if health is not None:
+            lines.append(f"Health Score: {health}")
+        
+        return "\n".join(lines) if lines else "No CRM context available."
+
+    def _map_am_from_crucible(self, crucible_data: Dict[str, Any], account_data: Dict[str, Any] = None, pipeline_state: Dict[str, Any] = None) -> AMResponseOutput:
+        account_data = account_data or {}
+        pipeline_state = pipeline_state or {}
         exec_brief = crucible_data.get("executive_brief", {})
         persona_insights = crucible_data.get("persona_insights", {})
         tactical_playbook = crucible_data.get("tactical_playbook", [])
+        crm_context = self._build_crm_grounding_context(account_data)
         
-        narrative = exec_brief.get("macro_summary", "Strategic plan initiated.")
+        # Use LLM to generate a grounded narrative using real CRM data
+        if pipeline_state.get("partial_data_mode", False):
+            system_p = """You are an Account Manager summarizing raw account data.
+CRITICAL RULES (Data-Shield Mode):
+1. State upfront that this is a raw data summary (AI strategic analysis was temporarily unavailable).
+2. Output ALL real account names, deal IDs, and dollar values from the CRM Context.
+3. Do NOT invent strategic advice, recommendations, or competitor info.
+4. Do NOT use abstract phrases like 'contact stakeholders' or 'review the account'.
+5. End with ONE specific next step naming a real contact from the CRM Context."""
+        else:
+            system_p = """You are an Account Manager generating an actionable playbook.
+Ground EVERY sentence with real names, deal IDs, and dollar values from the CRM Context provided.
+Do NOT use placeholders like 'key stakeholder', 'the client', or 'deal X'. Use actual names."""
+            
+        user_p = f"""CRM Context:\n{crm_context}\n\nCrucible Summary:\n{json.dumps(exec_brief)}\n\nPersona Insights:\n{json.dumps(persona_insights)}\n\nGenerate a 2-3 sentence grounded narrative that tells the account manager exactly who to contact, which deal is at risk, and what to do first."""
+        try:
+            narrative = self._call_llm(system_p, user_p, timeout=20)
+            if not narrative or len(narrative) < 20:
+                raise ValueError("Empty narrative")
+        except Exception:
+            narrative = exec_brief.get("macro_summary", "Strategic plan initiated.")
         
+        # Inject CRM names into playbook actions
+        contacts = account_data.get("contacts", [])
+        opportunities = account_data.get("opportunities", [])
+        primary_contact = contacts[0].get("name", contacts[0].get("contact_name", "Key Contact")) if contacts else "Key Contact"
+        primary_deal = ""
+        if opportunities:
+            opp = opportunities[0]
+            deal_id = opp.get("opportunity_id", opp.get("id", ""))
+            deal_name = opp.get("name", opp.get("opportunity_name", "deal"))
+            deal_val = opp.get("value", opp.get("amount", opp.get("deal_value", "")))
+            primary_deal = f"{deal_name} [{deal_id}] (${deal_val})"
+
         playbook_actions = []
         for item in tactical_playbook:
+            action_text = item.get("action", "")
+            # Substitute placeholders with real CRM entities
+            if primary_contact and "stakeholder" in action_text.lower():
+                action_text = action_text.replace("key stakeholder", primary_contact).replace("Key Stakeholder", primary_contact)
+            if primary_deal and "opportunity" in action_text.lower():
+                action_text = action_text.replace("open opportunity", primary_deal).replace("Open Opportunity", primary_deal)
             playbook_actions.append(PlaybookAction(
                 day=item.get("day", 1),
-                action=item.get("action", ""),
+                action=action_text,
                 owner=item.get("owner", "Account Manager"),
                 success_metric=item.get("success_metric", "Action step completed"),
                 template=item.get("template")
             ))
-            
-        ae_text = persona_insights.get("enterprise_ae", "")
+
+        # Build stakeholder sequence from real contacts
         stakeholder_sequence = []
-        if ae_text:
+        for c in contacts[:3]:
+            name = c.get("name", c.get("contact_name", "Key Contact"))
+            role = c.get("title", c.get("role", "Stakeholder"))
             stakeholder_sequence.append(Stakeholder(
-                stakeholder="Key Stakeholders",
-                role="Strategic Sponsors",
-                engagement_type="meeting",
-                talking_points=[ae_text[:120]],
-                success_indicator="Partnership alignment confirmed"
+                stakeholder=name,
+                role=role,
+                engagement_type="call",
+                talking_points=[persona_insights.get("enterprise_ae", "")[:120]],
+                success_indicator=f"Confirmed next steps with {name}"
             ))
-            
+        if not stakeholder_sequence:
+            ae_text = persona_insights.get("enterprise_ae", "")
+            if ae_text:
+                stakeholder_sequence.append(Stakeholder(
+                    stakeholder="Key Stakeholders",
+                    role="Strategic Sponsors",
+                    engagement_type="meeting",
+                    talking_points=[ae_text[:120]],
+                    success_indicator="Partnership alignment confirmed"
+                ))
+
         director_text = persona_insights.get("strategic_director", "")
         risks_and_mitigations = []
         if director_text:
             risks_and_mitigations.append(RiskMitigation(
-                risk=director_text[:120],
-                mitigation="Initiate immediate communication and review service milestones."
+                risk=director_text[:200],
+                mitigation=f"Immediately contact {primary_contact} to address open issues and confirm renewal timeline."
             ))
-            
+
         return AMResponseOutput(
             narrative=narrative,
             urgency="P2",
             playbook_7day=playbook_actions,
             stakeholder_sequence=stakeholder_sequence,
             risks_and_mitigations=risks_and_mitigations,
-            confidence_in_playbook=0.85,
+            confidence_in_playbook=0.85 if not pipeline_state.get("partial_data_mode") else 0.5,
             why_this_matters=persona_insights.get("enterprise_ae", "Strategic review required.")[:500]
         )
 
-    def _map_vp_from_crucible(self, crucible_data: Dict[str, Any]) -> VPResponseOutput:
+    def _map_vp_from_crucible(self, crucible_data: Dict[str, Any], account_data: Dict[str, Any] = None, pipeline_state: Dict[str, Any] = None) -> VPResponseOutput:
+        account_data = account_data or {}
+        pipeline_state = pipeline_state or {}
         exec_brief = crucible_data.get("executive_brief", {})
         persona_insights = crucible_data.get("persona_insights", {})
+        crm_context = self._build_crm_grounding_context(account_data)
         
-        narrative = exec_brief.get("macro_summary", "Strategic portfolio review initiated.")
+        # Generate grounded VP narrative
+        if pipeline_state.get("partial_data_mode", False):
+            system_p = """You are a VP generating a portfolio-level strategic narrative.
+CRITICAL RULES (Data-Shield Mode):
+1. State upfront that this is a raw data summary (AI strategic analysis was temporarily unavailable).
+2. Output ALL real account names, deal values, and concrete risks from the CRM context.
+3. Do NOT use abstract phrases or invent strategic recommendations."""
+        else:
+            system_p = """You are a VP generating a portfolio-level strategic narrative.
+Ground your narrative with actual deal values, account names, and concrete risks from the CRM context.
+Do NOT use vague terms like 'significant revenue' or 'key accounts'. Use specific numbers and names."""
+            
+        user_p = f"""CRM Context:\n{crm_context}\n\nCrucible Summary:\n{json.dumps(exec_brief)}\n\nStrategic Director Insight:\n{persona_insights.get('strategic_director', '')}\n\nGenerate a 2-3 sentence VP narrative that quantifies ARR at risk, names the account, and prescribes a portfolio-level action."""
+        try:
+            narrative = self._call_llm(system_p, user_p, timeout=20)
+            if not narrative or len(narrative) < 20:
+                raise ValueError("Empty narrative")
+        except Exception:
+            narrative = exec_brief.get("macro_summary", "Strategic portfolio review initiated.")
+        
         rev_stake = exec_brief.get("revenue_at_stake", "$0")
+        opportunities = account_data.get("opportunities", [])
+        if opportunities and rev_stake in ("$0", "", None):
+            total = sum(float(str(o.get("value", o.get("amount", o.get("deal_value", 0)))).replace(",", "").replace("$", "") or 0) for o in opportunities)
+            rev_stake = f"${total:,.0f}"
+        
+        # Estimate churn probability from health score
+        health = float(account_data.get("health_score", 70.0))
+        churn_prob = round(max(0.1, min(0.95, (100 - health) / 100)), 2)
+        
+        competitor_signal = persona_insights.get("strategic_director", "No competitive threat identified.")[:500]
         
         portfolio_impact = PortfolioImpact(
             accounts_affected=1,
             total_arr_at_risk=rev_stake,
-            probability_of_churn=0.3
+            probability_of_churn=churn_prob
         )
         
         market_signal = MarketSignal(
             is_market_wide=False,
-            competitor_threat=persona_insights.get("strategic_director", "")[:500],
-            strategic_implication="Immediate client relationship touchpoint needed to defend revenue."
+            competitor_threat=competitor_signal,
+            strategic_implication=f"Immediate executive touchpoint needed to defend {rev_stake} in pipeline."
         )
         
         resource_rec = ResourceRecommendation(
@@ -2871,29 +3104,63 @@ class ResponseGenerator:
             confidence=0.85
         )
 
-    def _map_svp_from_crucible(self, crucible_data: Dict[str, Any]) -> SVPResponseOutput:
+    def _map_svp_from_crucible(self, crucible_data: Dict[str, Any], account_data: Dict[str, Any] = None, pipeline_state: Dict[str, Any] = None) -> SVPResponseOutput:
+        account_data = account_data or {}
+        pipeline_state = pipeline_state or {}
         exec_brief = crucible_data.get("executive_brief", {})
         persona_insights = crucible_data.get("persona_insights", {})
+        crm_context = self._build_crm_grounding_context(account_data)
         
-        narrative = exec_brief.get("macro_summary", "Macro account briefing.")
+        # Generate grounded SVP board narrative
+        if pipeline_state.get("partial_data_mode", False):
+            system_p = """You are an SVP writing a board-level account narrative.
+CRITICAL RULES (Data-Shield Mode):
+1. State upfront that this is a raw data summary (AI strategic analysis was temporarily unavailable).
+2. Output ALL real account names, deal sizes, contact names, and concrete competitive threats from the CRM context.
+3. Do NOT use abstract phrases or invent board-level recommendations."""
+        else:
+            system_p = """You are an SVP writing a board-level account narrative.
+Make every claim specific: use account name, deal sizes, contact names, and concrete competitive threats from the CRM context.
+Avoid abstract language. Write like you're presenting to a board in 90 seconds."""
+            
+        user_p = f"""CRM Context:\n{crm_context}\n\nCrucible Executive Brief:\n{json.dumps(exec_brief)}\n\nCompetitive Insight:\n{persona_insights.get('strategic_director', '')}\n\nGenerate a 2-3 sentence board-level narrative covering: strategic ARR at stake, competitive threat status, and the executive action required."""
+        try:
+            narrative = self._call_llm(system_p, user_p, timeout=20)
+            if not narrative or len(narrative) < 20:
+                raise ValueError("Empty narrative")
+        except Exception:
+            narrative = exec_brief.get("macro_summary", "Macro account briefing.")
+        
+        account_name = account_data.get("account_name", "this account")
+        rev_stake = exec_brief.get("revenue_at_stake", "pipeline ARR")
+        health = float(account_data.get("health_score", 70.0))
+        strategic_fit = "KEEP" if health >= 65 else ("CAUTIOUS" if health >= 40 else "LET_GO")
         
         strat_context = StrategicContext(
-            strategic_fit="KEEP",
-            strategic_value="High strategic value customer account.",
+            strategic_fit=strategic_fit,
+            strategic_value=f"{rev_stake} at risk for {account_name}",
             rationale=exec_brief.get("macro_summary", "Key relationship.")
         )
         
+        director_text = persona_insights.get("strategic_director", "Active competitor positioning detected.")
         comp_position = CompetitivePositioning(
-            threat_level="medium",
-            market_signal="Active competitor positioning detected.",
-            response_strategy="Reaffirm value framework and demonstrate ROI milestones."
+            threat_level="high" if health < 55 else "medium",
+            market_signal=director_text[:200],
+            response_strategy=f"Reaffirm {account_name} value framework and demonstrate ROI milestones through executive review."
+        )
+        
+        contacts = account_data.get("contacts", [])
+        exec_contact = next(
+            (c.get("name", c.get("contact_name", "Senior Sponsor")) for c in contacts
+             if any(t in c.get("title", c.get("role", "")).lower() for t in ["ceo", "cfo", "coo", "vp", "director"])),
+            "Senior Executive Sponsor"
         )
         
         decision_scenarios = [
             DecisionScenario(
-                scenario="Competitor discounts or displaces relationship",
-                action="Engage senior leadership and sponsor executive review",
-                expected_outcome="Reinforce relationship trust and secure renewal"
+                scenario=f"Competitor discounts or displaces {account_name} relationship",
+                action=f"Engage {exec_contact} for executive sponsorship review within 5 business days",
+                expected_outcome=f"Reinforce {account_name} trust and secure {rev_stake} renewal"
             )
         ]
         
@@ -2901,27 +3168,48 @@ class ResponseGenerator:
             narrative=narrative,
             strategic_context=strat_context,
             competitive_positioning=comp_position,
-            board_narrative=exec_brief.get("macro_summary", "SVP Executive Account Briefing."),
+            board_narrative=narrative,
             decision_framework=decision_scenarios,
-            long_term_implication="Ensure structured communication plan is established to avoid competitor lock-in.",
+            long_term_implication=f"Establish a structured executive communication cadence with {account_name} to avoid competitor lock-in.",
             confidence=0.85
         )
 
-    def _generate_am_response(self, consensus: ConsensusOutput) -> AMResponseOutput:
-        system_prompt = """You are translating consensus reasoning into an Account Manager's playbook.
+    def _generate_am_response(self, consensus: ConsensusOutput, account_data: Dict[str, Any] = None, pipeline_state: Dict[str, Any] = None) -> AMResponseOutput:
+        account_data = account_data or {}
+        pipeline_state = pipeline_state or {}
+        crm_context = self._build_crm_grounding_context(account_data)
+        
+        if pipeline_state.get("partial_data_mode", False):
+            system_prompt = """You are translating consensus reasoning into an Account Manager's raw data summary.
+CRITICAL RULES (Data-Shield Mode):
+1. State upfront that this is a raw data summary (AI strategic analysis was temporarily unavailable).
+2. Output ALL real account names, deal IDs, and dollar values from the CRM Context.
+3. Do NOT invent strategic advice, recommendations, or competitor info.
+4. Do NOT use abstract phrases like 'contact stakeholders' or 'review the account'.
+5. End with ONE specific next step naming a real contact from the CRM Context.
+
+Your job is to generate a JSON response summarizing this raw context."""
+        else:
+            system_prompt = """You are translating consensus reasoning into an Account Manager's playbook.
 
 Account Manager needs: Immediate tactics, stakeholder sequence, templates, 
 clear next steps.
 
 Your job: Create a 7-day playbook with:
-1. Specific, actionable steps (not general advice)
-2. Stakeholder engagement sequence
-3. Templates (email drafts, meeting agendas)
-4. Risk mitigations
-5. Success metrics"""
+1. Specific, actionable steps (not general advice) — use REAL NAMES and DEAL IDs from CRM Context.
+2. Stakeholder engagement sequence with real contact names and roles.
+3. Templates (email drafts, meeting agendas) referencing the actual account and deal.
+4. Risk mitigations naming specific open cases or stalled opportunities.
+5. Success metrics tied to real deal stages or contact responses.
+
+CRITICAL RULE: Never use placeholders like "key stakeholder", "the client", or "deal X".
+Always substitute with actual names and IDs from the CRM Context."""
 
         consensus_dict = consensus.model_dump() if hasattr(consensus, "model_dump") else consensus
-        user_prompt = f"""Consensus Output:
+        user_prompt = f"""CRM Context (use these real names/values in every output field):
+{crm_context}
+
+Consensus Output:
 {json.dumps(consensus_dict, indent=2)}
 
 Generate AM response JSON matching this structure:
@@ -2983,21 +3271,40 @@ Generate AM response JSON matching this structure:
             }
             return AMResponseOutput(**fallback)
 
-    def _generate_vp_response(self, consensus: ConsensusOutput) -> VPResponseOutput:
-        system_prompt = """You are translating consensus reasoning into a VP's portfolio strategy.
+    def _generate_vp_response(self, consensus: ConsensusOutput, account_data: Dict[str, Any] = None, pipeline_state: Dict[str, Any] = None) -> VPResponseOutput:
+        account_data = account_data or {}
+        pipeline_state = pipeline_state or {}
+        crm_context = self._build_crm_grounding_context(account_data)
+        
+        if pipeline_state.get("partial_data_mode", False):
+            system_prompt = """You are translating consensus reasoning into a VP's raw portfolio summary.
+CRITICAL RULES (Data-Shield Mode):
+1. State upfront that this is a raw data summary (AI strategic analysis was temporarily unavailable).
+2. Output ALL real account names, deal values, and concrete risks from the CRM context.
+3. Do NOT use abstract phrases or invent strategic recommendations.
+
+Your job is to generate a JSON response summarizing this raw context."""
+        else:
+            system_prompt = """You are translating consensus reasoning into a VP's portfolio strategy.
 
 VP needs: Market patterns, portfolio impact, resource implications, 
 strategic recommendations.
 
 Your job: Create a portfolio-level analysis with:
-1. Is this account-specific or market signal?
-2. How many accounts affected?
-3. Resource allocation recommendation
-4. Market strategy implication
-5. Portfolio-level action"""
+1. Is this account-specific or market signal? Name the account.
+2. Total ARR at risk — use real deal values from CRM Context.
+3. Resource allocation recommendation with specific team names.
+4. Competitive threat — name the competitor if known.
+5. Portfolio-level action with an owner and timeline.
+
+CRITICAL RULE: All dollar amounts, account names, and churn probabilities must be
+derived from the CRM Context. Do not invent values."""
 
         consensus_dict = consensus.model_dump() if hasattr(consensus, "model_dump") else consensus
-        user_prompt = f"""Consensus Output:
+        user_prompt = f"""CRM Context (use these real names/values in every output field):
+{crm_context}
+
+Consensus Output:
 {json.dumps(consensus_dict, indent=2)}
 
 Generate VP response JSON matching this structure:
@@ -3052,21 +3359,40 @@ Generate VP response JSON matching this structure:
             }
             return VPResponseOutput(**fallback)
 
-    def _generate_svp_response(self, consensus: ConsensusOutput) -> SVPResponseOutput:
-        system_prompt = """You are translating consensus reasoning into an SVP's strategic brief.
+    def _generate_svp_response(self, consensus: ConsensusOutput, account_data: Dict[str, Any] = None, pipeline_state: Dict[str, Any] = None) -> SVPResponseOutput:
+        account_data = account_data or {}
+        pipeline_state = pipeline_state or {}
+        crm_context = self._build_crm_grounding_context(account_data)
+        
+        if pipeline_state.get("partial_data_mode", False):
+            system_prompt = """You are translating consensus reasoning into an SVP's raw strategic brief.
+CRITICAL RULES (Data-Shield Mode):
+1. State upfront that this is a raw data summary (AI strategic analysis was temporarily unavailable).
+2. Output ALL real account names, deal values, and concrete risks from the CRM context.
+3. Do NOT use abstract phrases or invent strategic recommendations.
 
-SVP needs: Strategic context, board narrative, long-term implications, 
+Your job is to generate a JSON response summarizing this raw context."""
+        else:
+            system_prompt = """You are translating consensus reasoning into an SVP's strategic brief.
+
+SVP needs: Strategic context, board narrative, long-term implications,
 high-level decision framework.
 
 Your job: Create a strategic brief with:
-1. Is this consistent with 2026 strategy?
-2. Competitive positioning insight
-3. Board-level narrative
-4. High-stakes decision framework
-5. Long-term market implications"""
+1. Is this consistent with 2026 strategy? Reference the account name.
+2. Competitive positioning — name the competitor and their threat vector.
+3. Board-level narrative in 2-3 sentences, citing real ARR figures.
+4. High-stakes decision framework with scenario names tied to the real account.
+5. Long-term market implications naming the specific segment or geography at risk.
+
+CRITICAL RULE: Every field must reference the real account name, deal values, and
+executive contact names from the CRM Context. No abstract placeholders allowed."""
 
         consensus_dict = consensus.model_dump() if hasattr(consensus, "model_dump") else consensus
-        user_prompt = f"""Consensus Output:
+        user_prompt = f"""CRM Context (use these real names/values in every output field):
+{crm_context}
+
+Consensus Output:
 {json.dumps(consensus_dict, indent=2)}
 
 Generate SVP response JSON matching this structure:

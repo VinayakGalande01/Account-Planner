@@ -49,13 +49,7 @@ class SectionContractMapper:
 
         if is_role_specific:
             # Headline
-            headline = ""
-            if is_am:
-                headline = f"Urgency {urgency}: {narrative}"
-            elif is_vp:
-                headline = f"Portfolio Impact: {narrative}"
-            elif is_svp:
-                headline = f"Strategic Brief: {narrative}"
+            headline = narrative
             parts.append(f"__SECTION_HEADLINE__\n{headline}")
 
             # Summary
