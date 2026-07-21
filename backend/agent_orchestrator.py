@@ -259,7 +259,11 @@ class AccountPlanningAgent:
         from observability import TraceSpanContext
         
         if pre_built_intent:
-            intent = pre_built_intent
+            if isinstance(pre_built_intent, dict):
+                from intent_classifier import IntentClassificationOutput
+                intent = IntentClassificationOutput(**pre_built_intent)
+            else:
+                intent = pre_built_intent
             print(f"[Orchestrator] Bypassing intent classifier (Resuming with pre-built intent: {intent})")
         elif action_type:
             from intent_classifier import IntentClassificationOutput, ExtractedEntities, IntentEnum

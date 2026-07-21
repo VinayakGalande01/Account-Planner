@@ -39,8 +39,21 @@ class LocalVectorStore:
                 )
                 print(f"ChromaDB initialized at {self.db_path} with collection: {self.collection_name}")
             except BaseException as e:
-                print(f"Warning: Failed to initialize ChromaDB, falling back to memory keyword search: {e}")
-                self.chroma_client = None
+                print(f"Warning: Failed to initialize ChromaDB: {e}. Purging folder and retrying...")
+                import shutil
+                try:
+                    if os.path.exists(self.db_path):
+                        shutil.rmtree(self.db_path)
+                    self.chroma_client = chromadb.PersistentClient(path=self.db_path)
+                    self.model = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
+                    self.collection = self.chroma_client.get_or_create_collection(
+                        name=self.collection_name
+                    )
+                    print(f"ChromaDB initialized cleanly after purge at {self.db_path}")
+                except BaseException as retry_err:
+                    print(f"Warning: Failed to initialize ChromaDB after retry: {retry_err}. Falling back to memory search.")
+                    self.chroma_client = None
+                    self.collection = None
 
     def index_activities(self, activities: list, user_id: int):
         """Indexes a list of activity dictionaries into ChromaDB."""

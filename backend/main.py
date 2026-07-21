@@ -1510,6 +1510,7 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
     db_sess = SessionLocal()
     db_sess.info["user_id"] = str(current_user.id)
     chat_history = []
+    pre_built_intent_data = None
     try:
         chat_session = db_sess.query(ChatSession).filter(
             ChatSession.id == session_id,
@@ -1521,9 +1522,25 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             db_sess.commit()
             db_sess.refresh(chat_session)
         
+        # Check for checkpoint message
+        checkpoint_msg = db_sess.query(ChatMessage).filter(
+            ChatMessage.session_id == session_id,
+            ChatMessage.sender == "checkpoint",
+            ChatMessage.user_id == current_user.id
+        ).first()
+        if checkpoint_msg:
+            try:
+                pre_built_intent_data = json.loads(checkpoint_msg.text)
+                db_sess.delete(checkpoint_msg)
+                db_sess.commit()
+                print(f"[Checkpoint] Found and consumed checkpoint in DB for session: {session_id}")
+            except Exception as parse_err:
+                print(f"[Checkpoint Warning] Failed to parse checkpoint: {parse_err}")
+        
         db_history = db_sess.query(ChatMessage).filter(
             ChatMessage.session_id == session_id,
-            ChatMessage.user_id == current_user.id
+            ChatMessage.user_id == current_user.id,
+            ChatMessage.sender != "checkpoint"
         ).order_by(ChatMessage.timestamp.desc()).limit(10).all()
         for msg in reversed(db_history):
             text = msg.text or ""
@@ -1576,24 +1593,22 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             target_role = role_map.get(body.response_mode, "am")
             
             pre_built_intent = None
-            if session_id in session_checkpoints:
-                cached_res = session_checkpoints.pop(session_id, None)
-                if cached_res:
-                    cached_intent = cached_res.get("intent")
-                    if cached_intent:
-                        if hasattr(cached_intent, "extracted_entities") and cached_intent.extracted_entities:
-                            cached_intent.extracted_entities.account = body.query
-                        elif isinstance(cached_intent, dict) and "extracted_entities" in cached_intent:
-                            cached_intent["extracted_entities"]["account"] = body.query
-                        
-                        if hasattr(cached_intent, "target_entities"):
-                            cached_intent.target_entities = [body.query]
-                        elif isinstance(cached_intent, dict):
-                            cached_intent["target_entities"] = [body.query]
-                        
-                        pre_built_intent = cached_intent
-                        yield f"sys_meta_log|[SYS_LOG] Resuming session checkpoint. Account resolved: {body.query}✓\n\n"
-                        await asyncio.sleep(0.05)
+            if pre_built_intent_data:
+                cached_intent = pre_built_intent_data.get("intent")
+                if cached_intent:
+                    if hasattr(cached_intent, "extracted_entities") and cached_intent.extracted_entities:
+                        cached_intent.extracted_entities.account = body.query
+                    elif isinstance(cached_intent, dict) and "extracted_entities" in cached_intent:
+                        cached_intent["extracted_entities"]["account"] = body.query
+                    
+                    if hasattr(cached_intent, "target_entities"):
+                        cached_intent.target_entities = [body.query]
+                    elif isinstance(cached_intent, dict):
+                        cached_intent["target_entities"] = [body.query]
+                    
+                    pre_built_intent = cached_intent
+                    yield f"sys_meta_log|[SYS_LOG] Resuming session checkpoint. Account resolved: {body.query}✓\n\n"
+                    await asyncio.sleep(0.05)
             
             # Setup thread-safe progress callback queue
             progress_queue = asyncio.Queue()
@@ -1638,7 +1653,33 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             res = query_task.result()
             
             if res.get("status") == "CLARIFICATION_REQUIRED":
-                session_checkpoints[session_id] = res
+                # Save checkpoint in database
+                checkpoint_db = SessionLocal()
+                checkpoint_db.info["user_id"] = str(current_user.id)
+                try:
+                    # Clear any old checkpoints for this session
+                    checkpoint_db.query(ChatMessage).filter(
+                        ChatMessage.session_id == session_id,
+                        ChatMessage.sender == "checkpoint",
+                        ChatMessage.user_id == current_user.id
+                    ).delete()
+                    
+                    # Create a new checkpoint entry
+                    serialized_res = json.dumps(res, default=str)
+                    checkpoint_msg = ChatMessage(
+                        session_id=session_id,
+                        sender="checkpoint",
+                        text=serialized_res,
+                        user_id=current_user.id
+                    )
+                    checkpoint_db.add(checkpoint_msg)
+                    checkpoint_db.commit()
+                    print(f"[Checkpoint] Successfully saved checkpoint to DB for session {session_id}")
+                except Exception as save_err:
+                    print(f"[Checkpoint Error] Failed to save checkpoint to DB: {save_err}")
+                finally:
+                    checkpoint_db.close()
+
                 clarification_payload = {
                     "type": "clarification",
                     "message": res.get("question"),

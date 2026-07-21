@@ -44,6 +44,17 @@ class SectionContractMapper:
         is_role_specific = is_am or is_vp or is_svp
 
         narrative = safe_get(response_obj, "narrative", "")
+        if isinstance(narrative, str) and narrative.strip().startswith("{"):
+            try:
+                parsed_narrative = json.loads(narrative)
+                narrative = (
+                    parsed_narrative.get("playbook_narrative") or 
+                    parsed_narrative.get("narrative") or 
+                    narrative
+                )
+            except Exception:
+                pass
+
         why_this_matters = safe_get(response_obj, "why_this_matters", "")
         urgency = safe_get(response_obj, "urgency", "P2")
 
