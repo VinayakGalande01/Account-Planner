@@ -15,8 +15,19 @@ class DataEngine:
         """Loads all data for the user from the database into pandas DataFrames."""
         from models.crm_models import Account, Opportunity, Contact, Case, Activity
         
+        def safe_query(model):
+            try:
+                return self.db.query(model).filter(model.user_id == self.user_id).all()
+            except Exception as e:
+                print(f"  [WARNING] DB query failed on stale connection: {e}. Retrying once after rollback...")
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
+                return self.db.query(model).filter(model.user_id == self.user_id).all()
+        
         # 1. Accounts
-        accounts = self.db.query(Account).filter(Account.user_id == self.user_id).all()
+        accounts = safe_query(Account)
         accounts_list = []
         for a in accounts:
             accounts_list.append({
@@ -34,7 +45,7 @@ class DataEngine:
         ])
 
         # 2. Opportunities
-        opps = self.db.query(Opportunity).filter(Opportunity.user_id == self.user_id).all()
+        opps = safe_query(Opportunity)
         opps_list = []
         for o in opps:
             opps_list.append({
@@ -52,7 +63,7 @@ class DataEngine:
         ])
 
         # 3. Contacts
-        contacts = self.db.query(Contact).filter(Contact.user_id == self.user_id).all()
+        contacts = safe_query(Contact)
         contacts_list = []
         for c in contacts:
             contacts_list.append({
@@ -72,7 +83,7 @@ class DataEngine:
         ])
 
         # 4. Cases
-        cases = self.db.query(Case).filter(Case.user_id == self.user_id).all()
+        cases = safe_query(Case)
         cases_list = []
         for c in cases:
             cases_list.append({
@@ -89,7 +100,7 @@ class DataEngine:
         ])
 
         # 5. Activities
-        activities = self.db.query(Activity).filter(Activity.user_id == self.user_id).all()
+        activities = safe_query(Activity)
         activities_list = []
         for a in activities:
             activities_list.append({

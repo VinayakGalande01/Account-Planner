@@ -292,10 +292,17 @@ class AccountPlanningAgent:
             with TraceSpanContext("PLANNER"):
                 intent = self.intent_classifier.classify(query, history, user_role, active_account)
         try:
-            intent_data = intent.model_dump()
-        except AttributeError:
-            intent_data = intent.dict()
-        print(f"[Layer 1] Classified Intent Output: {intent_data}")
+            from pipeline_logger import PipelineLogger
+            primary_val = getattr(intent, 'primary_intent', intent.intent)
+            primary_name = primary_val.value if hasattr(primary_val, 'value') else str(primary_val)
+            PipelineLogger.layer1(
+                intent_name=primary_name,
+                confidence=getattr(intent, 'confidence_primary', 1.0),
+                complexity=getattr(intent, 'complexity', 'TACTICAL'),
+                scope=getattr(intent, 'scope', 'ENTITY')
+            )
+        except Exception as l1_err:
+            print(f"[Layer 1] Classified Intent: {intent}")
         
         # Fast path for conversational greetings
         if intent.complexity == "CONVERSATIONAL":
@@ -485,15 +492,60 @@ class AccountPlanningAgent:
         data_quality_val = data_quality.overall_sufficiency
         data_quality_pct = data_quality_val * 100.0
         
-        print(f"[Layer 2 Input] Retrieved Account Data: {account_data}")
-        print(f"[Layer 2 Input] Market Context: {market_context}")
-        print(f"[Layer 2 Input] Data Quality Sufficiency: {data_quality_pct}% (limiting factors: {data_quality.limiting_factors})")
+        try:
+            from pipeline_logger import PipelineLogger
+            opps = account_data.get("opportunities", [])
+            contacts = account_data.get("contacts", [])
+            cases = account_data.get("cases", [])
+            tot_usd = sum(float(o.get("amount_usd", 0.0)) for o in opps)
+            stalled_deals = account_data.get("intelligence_signals", {}).get("stale_deals", [])
+            stalled_usd = sum(float(s.get("amount_usd", 0.0)) for s in stalled_deals)
+            
+            PipelineLogger.layer2(
+                account_name=str(account_data.get("account_name", "Global")),
+                data_summary={
+                    "opps_count": len(opps),
+                    "contacts_count": len(contacts),
+                    "cases_count": len(cases),
+                    "total_pipeline_usd": tot_usd,
+                    "stalled_usd": stalled_usd,
+                    "health_score": float(account_data.get("health_score", 80.0))
+                },
+                data_quality_pct=data_quality_pct,
+                rag_hits=len(account_data.get("semantic_activities", []))
+            )
+        except Exception as l2_err:
+            print(f"[Layer 2] Data retrieved for account: {account_data.get('account_name')}")
 
         if data_quality_val < 0.4:
             print(f"[WARNING] Critical low data quality: {data_quality_val}. Expanding scope...")
             account_data = self.data_retrieval.expand_scope(account_data)
-            print(f"[Layer 2 Input - Expanded Scope] Updated Account Data: {account_data}")
         
+        # Fast path for Calculation Audit queries
+        from intent_classifier import IntentEnum
+        if intent.intent == "CALCULATION_EXPLANATION" or getattr(intent, "primary_intent", None) == IntentEnum.CALCULATION_EXPLANATION:
+            print("[Governance] CALCULATION_EXPLANATION detected: Invoking CalculationAuditor.")
+            from calculation_auditor import CalculationAuditor
+            audit_res = CalculationAuditor.audit_account_metrics(account_data, query=query)
+            narrative_text = audit_res["audit_narrative"]
+            
+            consensus = self.reasoning_engine.run_reasoning_threads(
+                account_data=account_data,
+                market_context={},
+                complexity="FACTUAL"
+            )
+            responses = {role: {"narrative": narrative_text, "why_this_matters": "Math calculation audit breakdown requested."} for role in recipient_roles}
+            return {
+                "status": "SUCCESS",
+                "intent": intent,
+                "account_data": account_data,
+                "market_context": market_context,
+                "data_quality": data_quality,
+                "consensus": consensus,
+                "responses": responses,
+                "trace_payload": {}
+            }
+
         # Fast path for explicit quick-action tasks
         QUICK_ACTION_INTENTS = {"DRAFT_EMAIL", "EXEC_EMAIL", "MEETING_AGENDA", "SHOW_STAKEHOLDERS", "REVIEW_RISKS"}
         if intent.intent in QUICK_ACTION_INTENTS:
@@ -604,10 +656,14 @@ class AccountPlanningAgent:
         with TraceSpanContext("REASONER"):
             # Extract target response mode
             target_response_mode = recipient_roles[0] if recipient_roles else "am"
-            try:
+            if hasattr(intent, "model_dump"):
                 intent_json = intent.model_dump()
-            except AttributeError:
+            elif hasattr(intent, "dict"):
                 intent_json = intent.dict()
+            elif isinstance(intent, dict):
+                intent_json = intent
+            else:
+                intent_json = {"intent": str(intent)}
                 
             consensus = self.reasoning_engine.run_reasoning_threads(
                 account_data=account_data,
@@ -637,10 +693,14 @@ class AccountPlanningAgent:
                 f"Data sufficiency is moderate ({data_quality_pct:.1f}%). Capping confidence at 80%."
             )
         
-        try:
+        if hasattr(consensus, "model_dump"):
             consensus_data = consensus.model_dump()
-        except AttributeError:
+        elif hasattr(consensus, "dict"):
             consensus_data = consensus.dict()
+        elif isinstance(consensus, dict):
+            consensus_data = consensus
+        else:
+            consensus_data = {"consensus": str(consensus)}
         print(f"[Layer 2 Output] Consensus Synthesis: {consensus_data}")
         
         # LAYER 3: Response Generation (Role-specific)
@@ -654,10 +714,15 @@ class AccountPlanningAgent:
                     recipient_role=role,
                     account_data=account_data
                 )
-                try:
-                    resp_data = responses[role].model_dump()
-                except AttributeError:
-                    resp_data = responses[role].dict()
+                resp_obj = responses[role]
+                if hasattr(resp_obj, "model_dump"):
+                    resp_data = resp_obj.model_dump()
+                elif hasattr(resp_obj, "dict"):
+                    resp_data = resp_obj.dict()
+                elif isinstance(resp_obj, dict):
+                    resp_data = resp_obj
+                else:
+                    resp_data = {"response": str(resp_obj)}
                 print(f"[Layer 3 Output] Response for {role.upper()}: {resp_data}")
         
         # Print raw LLM output buckets for under-the-hood debugging

@@ -51,7 +51,7 @@ def classify_query(user_message: str) -> str:
         # Use sync client as this is called before async streaming in main.py, but FastAPI endpoints can handle blocking or we can make it sync. Wait, the main.py endpoint `generate_stream()` might be async.
         # Actually, let's make it sync for simplicity if we are calling it sequentially, or we can use httpx.Client().
         # Wait, the instruction says "classify_query(user_message)", not async def.
-        with httpx.Client(timeout=5.0) as client:
+        with httpx.Client(timeout=12.0) as client:
             payload = {
                 "model": model,
                 "prompt": system_prompt,

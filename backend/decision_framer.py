@@ -145,7 +145,13 @@ Respond in raw JSON:
             response_text = re.sub(r"^```(?:json)?\s*", "", response_text.strip())
             response_text = re.sub(r"\s*```$", "", response_text)
             
-            result = json.loads(response_text)
+            try:
+                result = json.loads(response_text)
+            except Exception:
+                from reasoning_engine import repair_json_string
+                repaired = repair_json_string(response_text)
+                result = json.loads(repaired)
+                
             frame = result.get("frame", "health_assessment")
             if frame not in self.DECISION_FRAMES:
                 frame = "health_assessment"

@@ -87,9 +87,12 @@ Respond in raw JSON:
         try:
             from reasoning_engine import call_gemini_api
             response_text = call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=1024, timeout=12)
-            response_text = re.sub(r"^```(?:json)?\s*", "", response_text.strip())
-            response_text = re.sub(r"\s*```$", "", response_text)
-            return json.loads(response_text)
+            try:
+                return json.loads(response_text)
+            except Exception:
+                from reasoning_engine import repair_json_string
+                repaired = repair_json_string(response_text)
+                return json.loads(repaired)
         except Exception as e:
             print(f"[NarrativeBuilder Warning] Causality generation failed: {e}")
             return {"signal_causality": []}
@@ -140,9 +143,12 @@ Respond in raw JSON:
         try:
             from reasoning_engine import call_gemini_api
             response_text = call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=1536, timeout=15)
-            response_text = re.sub(r"^```(?:json)?\s*", "", response_text.strip())
-            response_text = re.sub(r"\s*```$", "", response_text)
-            return json.loads(response_text)
+            try:
+                return json.loads(response_text)
+            except Exception:
+                from reasoning_engine import repair_json_string
+                repaired = repair_json_string(response_text)
+                return json.loads(repaired)
         except Exception as e:
             print(f"[NarrativeBuilder Warning] Narrative synthesis failed: {e}")
             return {

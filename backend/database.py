@@ -26,10 +26,10 @@ def get_engine():
         temp_engine = create_engine(
             DATABASE_URL, 
             pool_pre_ping=True, 
-            pool_recycle=1800,  # Recycle connections every 30 minutes
+            pool_recycle=300,   # Recycle connections every 5 minutes (prevents Supabase idle drops)
             pool_size=10,       # Keep up to 10 persistent connections
             max_overflow=20,    # Allow bursting up to 20 temporary connections
-            connect_args={"connect_timeout": 3}
+            connect_args={"connect_timeout": 5}
         )
         with temp_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -76,10 +76,13 @@ def set_rls_user_id(conn, cursor, statement, parameters, context, executemany):
             if not user_id:
                 user_id = current_user_id_var.get()
 
-            if user_id:
-                cursor.execute("SELECT set_config('app.current_user_id', %s, true)", (str(user_id),))
-            else:
-                cursor.execute("SELECT set_config('app.current_user_id', '', true)")
+            try:
+                if user_id:
+                    cursor.execute("SELECT set_config('app.current_user_id', %s, true)", (str(user_id),))
+                else:
+                    cursor.execute("SELECT set_config('app.current_user_id', '', true)")
+            except Exception as rls_err:
+                print(f"  [WARNING] RLS set_config error (connection may be stale): {rls_err}")
 
 Base = declarative_base()
 

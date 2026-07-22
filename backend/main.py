@@ -1388,7 +1388,7 @@ def save_telemetry_bg(trace_id, request_id, session_id, user_id, workspace_id, c
             if hasattr(intent, "primary_intent"):
                 selected_intent = intent.primary_intent.value if hasattr(intent.primary_intent, "value") else str(intent.primary_intent)
                 planner_confidence = "HIGH" if intent.confidence_primary >= 0.8 else ("MEDIUM" if intent.confidence_primary >= 0.5 else "LOW")
-                entities = intent.extracted_entities.model_dump() if hasattr(intent.extracted_entities, "model_dump") else intent.extracted_entities.dict()
+                entities = intent.extracted_entities.model_dump() if hasattr(intent.extracted_entities, "model_dump") else (intent.extracted_entities.dict() if hasattr(intent.extracted_entities, "dict") else (intent.extracted_entities if isinstance(intent.extracted_entities, dict) else {}))
             else:
                 selected_intent = str(intent)
             filters = {"active_account": active_account}
@@ -1562,6 +1562,18 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
     async def _generate_stream_impl():
         start_time = asyncio.get_event_loop().time()
 
+        try:
+            from pipeline_logger import PipelineLogger
+            from observability.context import trace_id_var
+            PipelineLogger.start(
+                query=body.query,
+                session_id=session_id,
+                user_role=getattr(current_user, 'email', 'sales'),
+                trace_id=trace_id_var.get() or "trace_local"
+            )
+        except Exception:
+            pass
+
         yield "sys_meta_log|[SYS_LOG] Initializing Account Planning Agent...\n\n"
         await asyncio.sleep(0.05)
         
@@ -1592,6 +1604,38 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             
             target_role = role_map.get(body.response_mode, "am")
             
+            # Contact-to-Account & History active account auto-resolution
+            resolved_active_account = body.active_account
+            if not resolved_active_account and user_engine:
+                query_lower = (body.query or "").lower()
+                contacts_df = user_engine.data.get('contact')
+                accounts_df = user_engine.data.get('account')
+                if contacts_df is not None and not contacts_df.empty:
+                    for idx, row in contacts_df.iterrows():
+                        fname = str(row.get('First_Name', '')).strip().lower()
+                        lname = str(row.get('Last_Name', '')).strip().lower()
+                        full_name = f"{fname} {lname}".strip()
+                        if (fname and fname in query_lower) or (full_name and full_name in query_lower):
+                            acc_id = row.get('Account_ID')
+                            if accounts_df is not None and not accounts_df.empty:
+                                acc_match = accounts_df[accounts_df['Account_ID'] == acc_id]
+                                if not acc_match.empty:
+                                    resolved_active_account = acc_match.iloc[0]['Account_Name']
+                                    print(f"[Contact Resolution] Auto-resolved {full_name} -> Account: {resolved_active_account}")
+                                    break
+                
+                if not resolved_active_account and chat_history:
+                    for h_msg in reversed(chat_history):
+                        h_text = h_msg.get("text", "")
+                        if accounts_df is not None and not accounts_df.empty:
+                            for acc_name in accounts_df['Account_Name'].tolist():
+                                if acc_name and acc_name.lower() in h_text.lower():
+                                    resolved_active_account = acc_name
+                                    print(f"[History Resolution] Inherited active account from history: {resolved_active_account}")
+                                    break
+                        if resolved_active_account:
+                            break
+                            
             pre_built_intent = None
             if pre_built_intent_data:
                 cached_intent = pre_built_intent_data.get("intent")
@@ -1626,7 +1670,7 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
                     user_role="sales", # Default
                     recipient_roles=[target_role],
                     history=body.chat_history if body.chat_history else chat_history,
-                    active_account=body.active_account,
+                    active_account=resolved_active_account,
                     action_type=body.action_type,
                     pre_built_intent=pre_built_intent,
                     progress_callback=on_progress
@@ -1693,6 +1737,32 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             trace_payload["account_data"] = res.get("account_data")
             trace_payload["raw_reasoning_bucket"] = res.get("raw_reasoning_bucket")
             trace_payload["raw_response_bucket"] = res.get("raw_response_bucket")
+            
+            try:
+                from pipeline_logger import PipelineLogger
+                from observability.context import trace_id_var
+                duration_ms = int((asyncio.get_event_loop().time() - start_time) * 1000)
+                acc_name = str(res.get("account_data", {}).get("account_name", "Global"))
+                data_qual = float(res.get("data_quality_score", 100.0))
+                conf_raw = res.get("confidence", 1.0)
+                conf_val = float(conf_raw) * 100.0 if float(conf_raw) <= 1.0 else float(conf_raw)
+                intent_obj = res.get("intent")
+                primary_val = getattr(intent_obj, 'primary_intent', intent_obj)
+                intent_str = str(primary_val.value if hasattr(primary_val, 'value') else primary_val)
+
+                PipelineLogger.finish(
+                    trace_id=trace_id_var.get() or "trace_local",
+                    session_id=session_id,
+                    query=body.query,
+                    intent_name=intent_str,
+                    account_name=acc_name,
+                    data_quality_pct=data_qual,
+                    confidence_pct=conf_val,
+                    duration_ms=duration_ms,
+                    status=res.get("status", "SUCCESS")
+                )
+            except Exception as finish_err:
+                print(f"  [Warning] PipelineLogger finish error: {finish_err}")
             
             # Yield active account for frontend tracking
             resolved_account = res.get("account_data", {}).get("account_name")

@@ -2,8 +2,9 @@ import os
 import sys
 from dotenv import load_dotenv
 
-# Ensure current directory is in path
+# Ensure current directory and backend directory are in path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(override=True)
 
 from reasoning_engine import ReasoningEngine

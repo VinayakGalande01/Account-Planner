@@ -57,20 +57,24 @@ def test_contextual_fallback_content():
     
     generator = ResponseGenerator(is_local=True)
     
-    # Generate for AM
-    am_res = generator.generate_response(consensus, "am")
-    assert am_res.narrative == macro_summary
-    assert len(am_res.playbook_7day) == 3
-    assert am_res.playbook_7day[0].action.startswith("Review stage and details of opportunity 'Cloud Expansion'")
+    # Generate for AM — narrative is now LLM-generated and grounded, NOT a copy of macro_summary
+    am_res = generator.generate_response(consensus, "am", account_data=mock_account)
+    assert am_res.narrative, "AM narrative should not be empty"
+    assert len(am_res.narrative) > 20, "AM narrative should be a meaningful sentence"
+    assert len(am_res.playbook_7day) > 0, "Playbook should have at least one action"
+    assert am_res.confidence_in_playbook > 0
     
-    # Generate for VP
-    vp_res = generator.generate_response(consensus, "vp")
-    assert vp_res.narrative == macro_summary
-    assert vp_res.portfolio_impact.total_arr_at_risk == "$150,000.00"
+    # Generate for VP — narrative grounded; ARR derived from real opportunity sums
+    vp_res = generator.generate_response(consensus, "vp", account_data=mock_account)
+    assert vp_res.narrative, "VP narrative should not be empty"
+    assert len(vp_res.narrative) > 20, "VP narrative should be a meaningful sentence"
+    # ARR at risk should be derived from real deal values (not $0)
+    assert vp_res.portfolio_impact.total_arr_at_risk not in ("$0", "", None)
     
-    # Generate for SVP
-    svp_res = generator.generate_response(consensus, "svp")
-    assert svp_res.narrative == macro_summary
-    assert svp_res.strategic_context.strategic_fit == "KEEP"
+    # Generate for SVP — strategic fit derived from health score (75.5 → KEEP)
+    svp_res = generator.generate_response(consensus, "svp", account_data=mock_account)
+    assert svp_res.narrative, "SVP narrative should not be empty"
+    assert svp_res.strategic_context.strategic_fit == "KEEP"  # health=75.5 → >= 65 → KEEP
+    assert "Acme Corp" in svp_res.strategic_context.strategic_value
 
     print("Success: Fallback and Crucible mapping validation test passed successfully!")

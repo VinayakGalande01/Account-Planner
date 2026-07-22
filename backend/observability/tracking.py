@@ -35,6 +35,8 @@ def calculate_token_cost(model_name: str, prompt_tokens: int, completion_tokens:
     
     # Cost per 1M tokens
     pricing = {
+        "gemini": {"input": 0.075, "output": 0.30},
+        "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
         "gpt-4o": {"input": 5.0, "output": 15.0},
         "gpt-3.5-turbo": {"input": 0.5, "output": 1.5},
         "claude-3-5-sonnet": {"input": 3.0, "output": 15.0},

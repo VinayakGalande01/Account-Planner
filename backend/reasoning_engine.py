@@ -1670,7 +1670,39 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
             if response.status_code == 200:
                 res_json = response.json()
                 try:
-                    return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    text_content = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    
+                    # Extract usage metadata & accumulate token counts
+                    usage = res_json.get("usageMetadata", {})
+                    prompt_tokens = int(usage.get("promptTokenCount", 0))
+                    completion_tokens = int(usage.get("candidatesTokenCount", 0))
+                    
+                    try:
+                        from pipeline_logger import TokenAccumulator
+                        call_label = "llm_call"
+                        sp_lower = system_prompt.lower()
+                        if "evidence" in sp_lower:
+                            call_label = "evidence_selection"
+                        elif "brief" in sp_lower:
+                            call_label = "intelligence_brief"
+                        elif "plan" in sp_lower:
+                            call_label = "reasoning_plan"
+                        elif "frame" in sp_lower:
+                            call_label = "decision_frame"
+                        elif "causal" in sp_lower or "theories" in sp_lower:
+                            call_label = "narrative_causality"
+                        elif "consultant" in sp_lower or "synthesis" in sp_lower:
+                            call_label = "narrative_synthesis"
+                        elif "email" in sp_lower:
+                            call_label = "quick_action_email"
+                        elif "agenda" in sp_lower:
+                            call_label = "quick_action_agenda"
+                        
+                        TokenAccumulator.record_call(call_label, prompt_tokens, completion_tokens)
+                    except Exception as token_err:
+                        print(f"  [Warning] Token accumulation failed: {token_err}")
+                        
+                    return text_content
                 except (KeyError, IndexError):
                     raise Exception(f"Unexpected Gemini API response structure: {res_json}")
             else:
@@ -1833,9 +1865,6 @@ class ReasoningEngine:
         if gemini_key:
             try:
                 print(f"[Cloud Route] Routing LLM call to Google Gemini API (model: {self.model})...")
-                # Import the helper that communicates with Gemini
-                from intent_classifier import call_gemini_api
-                # Enforce a 10s strict timeout for responsive user experience
                 return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=10)
             except Exception as e:
                 print(f"[Cloud Route Error] Gemini API call failed: {e}. Falling back...")
@@ -2109,7 +2138,7 @@ class ReasoningEngine:
                     data_sufficiency_score=data_sufficiency_score
                 )
                 pre_reasoning_telemetry['evidence_selection'] = ev_telemetry
-                self.raw_reasoning_bucket['evidence_bundle'] = evidence_bundle.dict()
+                self.raw_reasoning_bucket['evidence_bundle'] = evidence_bundle.dict() if hasattr(evidence_bundle, 'dict') else (evidence_bundle if isinstance(evidence_bundle, dict) else {'content': str(evidence_bundle)})
                 state.stage_reached = 3
                 report_progress("Stage 3/6: CRM Evidence Selected ✓")
 
@@ -2123,7 +2152,7 @@ class ReasoningEngine:
                     data_sufficiency_score=data_sufficiency_score
                 )
                 pre_reasoning_telemetry['intelligence_brief'] = ib_telemetry
-                self.raw_reasoning_bucket['intelligence_brief'] = intelligence_brief.dict()
+                self.raw_reasoning_bucket['intelligence_brief'] = intelligence_brief.dict() if hasattr(intelligence_brief, 'dict') else (intelligence_brief if isinstance(intelligence_brief, dict) else {'content': str(intelligence_brief)})
                 state.stage_reached = 4
                 report_progress("Stage 4/6: Intelligence Brief Compiled ✓")
 
@@ -2136,7 +2165,7 @@ class ReasoningEngine:
                     intelligence_brief=intelligence_brief
                 )
                 pre_reasoning_telemetry['reasoning_plan'] = rp_telemetry
-                self.raw_reasoning_bucket['reasoning_plan'] = reasoning_plan.dict()
+                self.raw_reasoning_bucket['reasoning_plan'] = reasoning_plan.dict() if hasattr(reasoning_plan, 'dict') else (reasoning_plan if isinstance(reasoning_plan, dict) else {'content': str(reasoning_plan)})
                 self.raw_reasoning_bucket['pre_reasoning_telemetry'] = pre_reasoning_telemetry
                 state.stage_reached = 5
                 report_progress("Stage 5/6: Reasoning Plan Generated ✓")
@@ -2182,11 +2211,11 @@ Instead of debating raw metrics (numbers), you must validate whether the suggest
             context_payload["Strategic Narrative Builder Output"] = narrative_result
             
         if evidence_bundle:
-            context_payload["Pre-Computed Evidence Bundle"] = evidence_bundle.dict()
+            context_payload["Pre-Computed Evidence Bundle"] = evidence_bundle.dict() if hasattr(evidence_bundle, 'dict') else (evidence_bundle if isinstance(evidence_bundle, dict) else {'content': str(evidence_bundle)})
         if intelligence_brief:
-            context_payload["Intelligence Brief"] = intelligence_brief.dict()
+            context_payload["Intelligence Brief"] = intelligence_brief.dict() if hasattr(intelligence_brief, 'dict') else (intelligence_brief if isinstance(intelligence_brief, dict) else {'content': str(intelligence_brief)})
         if reasoning_plan:
-            context_payload["Reasoning Plan"] = reasoning_plan.dict()
+            context_payload["Reasoning Plan"] = reasoning_plan.dict() if hasattr(reasoning_plan, 'dict') else (reasoning_plan if isinstance(reasoning_plan, dict) else {'content': str(reasoning_plan)})
 
         if history:
             history_text = "\n".join([f"{msg.get('role', msg.get('sender', 'user'))}: {msg.get('content', msg.get('text', ''))}" for msg in history])

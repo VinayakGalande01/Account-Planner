@@ -29,6 +29,7 @@ class IntentEnum(str, Enum):
     MEETING_AGENDA = "meeting_agenda"
     SHOW_STAKEHOLDERS = "show_stakeholders"
     REVIEW_RISKS = "review_risks"
+    CALCULATION_EXPLANATION = "calculation_explanation"
 
 class ExtractedEntities(BaseModel):
     account: Optional[str] = None
@@ -180,6 +181,27 @@ class IntentClassifier:
                 complexity="CONVERSATIONAL",
                 target_entities=[],
                 context_summary=f"Conversational: {chitchat_intent}"
+            )
+
+        # Fast-path for Calculation Breakdown Queries
+        CALC_PATTERNS = [
+            r"\bhow (did you|was this|was it|were they|is it) calculate(d)?\b",
+            r"\bbreakdown of (how|the|how you|deals|total|revenue|stalled|\$\d+)\b",
+            r"\bexplain (the|how|this|my|that|\$\d+) (calculation|figure|sum|number|total|math)\b",
+            r"\bmath breakdown\b",
+            r"\bwhere did (the|\$\d+) come from\b"
+        ]
+        if any(re.search(p, query_lower) for p in CALC_PATTERNS):
+            return IntentClassificationOutput(
+                primary_intent=IntentEnum.CALCULATION_EXPLANATION,
+                confidence_primary=0.95,
+                extracted_entities=ExtractedEntities(account=active_account),
+                urgency="medium",
+                scope="ENTITY" if active_account else "PORTFOLIO",
+                intent="CALCULATION_EXPLANATION",
+                complexity="FACTUAL",
+                target_entities=[active_account] if active_account else [],
+                context_summary="Fast-path Calculation Breakdown Inspector"
             )
 
         # Entity extraction (using robust legacy rules)

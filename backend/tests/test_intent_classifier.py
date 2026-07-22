@@ -35,5 +35,17 @@ def test():
             
     print("\n=== INTENT CLASSIFIER TEST COMPLETE ===")
 
+def test_opportunity_resolution():
+    print("=== TESTING OPPORTUNITY ID RESOLUTION ===")
+    known_opps = {
+        "2_opp0125": "Deloitte"
+    }
+    classifier = IntentClassifier(known_opportunities=known_opps)
+    output = classifier.classify("Why opportunity 2_OPP0125 Commercial Negotiation stage ?")
+    
+    assert output.extracted_entities.account == "Deloitte"
+    print("Successfully resolved opportunity ID 2_OPP0125 to target account Deloitte!")
+
 if __name__ == "__main__":
     test()
+    test_opportunity_resolution()

@@ -59,8 +59,21 @@ LOGGING_CONFIG = {
             "maxBytes": 10485760,
             "backupCount": 5,
         },
+        "pipeline_file": {
+            "level": "INFO",
+            "formatter": "standard",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(LOGS_DIR, "pipeline.log"),
+            "maxBytes": 10485760,
+            "backupCount": 5,
+        },
     },
     "loggers": {
+        "pipeline": {
+            "handlers": ["console", "pipeline_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "database": {
             "handlers": ["console", "database_file"],
             "level": "INFO",
