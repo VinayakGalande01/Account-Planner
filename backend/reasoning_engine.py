@@ -35,6 +35,9 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import pandas as pd
 import re
+import logging
+
+logger = logging.getLogger("reasoning_engine")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1761,6 +1764,10 @@ def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str,
     # (Other playbook generation lines were kept here in template format)
     # --- END OLD TEMPLATED FALLBACK CODE ---
 
+    logger.warning(
+        "[Fallback] Context-aware fallback engine activated (Crucible LLM unavailable)",
+        extra={"account_name": account_data.get("account_name", "unknown")}
+    )
     from intelligence_engine import IntelligenceEngine
     signals = IntelligenceEngine.compute(account_data)
     
@@ -1863,11 +1870,27 @@ class ReasoningEngine:
         # Check for Gemini API integration (Cloud Primary)
         gemini_key = os.getenv("GEMINI_API_KEY")
         if gemini_key:
-            try:
-                print(f"[Cloud Route] Routing LLM call to Google Gemini API (model: {self.model})...")
-                return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=10)
-            except Exception as e:
-                print(f"[Cloud Route Error] Gemini API call failed: {e}. Falling back...")
+            last_exception = None
+            for attempt in range(2):  # attempt 0 = initial, attempt 1 = retry
+                try:
+                    if attempt == 0:
+                        print(f"[Cloud Route] Routing LLM call to Google Gemini API (model: {self.model})...")
+                    else:
+                        print(f"[Cloud Route] Retry attempt for Gemini API (model: {self.model})...")
+                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 1500))
+                except Exception as e:
+                    last_exception = e
+                    if attempt == 0:
+                        logger.warning(
+                            "[Cloud Route Error] Gemini API call failed (attempt 1/2), retrying in 2s",
+                            extra={"error": str(e), "timeout_budget": timeout, "model": self.model}
+                        )
+                        time.sleep(2)
+                    else:
+                        logger.warning(
+                            "[Cloud Route Error] Gemini API call failed (attempt 2/2), falling back",
+                            extra={"error": str(e), "timeout_budget": timeout, "model": self.model}
+                        )
 
         # --- LOCAL LLM EXECUTION CODE (COMMENTED OUT FOR PERFORMANCE) ---
         # # Enforce conciseness for resource-constrained systems
@@ -1902,6 +1925,10 @@ class ReasoningEngine:
 
     def _extract_fallback_fields(self, text: str, thread_name: str) -> dict:
         """Fallback regex extractor to salvage fields and match standard structures."""
+        logger.warning(
+            "[Fallback] Regex fallback extraction activated for reasoning thread",
+            extra={"thread": thread_name, "text_length": len(text)}
+        )
         # Grab base fallback structure first
         salvaged = self._fallback_for_thread(thread_name, "JSON Parsing Error")
         
@@ -2266,6 +2293,10 @@ Context Payload:
                     raise ValueError("JSON parsed successfully but missing required Crucible schema keys.")
                     
             except Exception as e:
+                logger.warning(
+                    "[Fallback] Crucible LLM execution failed, routing to fallback engine",
+                    extra={"error": str(e), "account": account_data.get("account_name", "unknown")}
+                )
                 print(f"[Crucible Warning] Crucible execution or parsing failed: {e}. Generating context-aware fallback data.")
                 if 'consensus' not in self.raw_reasoning_bucket:
                     self.raw_reasoning_bucket['consensus'] = f"Error or parsing issue: {e}. Raw text: {raw_llm_output[:200]}"
@@ -2342,6 +2373,10 @@ Respond with JSON only:
             res_dict = self._clean_and_parse(raw_text)
             return AMPerspectiveOutput(**res_dict)
         except Exception as e:
+            logger.warning(
+                "[Fallback] Reasoning thread failed, using deterministic fallback",
+                extra={"thread": "am", "error": str(e)}
+            )
             if 'am' not in self.raw_reasoning_bucket:
                 self.raw_reasoning_bucket['am'] = f"Error or timeout before response: {e}"
             return AMPerspectiveOutput(**self._fallback_for_thread('am', str(e)))
@@ -2399,6 +2434,10 @@ Respond with JSON only:
             res_dict = self._clean_and_parse(raw_text)
             return VPPerspectiveOutput(**res_dict)
         except Exception as e:
+            logger.warning(
+                "[Fallback] Reasoning thread failed, using deterministic fallback",
+                extra={"thread": "vp", "error": str(e)}
+            )
             if 'vp' not in self.raw_reasoning_bucket:
                 self.raw_reasoning_bucket['vp'] = f"Error or timeout before response: {e}"
             return VPPerspectiveOutput(**self._fallback_for_thread('vp', str(e)))
@@ -2453,6 +2492,10 @@ Respond with JSON only:
             res_dict = self._clean_and_parse(raw_text)
             return SVPPerspectiveOutput(**res_dict)
         except Exception as e:
+            logger.warning(
+                "[Fallback] Reasoning thread failed, using deterministic fallback",
+                extra={"thread": "svp", "error": str(e)}
+            )
             if 'svp' not in self.raw_reasoning_bucket:
                 self.raw_reasoning_bucket['svp'] = f"Error or timeout before response: {e}"
             return SVPPerspectiveOutput(**self._fallback_for_thread('svp', str(e)))
@@ -2522,12 +2565,20 @@ Respond with JSON only:
             res_dict = self._clean_and_parse(raw_text)
             return DataPerspectiveOutput(**res_dict)
         except Exception as e:
+            logger.warning(
+                "[Fallback] Reasoning thread failed, using deterministic fallback",
+                extra={"thread": "data", "error": str(e)}
+            )
             if 'data' not in self.raw_reasoning_bucket:
                 self.raw_reasoning_bucket['data'] = f"Error or timeout before response: {e}"
             return DataPerspectiveOutput(**self._fallback_for_thread('data', str(e)))
 
     def _fallback_for_thread(self, thread_name: str, error: str) -> Dict:
         """Fallback if thread times out or fails."""
+        logger.warning(
+            "[Fallback] Deterministic fallback activated for reasoning thread",
+            extra={"thread": thread_name, "error": error}
+        )
         if thread_name == 'am':
             return {
                 "am_perspective": f"Thread am timed out or failed: {error}",
@@ -2631,6 +2682,10 @@ Respond in JSON format only:
             res_dict = self._clean_and_parse(raw_text, is_consensus=True)
             return ConsensusOutput(**res_dict)
         except Exception as e:
+            logger.warning(
+                "[Fallback] Consensus synthesis failed, using deterministic fallback",
+                extra={"error": str(e)}
+            )
             if 'consensus' not in self.raw_reasoning_bucket:
                 self.raw_reasoning_bucket['consensus'] = f"Error or timeout before response: {e}"
             fallback = {
@@ -2744,11 +2799,27 @@ class ResponseGenerator:
         # Check for Gemini API integration (Cloud Primary Route)
         gemini_key = os.getenv("GEMINI_API_KEY")
         if gemini_key:
-            try:
-                print("[Governance] Routing ResponseGenerator LLM call directly to Google Gemini API (Cloud Route)...")
-                return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 1500))
-            except Exception as e:
-                print(f"[Governance Warning] Gemini API routing failed: {e}. Falling back to local model...")
+            last_exception = None
+            for attempt in range(2):  # attempt 0 = initial, attempt 1 = retry
+                try:
+                    if attempt == 0:
+                        print("[Governance] Routing ResponseGenerator LLM call directly to Google Gemini API (Cloud Route)...")
+                    else:
+                        print("[Governance] Retry attempt for ResponseGenerator Gemini API call (Cloud Route)...")
+                    return call_gemini_api(system_prompt, user_prompt, gemini_key, max_tokens=2048, timeout=min(timeout, 1500))
+                except Exception as e:
+                    last_exception = e
+                    if attempt == 0:
+                        logger.warning(
+                            "[Governance Warning] Gemini API routing failed (attempt 1/2), retrying in 2s",
+                            extra={"error": str(e), "timeout_budget": timeout, "model": self.model}
+                        )
+                        time.sleep(2)
+                    else:
+                        logger.warning(
+                            "[Governance Warning] Gemini API routing failed (attempt 2/2), falling back",
+                            extra={"error": str(e), "timeout_budget": timeout, "model": self.model}
+                        )
 
         # --- LOCAL LLM EXECUTION CODE (COMMENTED OUT FOR PERFORMANCE) ---
         # # Enforce conciseness for resource-constrained systems
@@ -2814,6 +2885,10 @@ class ResponseGenerator:
 
     def _extract_fallback_fields(self, text: str, role: str) -> dict:
         """Extract narrative and other fields using regex from broken JSON."""
+        logger.warning(
+            "[Fallback] Regex fallback extraction activated for response generation",
+            extra={"role": role, "text_length": len(text)}
+        )
         salvaged = {}
         narrative_match = re.search(r'"narrative"\s*:\s*"([^"]+)"', text)
         if narrative_match:
@@ -2995,7 +3070,11 @@ Do NOT use placeholders like 'key stakeholder', 'the client', or 'deal X'. Use a
             narrative = self._call_llm(system_p, user_p, timeout=20)
             if not narrative or len(narrative) < 20:
                 raise ValueError("Empty narrative")
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "[Fallback] ResponseGenerator narrative generation failed",
+                extra={"role": "am", "error": str(e), "account": account_data.get("account_name", "unknown")}
+            )
             narrative = exec_brief.get("macro_summary", "Strategic plan initiated.")
         
         # Inject CRM names into playbook actions
@@ -3091,7 +3170,11 @@ Do NOT use vague terms like 'significant revenue' or 'key accounts'. Use specifi
             narrative = self._call_llm(system_p, user_p, timeout=20)
             if not narrative or len(narrative) < 20:
                 raise ValueError("Empty narrative")
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "[Fallback] ResponseGenerator narrative generation failed",
+                extra={"role": "vp", "error": str(e), "account": account_data.get("account_name", "unknown")}
+            )
             narrative = exec_brief.get("macro_summary", "Strategic portfolio review initiated.")
         
         rev_stake = exec_brief.get("revenue_at_stake", "$0")
@@ -3157,7 +3240,11 @@ Avoid abstract language. Write like you're presenting to a board in 90 seconds."
             narrative = self._call_llm(system_p, user_p, timeout=20)
             if not narrative or len(narrative) < 20:
                 raise ValueError("Empty narrative")
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "[Fallback] ResponseGenerator narrative generation failed",
+                extra={"role": "svp", "error": str(e), "account": account_data.get("account_name", "unknown")}
+            )
             narrative = exec_brief.get("macro_summary", "Macro account briefing.")
         
         account_name = account_data.get("account_name", "this account")
@@ -3279,6 +3366,10 @@ Generate AM response JSON matching this structure:
             res_dict = self._clean_and_parse(raw_text)
             return AMResponseOutput(**res_dict)
         except Exception as e:
+            logger.warning(
+                "[Fallback] ResponseGenerator full response generation failed",
+                extra={"role": "am", "error": str(e)}
+            )
             if self.raw_response_bucket.get('am') == "Pending generation...":
                 self.raw_response_bucket['am'] = f"Error or timeout before response: {e}"
             fallback = {
@@ -3364,6 +3455,10 @@ Generate VP response JSON matching this structure:
             res_dict = self._clean_and_parse(raw_text)
             return VPResponseOutput(**res_dict)
         except Exception as e:
+            logger.warning(
+                "[Fallback] ResponseGenerator full response generation failed",
+                extra={"role": "vp", "error": str(e)}
+            )
             if self.raw_response_bucket.get('vp') == "Pending generation...":
                 self.raw_response_bucket['vp'] = f"Error or timeout before response: {e}"
             fallback = {
@@ -3455,6 +3550,10 @@ Generate SVP response JSON matching this structure:
             res_dict = self._clean_and_parse(raw_text)
             return SVPResponseOutput(**res_dict)
         except Exception as e:
+            logger.warning(
+                "[Fallback] ResponseGenerator full response generation failed",
+                extra={"role": "svp", "error": str(e)}
+            )
             if self.raw_response_bucket.get('svp') == "Pending generation...":
                 self.raw_response_bucket['svp'] = f"Error or timeout before response: {e}"
             fallback = {

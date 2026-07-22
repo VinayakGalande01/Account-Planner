@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Sidebar } from '@/components/Sidebar'
-import { Header } from '@/components/header'
 import { useAuth } from '@/context/AuthContext'
+import { useAnimation } from '@/context/AnimationContext'
 import { toast } from 'sonner'
+import { PageHeader } from '@/components/PageHeader'
 import { 
   Database, 
   Search, 
@@ -25,6 +25,8 @@ import {
   Layers,
   ChevronRight
 } from 'lucide-react'
+import { useFocusTrap } from '@/lib/useFocusTrap'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface GoldenTestCase {
   id: string
@@ -57,6 +59,7 @@ interface GoldenTestCase {
 
 export default function GoldenDatasetPage() {
   const { authFetch } = useAuth()
+  const { isFirstVisit } = useAnimation()
   const [cases, setCases] = useState<GoldenTestCase[]>([])
   const [loading, setLoading] = useState(true)
   
@@ -80,6 +83,16 @@ export default function GoldenDatasetPage() {
   const [formEntities, setFormEntities] = useState('{\n  "account": "Wipro"\n}')
   const [formRecType, setFormRecType] = useState('RISK_MITIGATION')
   const [formNotes, setFormNotes] = useState('')
+
+  const createModalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: isCreateModalOpen,
+    onClose: () => setIsCreateModalOpen(false),
+  })
+
+  const detailModalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: isDetailModalOpen,
+    onClose: () => setIsDetailModalOpen(false),
+  })
 
   // Load dataset
   const loadDataset = async () => {
@@ -271,40 +284,37 @@ export default function GoldenDatasetPage() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col md:ml-0 overflow-hidden">
-        <Header />
-        
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
-          {/* Page Title & Stats */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <motion.div
-              initial={{ opacity: 0, y: -12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-            >
-              <h1 className="text-3xl font-semibold text-foreground flex items-center gap-2">
-                <Database className="w-8 h-8 text-primary" />
-                Golden Dataset
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage the immutable ground-truth benchmark scenarios for pipeline evaluations
-              </p>
-            </motion.div>
-            
-            <motion.button
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => { resetForm(); setIsCreateModalOpen(true) }}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add Test Case
-            </motion.button>
+    <>
+      <main className="flex-1 overflow-y-auto p-6 md:p-8">
+        {/* Admin Surface Banner */}
+        <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Database className="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
+            <div>
+              <span className="text-xs font-bold text-primary uppercase tracking-wider block">Internal Admin & QA Benchmark Surface</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Curation tool for AI intent classifiers and ground-truth eval testcases. Excluded from primary salesperson navigation.</p>
+            </div>
           </div>
+        </div>
+
+        {/* Page Title & Actions */}
+        <PageHeader
+          title="Golden Dataset Benchmarks"
+          subtitle={`Manage ${totalCount} ground-truth evaluation testcases for AI accuracy testing`}
+          icon={<Database className="w-6 h-6" />}
+          action={
+            <button
+              onClick={() => {
+                resetForm()
+                setIsCreateModalOpen(true)
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-xs font-semibold rounded-md hover:bg-primary/90 transition-colors shadow-flat"
+            >
+              <Plus className="w-4 h-4" aria-hidden="true" />
+              <span>New Test Case</span>
+            </button>
+          }
+        />
 
           {/* Stats Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -316,9 +326,9 @@ export default function GoldenDatasetPage() {
             ].map((stat, idx) => (
               <motion.div
                 key={stat.label}
-                initial={{ opacity: 0, y: 10 }}
+                initial={isFirstVisit ? { opacity: 0, y: 10 } : false}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
+                transition={{ delay: isFirstVisit ? idx * 0.05 : 0 }}
                 className="bg-secondary/10 border border-border/80 rounded-xl p-4 flex items-center justify-between shadow-sm backdrop-blur-sm"
               >
                 <div>
@@ -333,10 +343,11 @@ export default function GoldenDatasetPage() {
           {/* Search & Filter Section */}
           <div className="bg-secondary/10 border border-border/80 rounded-xl p-4 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between backdrop-blur-sm">
             <div className="relative w-full md:w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
               <input
                 type="text"
                 placeholder="Search queries, intents, or tags..."
+                aria-label="Search queries, intents, or tags"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-foreground"
@@ -345,7 +356,7 @@ export default function GoldenDatasetPage() {
             
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-1">
-                <Filter className="w-3.5 h-3.5" />
+                <Filter className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Filters:</span>
               </div>
               
@@ -353,6 +364,7 @@ export default function GoldenDatasetPage() {
               <select
                 value={selectedIntent}
                 onChange={(e) => setSelectedIntent(e.target.value)}
+                aria-label="Filter by intent"
                 className="bg-background border border-border text-foreground text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
               >
                 <option value="ALL">All Intents</option>
@@ -370,6 +382,7 @@ export default function GoldenDatasetPage() {
               <select
                 value={selectedPriority}
                 onChange={(e) => setSelectedPriority(e.target.value)}
+                aria-label="Filter by priority"
                 className="bg-background border border-border text-foreground text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
               >
                 <option value="ALL">All Priorities</option>
@@ -383,6 +396,7 @@ export default function GoldenDatasetPage() {
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
+                aria-label="Filter by status"
                 className="bg-background border border-border text-foreground text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
               >
                 <option value="ALL">All Statuses</option>
@@ -395,13 +409,16 @@ export default function GoldenDatasetPage() {
 
           {/* Golden Cases Table/List */}
           {loading ? (
-            <div className="text-center py-12">
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-sm text-muted-foreground">Loading test cases...</p>
+            <div className="bg-[#181824] border border-border/80 rounded-xl overflow-hidden shadow-lg p-4">
+               <div className="space-y-3">
+                 {[...Array(6)].map((_, i) => (
+                   <Skeleton key={`sk-${i}`} className="h-12 w-full" />
+                 ))}
+               </div>
             </div>
           ) : filteredCases.length === 0 ? (
             <div className="text-center py-16 border border-dashed border-border/80 rounded-xl bg-secondary/5">
-              <Database className="w-12 h-12 text-muted-foreground/60 mx-auto mb-4" />
+              <Database className="w-12 h-12 text-muted-foreground/60 mx-auto mb-4" aria-hidden="true" />
               <h3 className="text-base font-semibold text-foreground">No test cases found</h3>
               <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
                 No golden cases match your search query and filters. Try adjusting your search parameters.
@@ -409,23 +426,32 @@ export default function GoldenDatasetPage() {
             </div>
           ) : (
             <div className="bg-[#181824] border border-border/80 rounded-xl overflow-hidden shadow-lg">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse" aria-label="Golden Test Cases">
                 <thead>
                   <tr className="border-b border-border/60 bg-secondary/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    <th className="px-6 py-4">Query</th>
-                    <th className="px-6 py-4">Expected Intent</th>
-                    <th className="px-6 py-4">Priority</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Version</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <th scope="col" className="px-6 py-4">Query</th>
+                    <th scope="col" className="px-6 py-4">Expected Intent</th>
+                    <th scope="col" className="px-6 py-4">Priority</th>
+                    <th scope="col" className="px-6 py-4">Status</th>
+                    <th scope="col" className="px-6 py-4">Version</th>
+                    <th scope="col" className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40 text-sm text-foreground">
                   {filteredCases.map((tc) => (
                     <tr 
                       key={tc.id} 
-                      className="hover:bg-secondary/10 transition-colors duration-150 cursor-pointer"
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`View detail for scenario: ${tc.query}`}
+                      className="hover:bg-secondary/10 transition-colors duration-150 cursor-pointer focus:outline-none focus:bg-secondary/20"
                       onClick={() => handleOpenDetail(tc)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleOpenDetail(tc)
+                        }
+                      }}
                     >
                       <td className="px-6 py-4 max-w-sm truncate font-medium">
                         {tc.query}
@@ -461,17 +487,17 @@ export default function GoldenDatasetPage() {
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => handleOpenDetail(tc)}
+                            aria-label={`Edit test case ${tc.query}`}
                             className="p-1.5 hover:bg-secondary/80 text-muted-foreground hover:text-foreground rounded-lg transition-colors"
-                            title="Edit"
                           >
-                            <Edit3 className="w-4 h-4" />
+                            <Edit3 className="w-4 h-4" aria-hidden="true" />
                           </button>
                           <button
                             onClick={() => handleDeleteCase(tc)}
+                            aria-label={`Archive test case ${tc.query}`}
                             className="p-1.5 hover:bg-secondary/80 text-muted-foreground hover:text-red-400 rounded-lg transition-colors"
-                            title="Archive"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
                           </button>
                         </div>
                       </td>
@@ -482,7 +508,6 @@ export default function GoldenDatasetPage() {
             </div>
           )}
         </main>
-      </div>
 
       {/* ────────────────── CREATE MODAL ────────────────── */}
       <AnimatePresence>
@@ -497,21 +522,26 @@ export default function GoldenDatasetPage() {
             />
             
             <motion.div
+              ref={createModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="create-modal-title"
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               className="relative w-full max-w-2xl bg-[#181824] border border-border rounded-xl shadow-2xl z-50 flex flex-col max-h-[85vh] text-foreground"
             >
               <div className="p-6 border-b border-border flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                  <Database className="w-5 h-5 text-primary" />
+                <h3 id="create-modal-title" className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <Database className="w-5 h-5 text-primary" aria-hidden="true" />
                   Add New Golden Test Case
                 </h3>
                 <button 
                   onClick={() => setIsCreateModalOpen(false)} 
+                  aria-label="Close modal"
                   className="p-1 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
 
@@ -662,6 +692,10 @@ export default function GoldenDatasetPage() {
             />
             
             <motion.div
+              ref={detailModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="detail-modal-title"
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
@@ -669,8 +703,8 @@ export default function GoldenDatasetPage() {
             >
               <div className="p-6 border-b border-border flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                    <Database className="w-5 h-5 text-primary" />
+                  <h3 id="detail-modal-title" className="text-lg font-semibold text-foreground flex items-center gap-2">
+                    <Database className="w-5 h-5 text-primary" aria-hidden="true" />
                     Review/Modify Golden Case
                   </h3>
                   <span className="text-xs text-muted-foreground font-mono mt-0.5 block">
@@ -679,9 +713,10 @@ export default function GoldenDatasetPage() {
                 </div>
                 <button 
                   onClick={() => setIsDetailModalOpen(false)} 
+                  aria-label="Close modal"
                   className="p-1 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
 
@@ -851,6 +886,6 @@ export default function GoldenDatasetPage() {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </>
   )
 }

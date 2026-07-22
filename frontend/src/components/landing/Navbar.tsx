@@ -73,7 +73,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onRequestAccess }) => {
           <button
             data-testid="theme-toggle"
             onClick={toggleTheme}
-            aria-label="Toggle theme"
+            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
             className="w-9 h-9 grid place-items-center border border-primary/30 hover:border-primary hover:bg-primary/10 transition-all cursor-pointer"
             style={{
               clipPath:
@@ -81,9 +81,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onRequestAccess }) => {
             }}
           >
             {theme === 'dark' ? (
-              <Sun className="w-4 h-4 text-primary" strokeWidth={1.8} />
+              <Sun className="w-4 h-4 text-primary" strokeWidth={1.8} aria-hidden="true" />
             ) : (
-              <Moon className="w-4 h-4 text-primary" strokeWidth={1.8} />
+              <Moon className="w-4 h-4 text-primary" strokeWidth={1.8} aria-hidden="true" />
             )}
           </button>
           <button
@@ -97,12 +97,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onRequestAccess }) => {
             data-testid="nav-mobile-toggle"
             onClick={() => setOpen(!open)}
             className="md:hidden w-9 h-9 grid place-items-center border border-primary/30 cursor-pointer"
-            aria-label="Menu"
+            aria-label={open ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={open}
           >
             {open ? (
-              <X className="w-4 h-4 text-primary" />
+              <X className="w-4 h-4 text-primary" aria-hidden="true" />
             ) : (
-              <Menu className="w-4 h-4 text-primary" />
+              <Menu className="w-4 h-4 text-primary" aria-hidden="true" />
             )}
           </button>
         </div>

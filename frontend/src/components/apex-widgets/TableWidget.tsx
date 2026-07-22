@@ -23,11 +23,11 @@ export function TableWidget({ data }: TableWidgetProps) {
   return (
     <div className="apex-widget-table">
       <div className="overflow-x-auto">
-        <table className="apex-data-grid" id="apex-table-primary">
+        <table className="apex-data-grid" id="apex-table-primary" aria-label="Structured data grid">
           <thead>
             <tr>
               {data.columns.map((col) => (
-                <th key={col}>{formatColumnHeader(col)}</th>
+                <th key={col} scope="col">{formatColumnHeader(col)}</th>
               ))}
             </tr>
           </thead>

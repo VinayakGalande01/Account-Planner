@@ -1,4 +1,5 @@
 import { AuthWrapper } from '@/components/auth-wrapper'
+import { DashboardShell } from '@/components/dashboard-shell'
 
 export default function DashboardLayout({
   children,
@@ -7,7 +8,7 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthWrapper>
-      {children}
+      <DashboardShell>{children}</DashboardShell>
     </AuthWrapper>
   )
 }

@@ -2,15 +2,18 @@
 
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/context/AuthContext'
-import { Sidebar } from '@/components/Sidebar'
-import { Header } from '@/components/header'
-import { Brain, Send, Zap } from 'lucide-react'
+import { Brain, Send, Zap, Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { ContractRenderer, FinalizedContractRenderer } from '@/components/apex-widgets'
 import { parseResponseContract } from '@/utils/contractParser'
 import type { ResponseContract, RecommendedAction } from '@/types/responseContract'
 
+import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
+import { useAnimation } from '@/context/AnimationContext'
+import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/PageHeader'
+import { ThinkingIndicator } from '@/components/ThinkingIndicator'
+import { ReasoningTrail } from '@/components/ReasoningTrail'
 
 interface Message {
   id: number;
@@ -18,27 +21,18 @@ interface Message {
   content: string;
   timestamp: Date;
   contract?: ResponseContract;
+  reasoningSteps?: string[];
 }
 
 function RenderMessageLines({ content }: { content: string }) {
   const lines = content.split('\n')
   return (
     <>
-      {lines.map((line, idx) => {
-        if (line.startsWith('sys_meta_log|')) {
-          const metaMsg = line.replace('sys_meta_log|', '')
-          return (
-            <div key={idx} className="text-[12px] text-zinc-600 font-bold tracking-widest my-1 uppercase">
-              {metaMsg}
-            </div>
-          )
-        }
-        return (
-          <div key={idx} className={idx === lines.length - 1 ? "new-stream-line min-h-[16px]" : "min-h-[16px]"}>
-            {line}
-          </div>
-        )
-      })}
+      {lines.map((line, idx) => (
+        <div key={idx} className={idx === lines.length - 1 ? "new-stream-line min-h-[16px]" : "min-h-[16px]"}>
+          {line}
+        </div>
+      ))}
     </>
   )
 }
@@ -60,13 +54,22 @@ const suggestedPrompts = [
 ]
 
 export default function IntelligencePage() {
-  const { authFetch } = useAuth()
-  const { activeSessionId, loadSessions } = useSidebar()
+  const { authFetch, user } = useAuth()
+  const { activeSessionId, setActiveSessionId, sessions, loadSessions, createSession, deleteSession } = useSidebar()
+  const { isFirstVisit } = useAnimation()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [persona, setPersona] = useState<'account_manager' | 'vp_sales' | 'executive'>('account_manager')
   const [isLoading, setIsLoading] = useState(false)
   const [isSessionLoading, setIsSessionLoading] = useState(false)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(true)
+  const [currentStatus, setCurrentStatus] = useState('')
+
+  useEffect(() => {
+    if (user) {
+      loadSessions()
+    }
+  }, [user])
   const [mounted, setMounted] = useState(false)
 
   const handleActionClick = (action: RecommendedAction) => {
@@ -90,13 +93,27 @@ export default function IntelligencePage() {
         if (res.ok && active) {
           const data = await res.json()
           if (Array.isArray(data) && data.length > 0) {
-            const formatted = data.map((msg: any) => ({
-              id: msg.id || Date.now(),
-              role: msg.role as 'user' | 'assistant',
-              content: msg.content,
-              timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
-              contract: parseResponseContract(msg.content).isStructured ? parseResponseContract(msg.content) : undefined
-            }))
+            const formatted = data.map((msg: any) => {
+              const lines = (msg.content || '').split('\n')
+              const cleanLines: string[] = []
+              const steps: string[] = []
+              lines.forEach((line: string) => {
+                if (line.startsWith('sys_meta_log|')) {
+                  steps.push(line.replace('sys_meta_log|', '').trim())
+                } else {
+                  cleanLines.push(line)
+                }
+              })
+              const cleanContent = cleanLines.join('\n')
+              return {
+                id: msg.id || Date.now(),
+                role: msg.role as 'user' | 'assistant',
+                content: cleanContent,
+                timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+                contract: parseResponseContract(cleanContent).isStructured ? parseResponseContract(cleanContent) : undefined,
+                reasoningSteps: steps.length > 0 ? steps : undefined
+              }
+            })
             setMessages(formatted)
           } else {
             setMessages(initialMessages)
@@ -138,6 +155,7 @@ export default function IntelligencePage() {
       timestamp: new Date(),
     }
 
+    setCurrentStatus('')
     setMessages((prev) => [...prev, userMessage])
     setInputValue('')
     setIsLoading(true)
@@ -167,31 +185,89 @@ export default function IntelligencePage() {
       const reader = response.body.getReader()
       const decoder = new TextDecoder('utf-8')
       let fullText = ''
+      let currentBuffer = ''
+      const accumulatedSteps: string[] = []
+      let lastWasMeta = false
 
       const aiMessageId = Date.now() + 1
-      setMessages((prev) => [...prev, { id: aiMessageId, role: 'assistant', content: '', timestamp: new Date() }])
+      setMessages((prev) => [...prev, { id: aiMessageId, role: 'assistant', content: '', timestamp: new Date(), reasoningSteps: [] }])
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         const chunk = decoder.decode(value, { stream: true })
-        fullText += chunk
+        
+        currentBuffer += chunk
+        
+        // Process full lines inside the buffer
+        while (currentBuffer.includes('\n')) {
+          const newlineIndex = currentBuffer.indexOf('\n')
+          const line = currentBuffer.substring(0, newlineIndex).trim()
+          currentBuffer = currentBuffer.substring(newlineIndex + 1)
 
-        // Extract active account from meta log if available
-        if (chunk.includes('sys_meta_log|')) {
-          const match = fullText.match(/Active Account: (.*?)\n/);
-          if (match) {
-            setActiveAccount(match[1].trim());
+          if (line.startsWith('sys_meta_log|')) {
+            lastWasMeta = true
+            const statusMsg = line.replace('sys_meta_log|', '').trim()
+            if (statusMsg) {
+              setCurrentStatus(statusMsg)
+              accumulatedSteps.push(statusMsg)
+              
+              // Extract active account from meta log if available
+              if (statusMsg.includes('Active Account:')) {
+                const match = statusMsg.match(/Active Account:\s*(.*)/)
+                if (match) {
+                  setActiveAccount(match[1].trim())
+                }
+              }
+            }
+          } else {
+            // Keep normal text lines
+            if (line.trim() === '' && lastWasMeta) {
+              // Skip empty lines immediately following progress logs
+            } else {
+              fullText += line + '\n'
+              lastWasMeta = false
+            }
           }
         }
 
-        setMessages((prev) => prev.map(msg => msg.id === aiMessageId ? { ...msg, content: fullText } : msg))
+        // Live update the message container with clean text and accumulated steps
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMessageId
+              ? {
+                  ...msg,
+                  content: fullText + (currentBuffer.startsWith('sys_meta_log|') ? '' : currentBuffer),
+                  reasoningSteps: [...accumulatedSteps],
+                }
+              : msg
+          )
+        )
       }
 
-      const contract = parseResponseContract(fullText)
+      // Handle any remaining content left in buffer
+      if (currentBuffer) {
+        if (currentBuffer.startsWith('sys_meta_log|')) {
+          const statusMsg = currentBuffer.replace('sys_meta_log|', '').trim()
+          if (statusMsg) {
+            setCurrentStatus(statusMsg)
+            accumulatedSteps.push(statusMsg)
+          }
+        } else {
+          fullText += currentBuffer
+        }
+      }
+
+      // Finish by parsing response contracts
+      const contract = parseResponseContract(fullText.trim())
       setMessages((prev) => prev.map(msg =>
         msg.id === aiMessageId
-          ? { ...msg, content: fullText, contract: contract.isStructured ? contract : undefined }
+          ? {
+              ...msg,
+              content: fullText.trim(),
+              contract: contract.isStructured ? contract : undefined,
+              reasoningSteps: accumulatedSteps.length > 0 ? accumulatedSteps : undefined
+            }
           : msg
       ))
 
@@ -212,211 +288,284 @@ export default function IntelligencePage() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-
-      <div className="flex-1 flex flex-col">
-        <Header />
-
-        <main className="flex-1 overflow-y-auto flex flex-col">
-          <div className="flex-1 p-6 md:p-8 flex flex-col">
-            {/* Page title */}
-            <motion.div
-              initial={{ opacity: 0, y: -12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="mb-6"
-            >
-              <div className="flex items-center gap-2">
-                <Brain className="w-6 h-6 text-primary" />
-                <h1 className="text-3xl font-semibold text-foreground">Intelligence</h1>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">APEX V2.1 - Connected | Ask me anything about your accounts</p>
-            </motion.div>
-
-            {/* Messages */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.1, duration: 0.4 }}
-              className="flex-1 bg-card border border-border rounded-lg p-5 mb-4 overflow-y-auto"
-            >
-              <div className="space-y-4 flex flex-col">
-                {isSessionLoading ? (
-                  <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
-                      <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-xs text-muted-foreground">Loading conversation history...</p>
-                    </div>
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <Brain className="w-12 h-12 text-primary/30 mx-auto mb-3" />
-                      <p className="text-muted-foreground">Start a conversation...</p>
-                    </div>
-                  </div>
-                ) : (
-                  messages.map((message, index) => (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`px-4 py-2 rounded-lg ${message.role === 'user'
-                          ? 'max-w-lg bg-primary text-primary-foreground'
-                          : (message.contract || message.content.includes('__SECTION_'))
-                            ? 'max-w-6xl bg-secondary/50 text-foreground border border-border w-full'
-                            : 'max-w-2xl bg-secondary/50 text-foreground border border-border w-fit'
-                          }`}
-                      >
-                        {message.role === 'assistant' ? (
-                          message.contract ? (
-                            <FinalizedContractRenderer contract={message.contract} onActionClick={handleActionClick} />
-                          ) : message.content.includes('__SECTION_') ? (
-                            <ContractRenderer content={message.content} isStreaming={isLoading && index === messages.length - 1} onActionClick={handleActionClick} />
-                          ) : (
-                            <div className="text-sm leading-relaxed">
-                              {(() => {
-                                try {
-                                  const p = JSON.parse(message.content);
-                                  if (p.type === 'conversational' || p.type === 'clarification') {
-                                    return <FinalizedContractRenderer contract={{ isStructured: true, type: p.type, conversationalData: p } as any} onActionClick={handleActionClick} />;
-                                  }
-                                } catch (e) { }
-                                return (
-                                  <>
-                                    <RenderMessageLines content={message.content} />
-                                    {isLoading && index === messages.length - 1 && (
-                                      <span className="inline-block w-[2px] h-4 bg-primary ml-0.5 animate-pulse align-middle rounded-full" />
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          )
-                        ) : (
-                          <p className="text-sm">{message.content}</p>
-                        )}
-                        <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
-                          {mounted ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                        </p>
-                      </div>
-                    </motion.div>
-                  ))
-                )}
-
-                {isLoading && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex gap-3"
-                  >
-                    <div className="bg-secondary/50 text-foreground border border-border px-4 py-2 rounded-lg">
-                      <div className="flex gap-1.5">
-                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse" />
-                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse delay-100" />
-                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse delay-200" />
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Suggested prompts (only show initially) */}
-            {messages.length === 1 && (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.4 }}
-                className="mb-4"
-              >
-                <p className="text-xs text-muted-foreground mb-2">Suggested questions:</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {suggestedPrompts.map((prompt, index) => (
-                    <motion.button
-                      key={prompt}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.25 + index * 0.05 }}
-                      onClick={() => handleSendMessage(prompt)}
-                      className="flex items-start gap-2 px-3 py-2 bg-secondary/30 border border-border rounded-md hover:bg-secondary/50 transition-colors text-sm text-foreground text-left"
-                    >
-                      <Zap className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-                      <span>{prompt}</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Input area */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.4 }}
-              className="flex flex-col gap-2 w-full"
-            >
-              {/* Persona Selector */}
-              <div className="flex gap-2 mb-1">
+    <main className="flex-1 overflow-y-auto flex flex-col">
+      <div className="flex-1 p-6 md:p-8 flex flex-col min-h-0">
+        <PageHeader
+          title="Intelligence"
+          subtitle="APEX V2.1 - Connected | Ask me anything about your accounts"
+          icon={<Brain className="w-6 h-6" />}
+          action={
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Persona Selector (Top-of-Page Placement) */}
+              <div className="flex bg-secondary/50 border border-border p-1 rounded-full" role="group" aria-label="Select AI persona view">
                 <button
                   onClick={() => setPersona('account_manager')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                  aria-pressed={persona === 'account_manager'}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
                     persona === 'account_manager'
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-border text-muted-foreground hover:bg-secondary/50'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  Account Manager
+                  AM
                 </button>
                 <button
                   onClick={() => setPersona('vp_sales')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                  aria-pressed={persona === 'vp_sales'}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
                     persona === 'vp_sales'
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-border text-muted-foreground hover:bg-secondary/50'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   VP Sales
                 </button>
                 <button
                   onClick={() => setPersona('executive')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                  aria-pressed={persona === 'executive'}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
                     persona === 'executive'
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-border text-muted-foreground hover:bg-secondary/50'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Executive
                 </button>
               </div>
 
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  placeholder="Ask a question about your accounts..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  disabled={isLoading}
-                  className="flex-1 bg-secondary border border-border rounded-lg px-4 py-2.5 text-sm placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors disabled:opacity-50"
-                />
+              {/* History Toggle Button */}
+              <button
+                onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                aria-label={isHistoryOpen ? "Collapse history panel" : "Expand history panel"}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-border rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+              >
+                {isHistoryOpen ? <ChevronLeft className="w-4 h-4" aria-hidden="true" /> : <ChevronRight className="w-4 h-4" aria-hidden="true" />}
+                <span>{isHistoryOpen ? 'Hide History' : 'Show History'}</span>
+              </button>
+            </div>
+          }
+        />
+
+        {/* 2-Column Layout with Page-Scoped Session History */}
+        <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
+          {/* Conversation Sessions Drawer */}
+          {isHistoryOpen && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 256, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              className="w-64 bg-card border border-border rounded-lg p-4 flex flex-col shrink-0 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-3 pb-3 border-b border-border">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Conversations</span>
                 <button
-                  onClick={() => handleSendMessage()}
-                  disabled={isLoading || !inputValue.trim()}
-                  className="px-4 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => createSession()}
+                  aria-label="Create new chat session"
+                  className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded hover:bg-primary/90 transition-colors"
                 >
-                  <Send className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>New</span>
                 </button>
               </div>
+
+              <div className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                {sessions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground/60 italic p-2">No past conversations</p>
+                ) : (
+                  sessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className={`group relative flex items-center justify-between rounded-md text-xs transition-colors ${
+                        activeSessionId === session.id
+                          ? 'bg-primary/10 text-primary font-medium border border-primary/20'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40'
+                      }`}
+                    >
+                      <button
+                        onClick={() => setActiveSessionId(session.id)}
+                        className="flex-1 text-left px-2.5 py-2 truncate flex items-center gap-2 min-w-0"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" aria-hidden="true" />
+                        <span className="truncate flex-1">{session.title}</span>
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          await deleteSession(session.id)
+                        }}
+                        aria-label={`Delete ${session.title}`}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-red-400 transition-opacity mr-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </motion.div>
+          )}
+
+          {/* Main Intelligence Chat Area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Messages */}
+            <motion.div
+              initial={isFirstVisit ? { opacity: 0 } : false}
+              animate={{ opacity: 1 }}
+              transition={{ delay: isFirstVisit ? 0.1 : 0, duration: 0.4 }}
+              className="flex-1 bg-card border border-border rounded-lg p-5 mb-4 overflow-y-auto"
+            >
+          <div className="space-y-4 flex flex-col">
+            {isSessionLoading ? (
+              <div className="flex flex-col gap-4 p-2">
+                <div className="flex justify-end"><Skeleton className="h-10 w-64 rounded-lg" /></div>
+                <div className="flex justify-start"><Skeleton className="h-24 w-full max-w-lg rounded-lg" /></div>
+                <div className="flex justify-end"><Skeleton className="h-10 w-48 rounded-lg" /></div>
+                <div className="flex justify-start"><Skeleton className="h-32 w-full max-w-2xl rounded-lg" /></div>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Brain className="w-12 h-12 text-primary/30 mx-auto mb-3" />
+                  <p className="text-muted-foreground">Start a conversation...</p>
+                </div>
+              </div>
+            ) : (
+              messages.map((message, index) => {
+                if (message.role === 'assistant' && !message.content.trim() && (!message.reasoningSteps || message.reasoningSteps.length === 0)) {
+                  return null
+                }
+                return (
+                  <motion.div
+                    key={message.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`px-4 py-2 rounded-lg ${message.role === 'user'
+                        ? 'max-w-lg bg-primary text-primary-foreground'
+                        : (message.contract || message.content.includes('__SECTION_'))
+                          ? 'max-w-6xl bg-secondary/50 text-foreground border border-border w-full'
+                          : 'max-w-2xl bg-secondary/50 text-foreground border border-border w-fit'
+                        }`}
+                    >
+                    {message.role === 'assistant' && (
+                      <ReasoningTrail steps={message.reasoningSteps || []} />
+                    )}
+                    {message.role === 'assistant' ? (
+                      message.contract ? (
+                        <FinalizedContractRenderer contract={message.contract} onActionClick={handleActionClick} />
+                      ) : message.content.includes('__SECTION_') ? (
+                        <ContractRenderer content={message.content} isStreaming={isLoading && index === messages.length - 1} onActionClick={handleActionClick} />
+                      ) : (
+                        <div className="text-sm leading-relaxed">
+                          {(() => {
+                            try {
+                              const p = JSON.parse(message.content);
+                              if (p.type === 'conversational' || p.type === 'clarification') {
+                                return <FinalizedContractRenderer contract={{ isStructured: true, type: p.type, conversationalData: p } as any} onActionClick={handleActionClick} />;
+                              }
+                            } catch (e) { }
+                            return (
+                              <>
+                                <RenderMessageLines content={message.content} />
+                                {isLoading && index === messages.length - 1 && (
+                                  <span className="inline-block w-[2px] h-4 bg-primary ml-0.5 animate-pulse align-middle rounded-full" />
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )
+                    ) : (
+                      <p className="text-sm">{message.content}</p>
+                    )}
+                    <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+                      {mounted ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </p>
+                  </div>
+                </motion.div>
+                )
+              })
+            )}
+
+            {isLoading && currentStatus && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex justify-start"
+              >
+                <ThinkingIndicator status={currentStatus} />
+              </motion.div>
+            )}
           </div>
-        </main>
+        </motion.div>
+
+        {/* Suggested prompts (only show initially) */}
+        {messages.length === 1 && (
+          <motion.div
+            initial={isFirstVisit ? { opacity: 0, y: 12 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: isFirstVisit ? 0.2 : 0, duration: 0.4 }}
+            className="mb-4"
+          >
+            <p className="text-xs text-muted-foreground mb-2">Suggested questions:</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {suggestedPrompts.map((prompt, index) => (
+                <motion.button
+                  key={prompt}
+                  initial={isFirstVisit ? { opacity: 0, x: -10 } : false}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: isFirstVisit ? 0.25 + index * 0.05 : 0 }}
+                  onClick={() => handleSendMessage(prompt)}
+                  className="flex items-start gap-2 px-3 py-2 bg-secondary/30 border border-border rounded-md hover:bg-secondary/50 transition-colors text-sm text-foreground text-left"
+                >
+                  <Zap className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                  <span>{prompt}</span>
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Input area */}
+        <motion.div
+          initial={isFirstVisit ? { opacity: 0, y: 12 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: isFirstVisit ? 0.15 : 0, duration: 0.4 }}
+          className="flex flex-col gap-2 w-full"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleSendMessage()
+            }}
+            className="flex gap-3"
+          >
+            <input
+              type="text"
+              placeholder="Ask a question about your accounts..."
+              aria-label="Ask a question about your accounts"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              disabled={isLoading}
+              className="flex-1 bg-secondary border border-border rounded-lg px-4 py-2.5 text-sm placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !inputValue.trim()}
+              aria-label="Send message"
+              className="px-4 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </form>
+        </motion.div>
       </div>
-    </div>
+      </div>
+      </div>
+    </main>
   )
 }

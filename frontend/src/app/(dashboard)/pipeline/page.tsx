@@ -3,10 +3,10 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { Sidebar } from '@/components/Sidebar'
-import { Header } from '@/components/header'
-import { AICopilotPanel } from '@/components/ai-copilot-panel'
-import { Sparkles, TrendingUp } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
+import { useAnimation } from '@/context/AnimationContext'
+import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/PageHeader'
 import {
   ResponsiveContainer,
   LineChart,
@@ -21,8 +21,7 @@ import {
 } from 'recharts'
 
 export default function PipelinePage() {
-  const [isCopilotOpen, setIsCopilotOpen] = useState(false)
-
+  const { isFirstVisit } = useAnimation()
   const { authFetch } = useAuth()
   const [pipelineData, setPipelineData] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
@@ -88,190 +87,210 @@ export default function PipelinePage() {
 
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
+    <main className="flex-1 overflow-y-auto">
+      <div className="p-6 md:p-8">
+        <PageHeader
+          title="Pipeline & Sales Speed"
+          subtitle="Sales Velocity - Actual vs Simulation"
+          icon={<TrendingUp className="w-6 h-6" />}
+        />
 
-      <div className="flex-1 flex flex-col">
-        <Header />
-
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-6 md:p-8">
+        {loading ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+            <Skeleton className="h-[370px] w-full" />
+            <Skeleton className="h-[440px] w-full" />
+          </div>
+        ) : (
+          <>
+            {/* What-If Sales Simulation Levers (Prominent Top Placement) */}
             <motion.div
-              initial={{ opacity: 0, y: -12 }}
+              initial={isFirstVisit ? { opacity: 0, y: 12 } : false}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="mb-6"
+              transition={{ delay: isFirstVisit ? 0.08 : 0, duration: 0.4 }}
+              className="bg-card border border-border rounded-lg p-5 mb-6 shadow-flat"
             >
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-6 h-6 text-primary" />
-                <h1 className="text-3xl font-semibold text-foreground">Pipeline</h1>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-foreground">Sales Simulation Levers</h3>
+                <span className="text-xs text-primary font-medium">Adjust sliders to re-calculate forecast live</span>
               </div>
-              <p className="text-sm text-muted-foreground mt-1">Sales Speed - Actual vs Simulation</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-secondary/20 border border-border rounded-md p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <label htmlFor="win-rate-boost" className="text-xs text-muted-foreground">Win Rate Boost</label>
+                    <span className="text-sm font-semibold text-primary">{winRateBoost >= 0 ? '+' : ''}{winRateBoost}%</span>
+                  </div>
+                  <input
+                    id="win-rate-boost"
+                    type="range"
+                    min="-15"
+                    max="25"
+                    value={winRateBoost}
+                    aria-valuemin={-15}
+                    aria-valuemax={25}
+                    aria-valuenow={winRateBoost}
+                    aria-valuetext={`${winRateBoost >= 0 ? '+' : ''}${winRateBoost}%`}
+                    onChange={(e) => setWinRateBoost(parseInt(e.target.value))}
+                    className="w-full accent-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  />
+                </div>
+                <div className="bg-secondary/20 border border-border rounded-md p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <label htmlFor="deal-size-expansion" className="text-xs text-muted-foreground">Deal Size Multiplier</label>
+                    <span className="text-sm font-semibold text-primary">{dealSizeExpansion.toFixed(2)}x</span>
+                  </div>
+                  <input
+                    id="deal-size-expansion"
+                    type="range"
+                    min="50"
+                    max="175"
+                    value={dealSizeExpansion * 100}
+                    aria-valuemin={50}
+                    aria-valuemax={175}
+                    aria-valuenow={Math.round(dealSizeExpansion * 100)}
+                    aria-valuetext={`${dealSizeExpansion.toFixed(2)} times multiplier`}
+                    onChange={(e) => setDealSizeExpansion(parseInt(e.target.value) / 100)}
+                    className="w-full accent-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  />
+                </div>
+                <div className="bg-secondary/20 border border-border rounded-md p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <label htmlFor="cycle-acceleration" className="text-xs text-muted-foreground">Sales Cycle Speedup</label>
+                    <span className="text-sm font-semibold text-primary">+{cycleAcceleration}%</span>
+                  </div>
+                  <input
+                    id="cycle-acceleration"
+                    type="range"
+                    min="0"
+                    max="40"
+                    value={cycleAcceleration}
+                    aria-valuemin={0}
+                    aria-valuemax={40}
+                    aria-valuenow={cycleAcceleration}
+                    aria-valuetext={`+${cycleAcceleration}% speedup`}
+                    onChange={(e) => setCycleAcceleration(parseInt(e.target.value))}
+                    className="w-full accent-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  />
+                </div>
+              </div>
             </motion.div>
 
-            {loading ? (
-              <div className="text-center py-10 text-muted-foreground">Loading pipeline data...</div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                  {[
-                    { label: 'Open Pipeline', value: formatCurrency(totalPipeline) },
-                    { label: 'Closed Won', value: formatCurrency(closedWon) },
-                    { label: 'Simulated Pipeline', value: formatCurrency(simTotalPipeline) },
-                    { label: 'Simulated Won', value: formatCurrency(simClosedWon) },
-                  ].map((metric, index) => (
-                    <motion.div
-                      key={metric.label}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.1 + index * 0.03 }}
-                      className="bg-secondary/20 border border-border rounded-md p-3 text-center"
-                    >
-                      <p className="text-xs text-muted-foreground">{metric.label}</p>
-                      <p className="text-lg font-semibold text-foreground mt-1.5">{metric.value}</p>
-                    </motion.div>
-                  ))}
-                </div>
-
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              {[
+                { label: 'Open Pipeline', value: formatCurrency(totalPipeline) },
+                { label: 'Closed Won', value: formatCurrency(closedWon) },
+                { label: 'Simulated Pipeline', value: formatCurrency(simTotalPipeline) },
+                { label: 'Simulated Won', value: formatCurrency(simClosedWon) },
+              ].map((metric, index) => (
                 <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.15, duration: 0.4 }}
-                  className="bg-card border border-border rounded-lg p-5 mb-6"
+                  key={metric.label}
+                  initial={isFirstVisit ? { opacity: 0 } : false}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: isFirstVisit ? 0.1 + index * 0.03 : 0 }}
+                  className="bg-secondary/20 border border-border rounded-md p-3 text-center"
                 >
-                  <h3 className="text-base font-semibold text-foreground mb-4">
-                    Sales Speed: Actual vs Simulation
-                  </h3>
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={salesSpeedData}>
-                        <defs>
-                          <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3366cc" stopOpacity={0.15} />
-                            <stop offset="95%" stopColor="#3366cc" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0a" vertical={false} />
-                        <XAxis dataKey="month" stroke="#8a8a96" style={{ fontSize: '11px' }} />
-                        <YAxis stroke="#8a8a96" style={{ fontSize: '11px' }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#1a1a20',
-                            border: '1px solid #ffffff10',
-                            borderRadius: '6px',
-                          }}
-                          labelStyle={{ color: '#e8e8eb' }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '12px' }} />
-                        <Line
-                          type="monotone"
-                          dataKey="forecast"
-                          stroke="#3366cc"
-                          strokeWidth={2}
-                          strokeDasharray="5 5"
-                          name="Forecast (M)"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="simulation"
-                          stroke="#22a366"
-                          strokeWidth={2}
-                          name="Simulation (M)"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="actual"
-                          stroke="#e8e8eb"
-                          strokeWidth={2}
-                          name="Actual (M)"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <p className="text-xs text-muted-foreground">{metric.label}</p>
+                  <p className="text-lg font-semibold text-foreground mt-1.5">{metric.value}</p>
                 </motion.div>
+              ))}
+            </div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.4 }}
-                  className="bg-card border border-border rounded-lg p-5 mb-6"
-                >
-                  <h3 className="text-base font-semibold text-foreground mb-4">
-                    Sales Stages (Current vs Simulated)
-                  </h3>
-                  <div className="h-96">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={stagesData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0a" vertical={false} />
-                        <XAxis dataKey="stage" stroke="#8a8a96" style={{ fontSize: '10px' }} angle={-45} textAnchor="end" height={100} />
-                        <YAxis stroke="#8a8a96" style={{ fontSize: '11px' }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#1a1a20',
-                            border: '1px solid #ffffff10',
-                            borderRadius: '6px',
-                          }}
-                          labelStyle={{ color: '#e8e8eb' }}
-                          formatter={(value) => [`$${Number(value).toFixed(2)}M`]}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '12px' }} />
-                        <Bar dataKey="current" fill="#3366cc" name="Current (M)" />
-                        <Bar dataKey="simulated" fill="#22a366" name="Simulated (M)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </motion.div>
+            <motion.div
+              initial={isFirstVisit ? { opacity: 0, y: 12 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: isFirstVisit ? 0.15 : 0, duration: 0.4 }}
+              className="bg-card border border-border rounded-lg p-5 mb-6"
+            >
+              <h3 className="text-base font-semibold text-foreground mb-4">
+                Sales Speed: Actual vs Simulation
+              </h3>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={salesSpeedData}>
+                    <defs>
+                      <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3366cc" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#3366cc" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0a" vertical={false} />
+                    <XAxis dataKey="month" stroke="#8a8a96" style={{ fontSize: '11px' }} />
+                    <YAxis stroke="#8a8a96" style={{ fontSize: '11px' }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1a1a20',
+                        border: '1px solid #ffffff10',
+                        borderRadius: '6px',
+                      }}
+                      labelStyle={{ color: '#e8e8eb' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <Line
+                      type="monotone"
+                      dataKey="forecast"
+                      stroke="#3366cc"
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      name="Forecast (M)"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="simulation"
+                      stroke="#22a366"
+                      strokeWidth={2}
+                      name="Simulation (M)"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="actual"
+                      stroke="#e8e8eb"
+                      strokeWidth={2}
+                      name="Actual (M)"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.25, duration: 0.4 }}
-                  className="bg-card border border-border rounded-lg p-5"
-                >
-                  <h3 className="text-base font-semibold text-foreground mb-4">Sales Simulation Levers</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-secondary/20 border border-border rounded-md p-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-xs text-muted-foreground">Win Rate Boost</p>
-                        <span className="text-sm font-semibold">{winRateBoost >= 0 ? '+' : ''}{winRateBoost}%</span>
-                      </div>
-                      <input type="range" min="-15" max="25" value={winRateBoost} onChange={(e) => setWinRateBoost(parseInt(e.target.value))} className="w-full accent-primary" />
-                    </div>
-                    <div className="bg-secondary/20 border border-border rounded-md p-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-xs text-muted-foreground">Deal Size Multiplier</p>
-                        <span className="text-sm font-semibold">{dealSizeExpansion.toFixed(2)}x</span>
-                      </div>
-                      <input type="range" min="50" max="175" value={dealSizeExpansion * 100} onChange={(e) => setDealSizeExpansion(parseInt(e.target.value) / 100)} className="w-full accent-primary" />
-                    </div>
-                    <div className="bg-secondary/20 border border-border rounded-md p-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-xs text-muted-foreground">Sales Cycle Speedup</p>
-                        <span className="text-sm font-semibold">+{cycleAcceleration}%</span>
-                      </div>
-                      <input type="range" min="0" max="40" value={cycleAcceleration} onChange={(e) => setCycleAcceleration(parseInt(e.target.value))} className="w-full accent-primary" />
-                    </div>
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </div>
-        </main>
+            <motion.div
+              initial={isFirstVisit ? { opacity: 0, y: 12 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: isFirstVisit ? 0.2 : 0, duration: 0.4 }}
+              className="bg-card border border-border rounded-lg p-5 mb-6"
+            >
+              <h3 className="text-base font-semibold text-foreground mb-4">
+                Sales Stages (Current vs Simulated)
+              </h3>
+              <div className="h-96">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stagesData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0a" vertical={false} />
+                    <XAxis dataKey="stage" stroke="#8a8a96" style={{ fontSize: '10px' }} angle={-45} textAnchor="end" height={100} />
+                    <YAxis stroke="#8a8a96" style={{ fontSize: '11px' }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1a1a20',
+                        border: '1px solid #ffffff10',
+                        borderRadius: '6px',
+                      }}
+                      labelStyle={{ color: '#e8e8eb' }}
+                      formatter={(value) => [`$${Number(value).toFixed(2)}M`]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <Bar dataKey="current" fill="#3366cc" name="Current (M)" />
+                    <Bar dataKey="simulated" fill="#22a366" name="Simulated (M)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+          </>
+        )}
       </div>
-
-      <motion.button
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.4, duration: 0.3 }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={() => setIsCopilotOpen(true)}
-        className="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-12 h-12 bg-primary rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:bg-primary/90 transition-all z-30"
-      >
-        <Sparkles className="w-5 h-5 text-primary-foreground" />
-      </motion.button>
-
-      <AICopilotPanel isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
-    </div>
+    </main>
   )
 }

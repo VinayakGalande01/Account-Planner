@@ -5,6 +5,7 @@ import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
 import { SidebarProvider } from '@/context/SidebarContext'
 import { DataProvider } from '@/context/DataContext'
+import { AnimationProvider } from '@/context/AnimationContext'
 import { Toaster } from 'sonner'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -41,6 +42,8 @@ export const viewport: Viewport = {
   themeColor: [{ media: '(prefers-color-scheme: dark)', color: '#09090b' }],
 }
 
+import { SkipLink } from '@/components/SkipLink'
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -52,13 +55,16 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} dark`}
     >
       <body className="font-sans antialiased bg-background">
-        <AuthProvider>
-          <SidebarProvider>
-            <DataProvider>
-              {children}
-            </DataProvider>
-          </SidebarProvider>
-        </AuthProvider>
+        <SkipLink />
+        <AnimationProvider>
+          <AuthProvider>
+            <SidebarProvider>
+              <DataProvider>
+                {children}
+              </DataProvider>
+            </SidebarProvider>
+          </AuthProvider>
+        </AnimationProvider>
         <Toaster theme="dark" position="top-center" />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

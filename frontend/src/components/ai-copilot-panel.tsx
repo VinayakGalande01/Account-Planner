@@ -11,57 +11,38 @@ interface Message {
   timestamp: Date
 }
 
-const initialMessages: Message[] = [
-  {
-    id: '1',
-    type: 'ai',
-    content:
-      'I&apos;m APEX Copilot. I can help you with account intelligence, risk analysis, and deal progression insights. What would you like to know about Acme Corp?',
-    timestamp: new Date(Date.now() - 120000),
-  },
-  {
-    id: '2',
-    type: 'user',
-    content: 'Summarize the key risks for the Acme Corp renewal',
-    timestamp: new Date(Date.now() - 60000),
-  },
-  {
-    id: '3',
-    type: 'ai',
-    content: `**Account Executive View:**
-Single point of contact (John Smith) - no established relationships with CFO or other decision makers. Risk if John leaves.
+import { useFocusTrap } from '@/lib/useFocusTrap'
+import { useAuth } from '@/context/AuthContext'
+import { useSidebar } from '@/context/SidebarContext'
 
-**VP Sales View:**
-$2.1M ARR renewal, 60 days out. Deal is not progressing - last activity 3 weeks ago. Recommend immediate executive business review.
-
-**Data Analysis:**
-Engagement dropped 34% over past 60 days. Competitor activity detected on LinkedIn. Win probability: 62%.
-
-**Recommended Actions:**
-1. Schedule executive business review this week
-2. Expand stakeholder relationships
-3. Prepare ROI justification deck`,
-    timestamp: new Date(),
-  },
-]
+const defaultWelcomeMessage: Message = {
+  id: '1',
+  type: 'ai',
+  content: 'APEX Copilot ready. How can I assist you with your accounts or sales pipeline today?',
+  timestamp: new Date(),
+}
 
 export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
+  const { authFetch } = useAuth()
+  const { activeSessionId } = useSidebar()
+  const [messages, setMessages] = useState<Message[]>([defaultWelcomeMessage])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const panelRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose })
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleSend = () => {
-    if (!input.trim()) return
+  const handleSend = async (text = input) => {
+    if (!text.trim() || isLoading) return
 
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
-      content: input,
+      content: text,
       timestamp: new Date(),
     }
 
@@ -69,18 +50,57 @@ export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: 
     setInput('')
     setIsLoading(true)
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content:
-          'I&apos;m analyzing your request... In a real implementation, this would connect to the APEX AI engine for account intelligence, risk scoring, and predictive insights based on your CRM data.',
-        timestamp: new Date(),
+    try {
+      const provider = typeof window !== 'undefined' ? (localStorage.getItem('llm_provider') || 'local') : 'local'
+      const response = await authFetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-llm-provider': provider,
+        },
+        body: JSON.stringify({
+          query: text,
+          session_id: activeSessionId || 'default_copilot_session',
+          persona: 'account_manager',
+          chat_history: messages.slice(-6).map((m) => ({
+            role: m.type === 'user' ? 'user' : 'assistant',
+            content: m.content,
+          })),
+        }),
+      })
+
+      if (!response.body) throw new Error('No stream body')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let fullText = ''
+
+      const aiMessageId = (Date.now() + 1).toString()
+      setMessages((prev) => [...prev, { id: aiMessageId, type: 'ai', content: '', timestamp: new Date() }])
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        fullText += chunk
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === aiMessageId ? { ...msg, content: fullText } : msg))
+        )
       }
-      setMessages((prev) => [...prev, aiMessage])
+    } catch (err) {
+      console.error('Copilot stream error:', err)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 2).toString(),
+          type: 'ai',
+          content: 'Sorry, I encountered an error connecting to APEX intelligence engine.',
+          timestamp: new Date(),
+        },
+      ])
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   return (
@@ -98,11 +118,15 @@ export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: 
 
           {/* Panel */}
           <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="copilot-panel-title"
             initial={{ x: 400, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 400, opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="fixed right-0 top-0 h-screen w-full md:w-96 bg-card border-l border-border flex flex-col z-50"
+            className="fixed right-0 top-0 h-screen w-full md:w-96 bg-card border-l border-border shadow-modal flex flex-col z-50"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-border">
@@ -111,7 +135,7 @@ export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: 
                   <Sparkles className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">APEX Copilot</h2>
+                  <h2 id="copilot-panel-title" className="text-lg font-semibold text-foreground">APEX Copilot</h2>
                   <p className="text-xs text-muted-foreground">AI Account Intelligence</p>
                 </div>
               </div>
@@ -119,6 +143,7 @@ export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: 
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={onClose}
+                aria-label="Close AI Copilot panel"
                 className="p-2 hover:bg-input rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-foreground" />
@@ -126,7 +151,7 @@ export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: 
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4" aria-live="polite">
               {messages.map((message) => (
                 <motion.div
                   key={message.id}
@@ -182,25 +207,32 @@ export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: 
 
             {/* Input */}
             <div className="border-t border-border p-4">
-              <div className="flex gap-2">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  handleSend()
+                }}
+                className="flex gap-2"
+              >
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Ask about this account..."
+                  aria-label="Ask about this account"
                   className="flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={handleSend}
-                  disabled={isLoading}
+                  type="submit"
+                  disabled={isLoading || !input.trim()}
+                  aria-label="Send query"
                   className="p-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
                 >
                   <Send className="w-4 h-4" />
                 </motion.button>
-              </div>
+              </form>
             </div>
           </motion.div>
         </>

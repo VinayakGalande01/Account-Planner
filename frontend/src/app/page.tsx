@@ -5,6 +5,7 @@ import { ArrowRight, BarChart3, Brain, CheckCircle2, Lock, Zap, TrendingUp, User
 import Image from 'next/image'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { FeatureCard } from '@/components/feature-card'
 import { TestimonialCard } from '@/components/testimonial-card'
 import { AnimatedCounter } from '@/components/animated-counter'
@@ -14,29 +15,29 @@ export default function Home() {
   const router = useRouter()
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-black to-zinc-950">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Floating background shapes */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
         <motion.div
           animate={{ y: [0, 40, 0] }}
           transition={{ duration: 6, repeat: Infinity }}
-          className="absolute right-10 top-20 size-96 rounded-full bg-white/5 blur-3xl"
+          className="absolute right-10 top-20 size-96 rounded-full bg-primary/5 blur-3xl"
         />
         <motion.div
           animate={{ y: [0, -30, 0] }}
           transition={{ duration: 8, repeat: Infinity }}
-          className="absolute left-10 bottom-20 size-72 rounded-full bg-zinc-500/10 blur-3xl"
+          className="absolute left-10 bottom-20 size-72 rounded-full bg-secondary/20 blur-3xl"
         />
       </div>
 
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/80 backdrop-blur-sm">
+      <nav className="sticky top-0 z-50 border-b border-border bg-background/85 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-4">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-2 text-2xl font-bold text-zinc-100"
+              className="flex items-center gap-2 text-2xl font-bold text-foreground"
             >
               <Image src="/logo.png" alt="APEX Logo" width={40} height={40} className="object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] brightness-125" priority />
               APEX
@@ -51,28 +52,34 @@ export default function Home() {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="text-zinc-400 transition-colors hover:text-white"
+                  className="text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {item}
                 </motion.a>
               ))}
             </div>
 
-            <motion.button
+            <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              onClick={() => router.push('/dashboard')}
-              className="hidden rounded-lg bg-white px-6 py-2 font-medium text-black transition-all hover:bg-zinc-200 hover:shadow-lg hover:shadow-white/10 md:block"
+              className="hidden md:block"
             >
-              Get Started
-            </motion.button>
+              <Link
+                href="/dashboard"
+                className="rounded-lg bg-primary px-6 py-2 font-semibold text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20 block"
+              >
+                Get Started
+              </Link>
+            </motion.div>
 
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden text-zinc-400 hover:text-white"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
+              className="md:hidden text-muted-foreground hover:text-foreground p-1"
             >
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              {mobileMenuOpen ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
             </button>
           </div>
 
@@ -81,21 +88,21 @@ export default function Home() {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="border-t border-white/10 py-4 md:hidden"
+              className="border-t border-border py-4 md:hidden"
             >
               <div className="flex flex-col gap-4">
                 {['Features', 'Solution', 'Pricing', 'Company'].map((item) => (
                   <a
                     key={item}
                     href={`#${item.toLowerCase()}`}
-                    className="text-zinc-400 transition-colors hover:text-white"
+                    className="text-muted-foreground transition-colors hover:text-foreground"
                   >
                     {item}
                   </a>
                 ))}
-                <button onClick={() => router.push('/dashboard')} className="rounded-lg bg-white px-6 py-2 font-medium text-black transition-all hover:bg-zinc-200 w-full">
+                <Link href="/dashboard" className="rounded-lg bg-primary px-6 py-2 font-semibold text-primary-foreground transition-all hover:bg-primary/90 w-full text-center">
                   Get Started
-                </button>
+                </Link>
               </div>
             </motion.div>
           )}
@@ -131,15 +138,18 @@ export default function Home() {
                 APEX uses AI-powered intelligence to help you streamline account planning and execution. Make smarter decisions, faster.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <motion.button
+                <motion.div
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => router.push('/dashboard')}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-white px-8 py-3 font-semibold text-black transition-all hover:bg-zinc-200 hover:shadow-lg hover:shadow-white/10"
                 >
-                  Start Free Trial
-                  <ArrowRight className="size-5" />
-                </motion.button>
+                  <Link
+                    href="/dashboard"
+                    className="flex items-center justify-center gap-2 rounded-lg bg-white px-8 py-3 font-semibold text-black transition-all hover:bg-zinc-200 hover:shadow-lg hover:shadow-white/10"
+                  >
+                    Start Free Trial
+                    <ArrowRight className="size-5" />
+                  </Link>
+                </motion.div>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -470,14 +480,17 @@ export default function Home() {
               Join thousands of enterprise teams using APEX to drive smarter revenue growth.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <motion.button
+              <motion.div
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => router.push('/dashboard')}
-                className="flex items-center justify-center gap-2 rounded-lg bg-white px-8 py-3 font-semibold text-black transition-all hover:bg-zinc-200"
               >
-                Start Free Trial Today
-              </motion.button>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center justify-center gap-2 rounded-lg bg-white px-8 py-3 font-semibold text-black transition-all hover:bg-zinc-200"
+                >
+                  Start Free Trial Today
+                </Link>
+              </motion.div>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}

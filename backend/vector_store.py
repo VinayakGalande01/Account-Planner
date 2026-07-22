@@ -16,8 +16,11 @@ if not DISABLE_CHROMA:
 else:
     print("Info: ChromaDB and Sentence-Transformers disabled via DISABLE_CHROMA. Using keyword-matching fallback.")
 
+_GLOBAL_VECTOR_EMBEDDING_MODEL = None
+
 class LocalVectorStore:
     def __init__(self, db_path: str = "./chroma_db"):
+        global _GLOBAL_VECTOR_EMBEDDING_MODEL
         self.db_path = os.path.abspath(db_path)
         self.collection_name = "activity_logs"
         self.model = None
@@ -31,7 +34,9 @@ class LocalVectorStore:
                 self.chroma_client = chromadb.PersistentClient(path=self.db_path)
                 
                 # Load a fast, lightweight SentenceTransformer model (downloads on first run, ~90MB)
-                self.model = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
+                if _GLOBAL_VECTOR_EMBEDDING_MODEL is None:
+                    _GLOBAL_VECTOR_EMBEDDING_MODEL = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
+                self.model = _GLOBAL_VECTOR_EMBEDDING_MODEL
                 
                 # Get or create collection
                 self.collection = self.chroma_client.get_or_create_collection(
@@ -45,7 +50,9 @@ class LocalVectorStore:
                     if os.path.exists(self.db_path):
                         shutil.rmtree(self.db_path)
                     self.chroma_client = chromadb.PersistentClient(path=self.db_path)
-                    self.model = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
+                    if _GLOBAL_VECTOR_EMBEDDING_MODEL is None:
+                        _GLOBAL_VECTOR_EMBEDDING_MODEL = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
+                    self.model = _GLOBAL_VECTOR_EMBEDDING_MODEL
                     self.collection = self.chroma_client.get_or_create_collection(
                         name=self.collection_name
                     )

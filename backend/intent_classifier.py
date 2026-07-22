@@ -18,6 +18,9 @@ try:
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
+_GLOBAL_EMBEDDING_MODEL = None
+_GLOBAL_SEED_EMBEDDINGS = None
+
 class IntentEnum(str, Enum):
     RISK_ASSESSMENT = "risk_assessment"
     OPPORTUNITY_EXPANSION = "opportunity_expansion"
@@ -119,15 +122,18 @@ class IntentClassifier:
 
     def _init_embeddings(self):
         """Lazy load sentence transformers and calculate seed embeddings."""
-        if self.embedding_model is None and SENTENCE_TRANSFORMERS_AVAILABLE:
+        global _GLOBAL_EMBEDDING_MODEL, _GLOBAL_SEED_EMBEDDINGS
+        if _GLOBAL_EMBEDDING_MODEL is None and SENTENCE_TRANSFORMERS_AVAILABLE:
             try:
                 print("[Router] Initializing SentenceTransformer model...")
-                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
+                _GLOBAL_EMBEDDING_MODEL = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
                 queries = [q["query"] for q in SEED_QUERIES]
-                self.seed_embeddings = self.embedding_model.encode(queries)
+                _GLOBAL_SEED_EMBEDDINGS = _GLOBAL_EMBEDDING_MODEL.encode(queries)
                 print(f"[Router] Successfully cached {len(queries)} seed embeddings.")
             except Exception as e:
                 print(f"Warning: Failed to load SentenceTransformer for fast router: {e}")
+        self.embedding_model = _GLOBAL_EMBEDDING_MODEL
+        self.seed_embeddings = _GLOBAL_SEED_EMBEDDINGS
 
     def classify(self, query: str, history: Optional[List[Dict[str, str]]] = None, user_role: str = "Account Manager", active_account: Optional[str] = None) -> IntentClassificationOutput:
         """Classify query using Hybrid Semantic-Symbolic routing."""

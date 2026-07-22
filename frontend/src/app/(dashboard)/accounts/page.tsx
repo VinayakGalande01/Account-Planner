@@ -3,10 +3,10 @@
 import { motion } from 'framer-motion'
 import { useState, useMemo } from 'react'
 import { useData } from '@/context/DataContext'
-import { Sidebar } from '@/components/Sidebar'
-import { Header } from '@/components/header'
-import { AICopilotPanel } from '@/components/ai-copilot-panel'
-import { Sparkles, Search, ChevronDown } from 'lucide-react'
+import { Search, ChevronDown, Briefcase } from 'lucide-react'
+import { useAnimation } from '@/context/AnimationContext'
+import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/PageHeader'
 
 const formatCurrency = (val: number | undefined): string => {
   if (!val && val !== 0) return '—'
@@ -17,7 +17,7 @@ const formatCurrency = (val: number | undefined): string => {
 
 export default function AccountsPage() {
   const { accounts, loading } = useData()
-  const [isCopilotOpen, setIsCopilotOpen] = useState(false)
+  const { isFirstVisit } = useAnimation()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterTier, setFilterTier] = useState('ALL TIERS')
   const [sortBy, setSortBy] = useState('name')
@@ -56,147 +56,174 @@ export default function AccountsPage() {
   }
 
   const getHealthColor = (health: number) => {
-    if (health >= 30) return 'text-chart-2'
-    if (health >= 20) return 'text-chart-3'
-    return 'text-destructive'
+    if (health >= 70) return 'text-emerald-400 font-semibold'
+    if (health >= 40) return 'text-amber-400 font-semibold'
+    return 'text-red-400 font-semibold'
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
+    <main className="flex-1 overflow-y-auto">
+      <div className="p-6 md:p-8">
+        <PageHeader
+          title="Accounts"
+          subtitle={`Account Directory - ${accounts.length} records`}
+          icon={<Briefcase className="w-6 h-6" />}
+        />
 
-      <div className="flex-1 flex flex-col">
-        <Header />
+        {/* Filters and search */}
+        <motion.div
+          initial={isFirstVisit ? { opacity: 0, y: 12 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: isFirstVisit ? 0.1 : 0, duration: 0.4 }}
+          className="flex flex-col md:flex-row gap-3 mb-6 items-start md:items-center justify-between"
+        >
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            {/* Search */}
+            <div className="relative flex-1 sm:flex-none">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
+              <input
+                type="text"
+                placeholder="Filter accounts..."
+                aria-label="Filter accounts by name or industry"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-secondary border border-border rounded-md pl-9 pr-4 py-1.5 text-sm placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+              />
+            </div>
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-6 md:p-8">
-            {/* Page title */}
-            <motion.div
-              initial={{ opacity: 0, y: -12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="mb-6"
-            >
-              <h1 className="text-3xl font-semibold text-foreground">Accounts</h1>
-              <p className="text-sm text-muted-foreground mt-1">Account Directory - {accounts.length} records</p>
-            </motion.div>
-
-            {/* Filters and search */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.4 }}
-              className="flex flex-col md:flex-row gap-3 mb-6 items-start md:items-center justify-between"
-            >
-              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                {/* Search */}
-                <div className="relative flex-1 sm:flex-none">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Filter accounts..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-secondary border border-border rounded-md pl-9 pr-4 py-1.5 text-sm placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
-                  />
-                </div>
-
-                {/* Tier filter */}
-                <div className="relative">
-                  <button className="flex items-center gap-2 px-3 py-1.5 bg-secondary border border-border rounded-md text-sm text-foreground hover:bg-secondary/50 transition-colors">
-                    {filterTier}
-                    <ChevronDown className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                Showing {filteredAccounts.length} of {accounts.length}
-              </div>
-            </motion.div>
-
-            {/* Accounts table */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.15, duration: 0.4 }}
-              className="bg-card border border-border rounded-lg overflow-hidden"
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-secondary/10">
-                      <th className="px-4 py-3 text-left font-semibold text-foreground cursor-pointer hover:bg-secondary/20" onClick={() => setSortBy('name')}>
-                        Account
-                      </th>
-                      <th className="px-4 py-3 text-left font-semibold text-foreground">Industry</th>
-                      <th className="px-4 py-3 text-left font-semibold text-foreground">Territory</th>
-                      <th className="px-4 py-3 text-left font-semibold text-foreground">Tier</th>
-                      <th className="px-4 py-3 text-left font-semibold text-foreground cursor-pointer hover:bg-secondary/20" onClick={() => setSortBy('health')}>
-                        Health
-                      </th>
-                      <th className="px-4 py-3 text-left font-semibold text-foreground cursor-pointer hover:bg-secondary/20" onClick={() => setSortBy('pipeline')}>
-                        Pipeline
-                      </th>
-                      <th className="px-4 py-3 text-left font-semibold text-foreground">Last Activity</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading accounts...</td>
-                      </tr>
-                    ) : filteredAccounts.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No accounts found.</td>
-                      </tr>
-                    ) : (
-                      filteredAccounts.map((account, index) => (
-                        <motion.tr
-                          key={account.Account_ID || index}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: 0.15 + index * 0.02 }}
-                          className="border-b border-border hover:bg-secondary/10 transition-colors"
-                        >
-                          <td className="px-4 py-3 font-medium text-foreground">{account.Account_Name || 'Unknown'}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{account.Industry || '—'}</td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs uppercase">{account.Territory || '—'}</td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded-sm text-xs font-medium ${getTierBadgeColor(account.Account_Tier?.toUpperCase() || 'NORMAL')}`}>
-                              {account.Account_Tier?.toUpperCase() || 'NORMAL'}
-                            </span>
-                          </td>
-                          <td className={`px-4 py-3 font-medium ${getHealthColor(account.health_score || 0)}`}>
-                            {account.health_score || 0}
-                          </td>
-                          <td className="px-4 py-3 font-medium text-foreground">{formatCurrency(account.total_pipeline_value)}</td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs">{account.last_activity_date || 'N/A'}</td>
-                        </motion.tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </motion.div>
+            {/* Tier filter */}
+            <div className="relative">
+              <select
+                value={filterTier}
+                onChange={(e) => setFilterTier(e.target.value)}
+                aria-label="Filter accounts by tier"
+                className="px-3 py-1.5 bg-secondary border border-border rounded-md text-sm text-foreground hover:bg-secondary/50 focus:outline-none focus:ring-1 focus:ring-primary transition-colors appearance-none pr-8 cursor-pointer"
+              >
+                <option value="ALL TIERS">ALL TIERS</option>
+                <option value="KEY">KEY</option>
+                <option value="STRATEGIC">STRATEGIC</option>
+                <option value="NORMAL">NORMAL</option>
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden="true" />
+            </div>
           </div>
-        </main>
+
+          <div className="text-sm text-muted-foreground" aria-live="polite">
+            Showing {filteredAccounts.length} of {accounts.length}
+          </div>
+        </motion.div>
+
+        {/* Accounts table */}
+        <motion.div
+          initial={isFirstVisit ? { opacity: 0 } : false}
+          animate={{ opacity: 1 }}
+          transition={{ delay: isFirstVisit ? 0.15 : 0, duration: 0.4 }}
+          className="bg-card border border-border rounded-lg overflow-hidden"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" aria-label="Accounts Directory">
+              <thead>
+                <tr className="border-b border-border bg-secondary/10">
+                  <th
+                    scope="col"
+                    aria-sort={sortBy === 'name' ? 'ascending' : 'none'}
+                    className="px-4 py-3 text-left font-semibold text-foreground"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSortBy('name')}
+                      aria-label="Sort by account name"
+                      className="flex items-center gap-1.5 hover:text-primary transition-colors font-semibold"
+                    >
+                      <span>Account</span>
+                      {sortBy === 'name' && <ChevronDown className="w-3.5 h-3.5 text-primary" aria-hidden="true" />}
+                    </button>
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Industry</th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Territory</th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Tier</th>
+                  <th
+                    scope="col"
+                    aria-sort={sortBy === 'health' ? 'descending' : 'none'}
+                    className="px-4 py-3 text-left font-semibold text-foreground"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSortBy('health')}
+                      aria-label="Sort by health score"
+                      className="flex items-center gap-1.5 hover:text-primary transition-colors font-semibold"
+                    >
+                      <span>Health</span>
+                      {sortBy === 'health' && <ChevronDown className="w-3.5 h-3.5 text-primary" aria-hidden="true" />}
+                    </button>
+                  </th>
+                  <th
+                    scope="col"
+                    aria-sort={sortBy === 'pipeline' ? 'descending' : 'none'}
+                    className="px-4 py-3 text-left font-semibold text-foreground"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSortBy('pipeline')}
+                      aria-label="Sort by pipeline value"
+                      className="flex items-center gap-1.5 hover:text-primary transition-colors font-semibold"
+                    >
+                      <span>Pipeline</span>
+                      {sortBy === 'pipeline' && <ChevronDown className="w-3.5 h-3.5 text-primary" aria-hidden="true" />}
+                    </button>
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left font-semibold text-foreground">Last Activity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <>
+                    {[...Array(5)].map((_, i) => (
+                      <tr key={`skeleton-${i}`} className="border-b border-border">
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-6 w-20 rounded-sm" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-12" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                        <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                      </tr>
+                    ))}
+                  </>
+                ) : filteredAccounts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No accounts found.</td>
+                  </tr>
+                ) : (
+                  filteredAccounts.map((account, index) => (
+                    <motion.tr
+                      key={account.Account_ID || index}
+                      initial={isFirstVisit ? { opacity: 0 } : false}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: isFirstVisit ? 0.15 + index * 0.02 : 0 }}
+                      className="border-b border-border hover:bg-secondary/10 transition-colors"
+                    >
+                      <td className="px-4 py-3 font-medium text-foreground">{account.Account_Name || 'Unknown'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{account.Industry || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs uppercase">{account.Territory || '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-sm text-xs font-medium ${getTierBadgeColor(account.Account_Tier?.toUpperCase() || 'NORMAL')}`}>
+                          {account.Account_Tier?.toUpperCase() || 'NORMAL'}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 font-medium ${getHealthColor(account.health_score || 0)}`}>
+                        {account.health_score || 0}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-foreground">{formatCurrency(account.total_pipeline_value)}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">{account.last_activity_date || 'N/A'}</td>
+                    </motion.tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
       </div>
-
-      {/* Copilot button */}
-      <motion.button
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.4, duration: 0.3 }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={() => setIsCopilotOpen(true)}
-        className="fixed bottom-6 right-6 md:bottom-8 md:right-8 w-12 h-12 bg-primary rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:bg-primary/90 transition-all z-30"
-      >
-        <Sparkles className="w-5 h-5 text-primary-foreground" />
-      </motion.button>
-
-      <AICopilotPanel isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
-    </div>
+    </main>
   )
 }

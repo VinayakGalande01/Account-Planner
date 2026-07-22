@@ -5,6 +5,7 @@ const BACKEND_URL = cleanUrl(process.env.BACKEND_URL || 'http://127.0.0.1:8002')
 const AUTH_URL = cleanUrl(process.env.AUTH_URL || (process.env.BACKEND_URL ? process.env.BACKEND_URL : 'http://127.0.0.1:8001'));
 
 const nextConfig: NextConfig = {
+  compress: false,
   async rewrites() {
     return [
       {
