@@ -1,5 +1,16 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original single-account drill-down view: header with tier badge + action buttons,
+// a health-index radial gauge with risk callouts, a revenue trend sparkline, and
+// tables for open opportunities and key contacts (fetched from /api/accounts/:id/details).
+//
+// --- SECTION: Shared UI Helpers (TacticalTooltip, formatCurrency, MicroTrend chart) ---
+// --- SECTION: AccountDetail Component — data fetch + derived values ---
+// --- SECTION: Render — Header (name, tier, action buttons) ---
+// --- SECTION: Render — Health Index & Active Risks ---
+// --- SECTION: Render — Revenue Forecast, Opportunity Table, Contact Matrix ---
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

@@ -1,5 +1,16 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original app shell: gated auth (landing/login vs console), sidebar + header chrome,
+// a global loading-bar context, and a tab-based content switcher (Dashboard, Accounts,
+// Pipeline, Intelligence, Strategy, Settings) plus the Proactive Insights drawer.
+//
+// --- SECTION: Loading Context + TopographicOverlay decorative SVG ---
+// --- SECTION: MainLayout Component — auth/console state, health check polling ---
+// --- SECTION: renderContent() — per-tab view switch ---
+// --- SECTION: Auth Loading / Landing / Auth-Form Early Returns ---
+// --- SECTION: Console Render — Sidebar, Header, Content, Insights Drawer ---
+
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import Sidebar from './Sidebar';
 import LandingPage from './LandingPage';

@@ -1,5 +1,11 @@
 'use client'
 
+// ReasoningTrail: collapsible timeline showing AI "thought process" steps
+// for a response, deduplicated and label-friendly.
+// Major sections:
+// - State/hooks + step cleanup logic
+// - Render: toggle bar, collapsible timeline list
+
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, ChevronRight, CheckCircle2, Circle } from 'lucide-react'
@@ -10,6 +16,7 @@ interface ReasoningTrailProps {
 }
 
 export function ReasoningTrail({ steps }: ReasoningTrailProps) {
+  // --- SECTION: State/Hooks ---
   const [isOpen, setIsOpen] = useState(false)
 
   if (!steps || steps.length === 0) return null
@@ -21,6 +28,7 @@ export function ReasoningTrail({ steps }: ReasoningTrailProps) {
 
   if (cleanSteps.length === 0) return null
 
+  // --- SECTION: Render ---
   return (
     <div className="mb-3 border-l-2 border-primary/20 pl-4 select-none">
       {/* Toggle Bar */}

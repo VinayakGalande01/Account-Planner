@@ -1,6 +1,11 @@
 /**
- * Maps raw backend progress pings and logs to human-friendly phrases.
+ * TELEMETRY STAGE LABEL MAPPER (src/utils/stageLabels.ts)
+ * Translates raw backend pipeline progress logs and telemetry pings into
+ * human-readable status labels displayed during AI stream generation.
  */
+
+// --- SECTION 1: Telemetry Stage Label Dictionary ---
+// Defines mapping of backend pipeline stage strings to polished UI status strings.
 const stageLabelMap: Record<string, string> = {
   'Initializing Account Planning Agent...': 'Initializing Account Planning Agent...',
   'Resuming session checkpoint...': 'Resuming session checkpoint...',

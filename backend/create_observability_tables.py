@@ -1,16 +1,23 @@
+"""
+OBSERVABILITY TABLE INITIALIZER (create_observability_tables.py)
+Database initialization script that builds and registers Observability Telemetry tables
+(Prompt Hashes, Traces, Token Costs) on the configured target database.
+"""
+
+# --- SECTION 1: Dependencies & Imports ---
+# Imports database engines, environment configuration, and telemetry model bindings.
 import os
 import sys
 from dotenv import load_dotenv
 
-# Ensure the backend directory is in the python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Load environment variables from .env file
 load_dotenv()
 
 from database import Base, get_engine
 import models.observability_models
 
+# --- SECTION 2: Observability Schema Build Routine ---
+# Binds engine to database and creates all tables defined in observability_models.
 def main():
     print("=== APEX OBSERVABILITY TABLE INITIALIZER ===")
     engine = get_engine()

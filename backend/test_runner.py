@@ -1,8 +1,11 @@
 """
-APEX Agent Test Runner
-Automates test execution and evaluation against expected outputs
+AGENT TEST RUNNER (test_runner.py)
+Automates test suite execution and evaluation against expected intent frames,
+causality narrative structures, and response contract assertions.
 """
 
+# --- SECTION 1: Dependencies & Environment Setup ---
+# Imports async task tools, dataclasses, and loads backend environment overrides.
 import os
 import sys
 import json
@@ -11,7 +14,6 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 from datetime import datetime
 
-# Load env variables and add backend to sys.path
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(backend_dir)
 
@@ -19,7 +21,8 @@ from dotenv import load_dotenv
 env_path = os.path.join(backend_dir, ".env")
 load_dotenv(dotenv_path=env_path, override=True)
 
-
+# --- SECTION 2: Test Case & Result Dataclasses ---
+# Defines structures for individual test case specifications, expected assertions, and execution results.
 @dataclass
 class TestCase:
     """Single test case definition"""

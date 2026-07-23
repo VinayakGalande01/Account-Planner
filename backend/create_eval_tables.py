@@ -1,17 +1,24 @@
+"""
+EVALUATION TABLE INITIALIZER (create_eval_tables.py)
+Database setup script that creates and registers Layer 2 Evaluation tables
+(Golden Dataset, Benchmark Results, Eval Runs) on PostgreSQL or SQLite destinations.
+"""
+
+# --- SECTION 1: Environment & Engine Setup ---
+# Loads environment parameters and sets target database connections.
 import os
 import sys
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
-# Ensure the backend directory is in the python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Load environment variables from .env file
 load_dotenv()
 
 from database import Base, get_engine, DATABASE_URL
 import models.eval_models
 
+# --- SECTION 2: Table Creation Routine ---
+# Connects to target database schema and executes metadata creation for eval tables.
 def main():
     print("=== APEX EVALUATION / LAYER 2 TABLE INITIALIZER ===")
     

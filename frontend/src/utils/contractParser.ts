@@ -1,8 +1,13 @@
+/**
+ * STREAMING CONTRACT PARSER (src/utils/contractParser.ts)
+ * Normalizes backend section tags (__SECTION_EXECUTIVE_SUMMARY__, __SECTION_TABLE__)
+ * and converts raw LLM text streams into structured ResponseContract UI models.
+ */
+
+// --- SECTION 1: Dependencies & Empty Contract Factory ---
+// Imports ResponseContract interface schemas and defines factory for empty contract states.
 import type { ResponseContract, SectionName, ConfidenceData, TableData, RecommendedAction } from '../types/responseContract';
 
-/**
- * Creates an empty ResponseContract with default values.
- */
 export function createEmptyContract(rawContent: string = ''): ResponseContract {
   return {
     queryType: '',
@@ -21,6 +26,9 @@ export function createEmptyContract(rawContent: string = ''): ResponseContract {
     formattedJson: undefined,
   };
 }
+
+// --- SECTION 2: Section Tag Parsing & JSON Normalization ---
+// Strips delimiter tags and parses embedded JSON/Markdown payloads into normalized UI objects.
 
 /**
  * Parses a completed response string into a normalized ResponseContract.

@@ -1,32 +1,17 @@
 """
-APEX Intelligence Layer — Phase 4: Hybrid Intelligence Architecture
-
-Pure-Python analytics module. Zero LLM dependency. Zero network requests.
-Fully deterministic. Consumes only pre-computed data from DataEngine.
-
-Architecture Principle:
-    Deterministic Engine → Intelligence Layer → Curated Synthesis → (optional) LLM narrative
-    LLM NEVER receives raw CRM dumps. Only curated aggregate intelligence.
-
-Modules:
-    - SignalClassifier: Typed signal priority hierarchy
-    - PortfolioIntelligence: Cross-entity concentration/exposure/momentum analysis
-    - TemporalIntelligence: Trajectory awareness (stale, decay, urgency)
-    - HumanizedPriority: CRITICAL/HIGH/MEDIUM/LOW bands + compact formatting
-    - generate_strategic_synthesis(): Master orchestrator
+DETERMINISTIC INTELLIGENCE LAYER (intelligence_layer.py)
+Pure-Python analytics engine that classifies business signals, computes temporal decay,
+evaluates portfolio exposure, and enforces strict response token budgets with zero LLM network calls.
 """
 
+# --- SECTION 1: Base Imports & Response Budget ---
+# Imports enumeration tools, typing utilities, and sets hard response budgets per query intent.
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
-
-
-# ═══════════════════════════════════════════════════════════════
-# RESPONSE BUDGET — Hard limits per intent (backend owns truncation)
-# ═══════════════════════════════════════════════════════════════
 
 RESPONSE_BUDGET = {
     "GLOBAL_LIST_QUERY":            {"max_rows": 10, "max_signals": 4, "max_actions": 3},
@@ -37,11 +22,8 @@ RESPONSE_BUDGET = {
     "ACTION_RECOMMENDATION_QUERY":  {"max_rows": 0,  "max_signals": 4, "max_actions": 5},
 }
 
-
-# ═══════════════════════════════════════════════════════════════
-# SIGNAL CLASSIFICATION SYSTEM
-# ═══════════════════════════════════════════════════════════════
-
+# --- SECTION 2: Signal Classification & Priority Hierarchy ---
+# Categorizes business insights (Revenue, Pipeline, Risk, Engagement) with explicit priority ordering.
 class SignalType(str, Enum):
     REVENUE     = "REVENUE"
     PIPELINE    = "PIPELINE"

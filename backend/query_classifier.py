@@ -1,3 +1,11 @@
+"""
+QUERY CLASSIFIER ROUTER (query_classifier.py)
+Classifies incoming user messages into DATA (CRM query), GENERAL (conversational/help),
+or UNCLEAR categories using active LLM configurations with safe DATA fallback.
+"""
+
+# --- SECTION 1: Dependencies & LLM Endpoint Resolver ---
+# Imports HTTP clients, JSON utilities, and resolves active LLM model configurations.
 import os
 import json
 import httpx
@@ -6,7 +14,6 @@ import logging
 logger = logging.getLogger("query_classifier")
 
 def get_active_llm_config() -> tuple:
-    """Helper to load cached or environment-configured LLM URL and model name."""
     cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "llm_cache.json")
     if os.path.exists(cache_path):
         try:
@@ -23,6 +30,8 @@ def get_active_llm_config() -> tuple:
     primary_model = os.getenv("MODEL_NAME", "llama3.2:latest")
     return primary_url, primary_model
 
+# --- SECTION 2: Query Classification Execution ---
+# Evaluates prompt classification rules and returns one-word classification tokens (DATA / GENERAL / UNCLEAR).
 def classify_query(user_message: str) -> str:
     """
     Calls the LLM to classify the user query into DATA, GENERAL, or UNCLEAR.

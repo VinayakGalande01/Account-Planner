@@ -1,21 +1,17 @@
 """
-APEX Risk Radar Engine
-
-Deterministic Python risk scoring for portfolio-level executive view.
-Zero LLM calls. Based on real CRM data patterns.
-
-Risk Score Components (weighted):
-  - Health Score (30%)
-  - Stale Deals Ratio (25%)
-  - Dead/Lost Deals Ratio (20%)
-  - Zero Contacts Registered (15%)
-  - Open Critical Cases (10%)
+RISK RADAR ENGINE (risk_engine.py)
+Deterministic risk scoring for portfolio-level executive accounts based on real CRM data:
+Health Scores (30%), Stale Deals (25%), Dead Deals (20%), Single Threading (15%), Critical Cases (10%).
 """
 
+# --- SECTION 1: Dependencies & Imports ---
+# Imports pandas dataframes, typing structures, and datetime anchor calculators.
 import pandas as pd
 from typing import List, Dict, Any
 from datetime import datetime
 
+# --- SECTION 2: Account Risk Radar Scoring Engine ---
+# Evaluates multi-dimensional risk components and ranks accounts by risk score descending.
 def score_account_risk(acc_id: str, acc_name: str, health: float, engine) -> Dict[str, Any]:
     score = 0.0
     reasons = []

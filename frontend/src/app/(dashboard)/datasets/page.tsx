@@ -1,5 +1,14 @@
 'use client'
 
+// Golden Dataset admin page: internal QA surface for curating ground-truth
+// eval testcases used to benchmark the AI intent classifier and reasoning.
+// Major sections below:
+//   - SECTION: Data Fetching (load/filter golden cases)
+//   - SECTION: CRUD Handlers (create/update/delete testcases)
+//   - SECTION: Render - Stats & Filters
+//   - SECTION: Render - Cases Table
+//   - SECTION: Render - Create/Detail Modals
+
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/context/AuthContext'
@@ -94,6 +103,7 @@ export default function GoldenDatasetPage() {
     onClose: () => setIsDetailModalOpen(false),
   })
 
+  // --- SECTION: Data Fetching ---
   // Load dataset
   const loadDataset = async () => {
     setLoading(true)
@@ -140,6 +150,7 @@ export default function GoldenDatasetPage() {
   const criticalCount = cases.filter(c => c.priority === 'CRITICAL').length
   const activeCount = cases.filter(c => c.status === 'ACTIVE').length
 
+  // --- SECTION: CRUD Handlers ---
   const handleOpenDetail = (tc: GoldenTestCase) => {
     setSelectedCase(tc)
     setFormQuery(tc.query)
@@ -316,6 +327,7 @@ export default function GoldenDatasetPage() {
           }
         />
 
+          {/* --- SECTION: Render - Stats & Filters --- */}
           {/* Stats Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {[
@@ -407,6 +419,7 @@ export default function GoldenDatasetPage() {
             </div>
           </div>
 
+          {/* --- SECTION: Render - Cases Table --- */}
           {/* Golden Cases Table/List */}
           {loading ? (
             <div className="bg-[#181824] border border-border/80 rounded-xl overflow-hidden shadow-lg p-4">
@@ -509,6 +522,7 @@ export default function GoldenDatasetPage() {
           )}
         </main>
 
+      {/* --- SECTION: Render - Create/Detail Modals --- */}
       {/* ────────────────── CREATE MODAL ────────────────── */}
       <AnimatePresence>
         {isCreateModalOpen && (

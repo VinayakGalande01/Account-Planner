@@ -1,19 +1,21 @@
 """
-APEX Clarification Builder - targeted human-in-the-loop questioning
+CLARIFICATION BUILDER (clarification_builder.py)
+Constructs targeted human-in-the-loop clarification prompts when user queries
+have ambiguous or unspecified account references, extracting candidate entity chips.
 """
 
+# --- SECTION 1: Dependencies & Logging Setup ---
+# Imports backend logger and typing constructs for clarification generation.
 import logging
 from typing import List, Dict, Any
 
 logger = logging.getLogger("backend")
 
+# --- SECTION 2: Clarification Prompt & Candidate Extraction ---
+# Builds targeted clarification text and extracts account candidate options for frontend chips.
 def build_clarification_prompt(last_user_message: str, prior_history: List[Dict[str, str]] = None, known_accounts: List[str] = None) -> str:
-    """
-    Builds a targeted clarification question based on user message and known accounts.
-    """
     known_accounts = known_accounts or []
     
-    # Try to find partial string matches in query
     query_lower = last_user_message.lower()
     candidates = []
     for acc in known_accounts:
@@ -27,9 +29,6 @@ def build_clarification_prompt(last_user_message: str, prior_history: List[Dict[
     return "I wasn't able to identify which account or deal you're referring to. Could you please specify the name of the account?"
 
 def extract_candidate_options(known_accounts: List[str], query: str) -> List[str]:
-    """
-    Extracts candidate accounts to present as option chips.
-    """
     query_lower = query.lower()
     candidates = []
     for acc in known_accounts:
@@ -38,3 +37,4 @@ def extract_candidate_options(known_accounts: List[str], query: str) -> List[str
     if not candidates:
         candidates = known_accounts[:3]
     return candidates
+

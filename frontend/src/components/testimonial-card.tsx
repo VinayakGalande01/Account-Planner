@@ -1,5 +1,11 @@
 'use client'
 
+// TestimonialCard: simple animated star-rating quote card for
+// marketing/social-proof sections.
+// Major sections:
+// - Props
+// - Render: star rating, quote text, author attribution
+
 import { motion } from 'framer-motion'
 import { Star } from 'lucide-react'
 
@@ -12,6 +18,7 @@ interface TestimonialCardProps {
 }
 
 export function TestimonialCard({ quote, author, title, company, delay = 0 }: TestimonialCardProps) {
+  // --- SECTION: Render ---
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

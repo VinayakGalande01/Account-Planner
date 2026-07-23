@@ -1,14 +1,16 @@
 'use client';
 
+/**
+ * LIGHTWEIGHT INLINE MARKDOWN RENDERER (src/utils/inlineMarkdown.tsx)
+ * Renders bold, italic, and inline code formatting inside APEX widget cards without external dependencies.
+ */
+
+// --- SECTION 1: Dependencies & Import Setup ---
+// Imports React primitives for creating inline styled DOM node arrays.
 import React from 'react';
 
-/**
- * Lightweight inline markdown renderer for APEX widget text.
- * Supports **bold**, *italic*, and `code` without external dependencies.
- * 
- * Design Rule: This is for short prose (signals, actions, summaries).
- *              For full markdown documents, use a proper markdown library.
- */
+// --- SECTION 2: Inline Markdown Tokenizer & Renderer ---
+// Parses text strings using regex matchers to return styled ReactNode JSX elements.
 export function renderInlineMarkdown(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   // Regex matches: **bold**, *italic*, `code`

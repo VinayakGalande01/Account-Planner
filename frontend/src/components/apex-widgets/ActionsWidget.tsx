@@ -1,8 +1,18 @@
 'use client';
 
+// ActionsWidget — APEX pipeline Level 5 widget.
+// Renders the backend-ranked list of next-best-actions as a numbered
+// list with gradient priority badges and inline markdown support.
+// Sections in this file:
+//   - Props/types
+//   - Render (ordered list of action items)
+// Design Rule: action order is decided by the backend; this component
+// only renders, it never re-ranks or filters actions client-side.
+
 import React from 'react';
 import { renderInlineMarkdown } from '../../utils/inlineMarkdown';
 
+// --- SECTION: Props ---
 interface ActionsWidgetProps {
   actions: string[];
 }
@@ -18,6 +28,7 @@ interface ActionsWidgetProps {
 export function ActionsWidget({ actions }: ActionsWidgetProps) {
   if (!actions || actions.length === 0) return null;
 
+  // --- SECTION: Render ---
   return (
     <div className="apex-widget-actions">
       <div className="apex-section-label">RECOMMENDED ACTIONS</div>

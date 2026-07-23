@@ -1,5 +1,13 @@
 'use client'
 
+// CommandPalette: Cmd/Ctrl+K modal for fuzzy-searching accounts and
+// jumping to navigation destinations.
+// Major sections:
+// - Static search data (accounts, nav items)
+// - State/hooks: query state, focus + escape key handling
+// - Filtering + select handler
+// - Render: backdrop, input header, results list, footer
+
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Briefcase, LayoutDashboard, TrendingUp, Brain, Settings, X, Command } from 'lucide-react'
@@ -28,6 +36,7 @@ const navigationItems = [
 ]
 
 export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
+  // --- SECTION: State/Hooks ---
   const [query, setQuery] = useState('')
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -53,6 +62,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
 
   if (!isOpen) return null
 
+  // --- SECTION: Filtering + Select Handler ---
   const filteredAccounts = searchableAccounts.filter((a) =>
     a.name.toLowerCase().includes(query.toLowerCase())
   )
@@ -66,6 +76,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     onClose()
   }
 
+  // --- SECTION: Render ---
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4">

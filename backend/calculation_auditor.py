@@ -1,20 +1,21 @@
 """
-Calculation Auditor & Transparency Engine.
-Provides step-by-step mathematical audits for pipeline totals, stalled deal figures, and excluded items.
+CALCULATION AUDITOR (calculation_auditor.py)
+Provides itemized mathematical audit trails for financial totals,
+active vs closed-lost deal breakdowns, and transparency proofs for AI outputs.
 """
 
+# --- SECTION 1: Dependencies & Class Initialization ---
+# Imports dictionary and list typing constructs for auditing CRM financial matrices.
 from typing import Dict, Any, List
 
+# --- SECTION 2: Calculation Auditing Engine ---
+# Evaluates database deal records, calculates active pipeline sums, and formats itemized mathematical audits.
 class CalculationAuditor:
     @staticmethod
     def audit_account_metrics(account_data: Dict[str, Any], query: str = "") -> Dict[str, Any]:
-        """
-        Generates an itemized mathematical audit for an account's financial metrics.
-        """
         account_name = account_data.get("account_name", "Global Portfolio")
         opportunities = account_data.get("opportunities", [])
         
-        # 1. Complete Database Records
         all_deals = []
         total_db_sum = 0.0
         for opp in opportunities:

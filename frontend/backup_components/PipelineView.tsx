@@ -1,5 +1,16 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original sales pipeline view: fetches per-stage pipeline totals, renders a
+// forecast-vs-actual step-line chart plus segmented stage bars, and includes an
+// interactive "What-If" simulator (win-rate/deal-size/cycle sliders) with live
+// recalculated projections and AI-style commentary.
+//
+// --- SECTION: Formatting/Chart Helpers (StepLineChart, SegmentedBar) ---
+// --- SECTION: PipelineView Component — data fetch + simulation math ---
+// --- SECTION: Render — Stage Chart Panel ---
+// --- SECTION: Render — What-If Simulator Panel (sliders + results) ---
+
 import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, TrendingDown, Sliders, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';

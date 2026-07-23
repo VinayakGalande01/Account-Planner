@@ -1,3 +1,11 @@
+"""
+CRM DATA SYNC DAEMON (sync_daemon.py)
+Reads Salesforce dummy Excel datasets and synchronizes Account, Opportunity,
+Contact, Case, and Activity data directly into the user-isolated database.
+"""
+
+# --- SECTION 1: Dependencies & Environment Setup ---
+# Imports data processing and ORM libraries for parsing Excel sheets and DB operations.
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -10,8 +18,9 @@ from database import SessionLocal
 import models.user
 from models.crm_models import Account, Opportunity, Contact, Case, Activity
 
+# --- SECTION 2: Dataset Path Resolution & Value Sanitization ---
+# Resolves the local Excel file location and cleans pandas NaN/NaT values for database safety.
 def get_data_path():
-    """Resolves Excel file path exactly like main.py."""
     data_path = os.getenv("DATA_PATH", "")
     if not data_path or not os.path.exists(data_path):
         dataset_1 = r"C:\Users\VINAYAK\Downloads\SF_AccountingAgent_DummyData.xlsx"
@@ -34,15 +43,15 @@ def get_data_path():
     return data_path
 
 def clean_value(val):
-    """Clean NaN or NaT values from pandas to None for database safety."""
     if pd.isna(val):
         return None
     if isinstance(val, (np.integer, np.floating)):
         return val.item()
     return str(val)
 
+# --- SECTION 3: Per-User Database Synchronization ---
+# Wipes existing records for the specified user and re-populates tables from Excel.
 def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = None) -> bool:
-    # Explicitly set the session info user_id for RLS enforcement
     db.info["user_id"] = str(user_id)
     
     if not excel_path:
@@ -56,7 +65,6 @@ def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = Non
     data = {name.lower(): df for name, df in sheets.items()}
 
     try:
-        # Clear existing tables for this user first
         db.query(Activity).filter(Activity.user_id == user_id).delete()
         db.query(Case).filter(Case.user_id == user_id).delete()
         db.query(Contact).filter(Contact.user_id == user_id).delete()

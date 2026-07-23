@@ -1,41 +1,33 @@
-import logging
-logger = logging.getLogger("llm")
 """
-APEX Pure-Agentic Plan-and-Execute Pipeline
-
-Orchestrates:
-    Phase 1 (Planner LLM): Extract strategic business intent and parameters -> JSON
-    Phase 2 (Retrieval Py): Deterministic Pandas filtering -> Pipe-delimited Text Context
-    Phase 3 (Reasoner LLM): Core business reasoning -> Structured Intelligence Package (SIP) JSON
-    Phase 4 (Narrative LLM): Strategic response contract generation -> RC Stream
+AGENT PIPELINE ENGINE (agent_pipeline.py)
+Orchestrates the 4-Phase Plan-and-Execute agentic workflow:
+Phase 1 (Planner LLM), Phase 2 (Python Retrieval), Phase 3 (Reasoner LLM), Phase 4 (Narrative LLM Stream).
 """
 
+# --- SECTION 1: Dependencies & Network Setup ---
+# Imports HTTP clients, asyncio tasks, data retrieval layers, and environmental model URLs.
 import os
 import sys
 import json
 import time
 import httpx
 import asyncio
+import logging
+import re
 from typing import Dict, Any, List, Optional, AsyncGenerator
 from dataclasses import dataclass, asdict
 
-# Ensure backend directory is in path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data_engine import DataEngine
 from data_retrieval_layer import execute_data_retrieval
 
-# Load configuration from environment
+logger = logging.getLogger("llm")
 LLM_URL = os.getenv("LLM_URL", "http://10.181.43.105:8000/api/generate")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2:latest")
 
-
-# ═══════════════════════════════════════════════════════════════
-# JSON PARSING UTILITIES (Anti-Hallucination Guardrails)
-# ═══════════════════════════════════════════════════════════════
-
-import re
-
+# --- SECTION 2: Anti-Hallucination & JSON Healing Utilities ---
+# Sanitizes LLM outputs, strips markdown fences, and heals missing JSON delimiters dynamically.
 def clean_and_parse_json(text: str) -> dict:
     """Robust parser that strips markdown wrappers, sanitizes control characters,
     performs syntax healing on missing delimiters, and parses JSON."""

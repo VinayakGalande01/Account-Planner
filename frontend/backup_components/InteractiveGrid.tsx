@@ -1,5 +1,15 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original Canvas2D background effect: a fixed full-viewport dot grid whose points
+// are repelled by the mouse and spring back to their base position, with brightness
+// and radius scaling by displacement for a subtle glow effect.
+//
+// --- SECTION: Point Type & Physics Constants ---
+// --- SECTION: initPoints — builds the dot grid on resize ---
+// --- SECTION: animate — per-frame physics update + canvas draw ---
+// --- SECTION: Effect Setup (resize/mouse listeners, RAF loop) & Render ---
+
 import React, { useRef, useEffect, useCallback } from 'react';
 
 interface Point {

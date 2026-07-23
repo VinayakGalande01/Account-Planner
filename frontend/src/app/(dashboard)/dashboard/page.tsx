@@ -1,5 +1,12 @@
 'use client'
 
+// Main dashboard page: shows KPI summary strip plus account health,
+// risk detection, and engagement momentum widgets for a quick overview.
+// Major sections below:
+//   - SECTION: KPI Stat Derivations
+//   - SECTION: Render - KPI Summary Strip
+//   - SECTION: Render - Widget Grid
+
 import { motion } from 'framer-motion'
 import { AccountHealthWidget } from '@/components/account-health-widget'
 import { EngagementMomentumChart } from '@/components/engagement-momentum-chart'
@@ -19,6 +26,7 @@ export default function Dashboard() {
   const { isFirstVisit } = useAnimation()
   const { accounts } = useData()
 
+  // --- SECTION: KPI Stat Derivations ---
   const activeAccountsCount = accounts.length > 0 ? accounts.length : 6
   const totalPipelineVal = accounts.reduce((acc, a) => acc + (a.arr_usd || a.revenue_usd || 1200000), 0)
   const avgHealth = accounts.length > 0
@@ -42,6 +50,7 @@ export default function Dashboard() {
           icon={<LayoutDashboard className="w-6 h-6" />}
         />
 
+        {/* --- SECTION: Render - KPI Summary Strip --- */}
         {/* Top KPI At-A-Glance Summary Strip */}
         <motion.div
           initial={isFirstVisit ? { opacity: 0, y: 12 } : false}
@@ -68,6 +77,7 @@ export default function Dashboard() {
           ))}
         </motion.div>
 
+        {/* --- SECTION: Render - Widget Grid --- */}
         {/* Grid layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Account Health - spans 2 columns on large screens */}

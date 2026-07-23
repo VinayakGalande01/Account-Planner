@@ -1,5 +1,14 @@
 'use client';
 
+// ContractRenderer — orchestrator for the APEX structured response pipeline.
+// Maps backend __SECTION_*__ tags / ResponseContract fields to widget
+// components, handling both live streaming and finalized history views.
+// Sections in this file:
+//   - FormattedResponseRenderer (legacy JSON-contract layout)
+//   - Widget Registry (section name -> renderer map)
+//   - ContractRenderer (streaming choreography)
+//   - FinalizedContractRenderer (post-stream, from normalized contract)
+
 import React, { useMemo } from 'react';
 import type { ResponseContract, SectionName, RecommendedAction, FormattedJsonResponse } from '../../types/responseContract';
 import { SECTION_RENDER_ORDER } from '../../types/responseContract';
@@ -16,6 +25,7 @@ import { RecommendedActionsWidget } from './RecommendedActionsWidget';
 import { ExecEmailCard, MeetingAgendaCard, StakeholderMapCard, RiskReviewCard } from '../quick-actions/QuickActionCards';
 
 // ── Formatted Response Renderer ─────────────────────────────
+// --- SECTION: FormattedResponseRenderer ---
 
 interface FormattedResponseRendererProps {
   data: FormattedJsonResponse;
@@ -92,6 +102,7 @@ export function FormattedResponseRenderer({ data, onActionClick }: FormattedResp
 
   return (
     <div className="space-y-4">
+      {/* --- SECTION: Render (urgency, headline, summary, table, flags/risks, actions) --- */}
       {/* Urgency Badge */}
       <div className="flex items-center">
         <span className={badgeClass}>
@@ -383,6 +394,7 @@ const WIDGET_REGISTRY: Record<string, WidgetRenderer> = {
 
 // ── Streaming Contract Renderer ─────────────────────────────
 
+// --- SECTION: ContractRenderer (streaming) ---
 interface ContractRendererProps {
   /** Raw content string (possibly still streaming) */
   content: string;
@@ -557,6 +569,7 @@ export function ContractRenderer({ content, isStreaming, onActionClick }: Contra
 
 // ── Finalized Contract Renderer ─────────────────────────────
 
+// --- SECTION: FinalizedContractRenderer ---
 interface FinalizedRendererProps {
   /** Normalized ResponseContract (post-stream application state) */
   contract: ResponseContract;

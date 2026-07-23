@@ -1,9 +1,19 @@
+"""
+DECISION FRAMER ENGINE (decision_framer.py)
+Classifies natural language intent into strategic decision frames:
+Churn Risk, Revenue Expansion, Deal Winback, Renewal Readiness, and Competitive Threats.
+"""
+
+# --- SECTION 1: Dependencies & Decision Frame Definitions ---
+# Imports Pydantic models and configures keyword triggers, priority signals, and ignore signals.
 import os
 import json
 import re
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
+# --- SECTION 2: DecisionFramer Implementation ---
+# Analyzes queries to match decision templates and priority signal hierarchies.
 class DecisionFramer:
     """
     Classifies user intent into specific decision frames.

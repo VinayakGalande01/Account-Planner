@@ -1,11 +1,16 @@
+"""
+SYSTEM INTEGRITY VERIFICATION SUITE (verify_all.py)
+End-to-end verification script testing database creation, sync daemon execution,
+record counts, CRM data hygiene checks, and vector RAG retrieval with zero errors.
+"""
+
+# --- SECTION 1: Dependencies & Environment Setup ---
+# Loads environment overrides and imports database engines, models, sync daemons, and vector stores.
 import os
 import sys
 from dotenv import load_dotenv
 
-# Load env vars BEFORE database imports
 load_dotenv(override=True)
-
-# Ensure current directory is in the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from database import Base, engine as db_engine
@@ -14,6 +19,8 @@ from sync_daemon import sync_crm_to_sqlite
 from hygiene_checker import check_data_hygiene
 from vector_store import vector_store
 
+# --- SECTION 2: System-Wide Verification Execution Routine ---
+# Cleans SQLite files, rebuilds ORM metadata, executes sync daemons, and tests RAG vector search.
 def verify():
     print("Starting verification script...")
     

@@ -1,5 +1,17 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original AI chat/intelligence terminal: streams responses from /api/chat via a
+// ReadableStream, reveals them with a typewriter effect, parses structured
+// "__SECTION_*__" response contracts into rich widgets, and offers a prompt library.
+//
+// --- SECTION: Types & Initial Messages ---
+// --- SECTION: ThinkingIndicator (stage animation) & RenderMessageLines (fallback text) ---
+// --- SECTION: ChatTerminal Component — state, prompt fetch, typewriter engine ---
+// --- SECTION: handleSend — streams/reads chat response, builds message contract ---
+// --- SECTION: Render — Header, Thinking Indicator, Message List ---
+// --- SECTION: Render — Prompt Library Popover & Input Bar ---
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Bot, User, Sparkles, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

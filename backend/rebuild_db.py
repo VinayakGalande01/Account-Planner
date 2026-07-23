@@ -1,7 +1,14 @@
+"""
+DATABASE REBUILD UTILITY (rebuild_db.py)
+Re-creates database schema tables and enforces PostgreSQL Row Level Security (RLS) policies
+and tenant isolation rules directly on Supabase/PostgreSQL destinations.
+"""
+
+# --- SECTION 1: Environment & Admin Connection ---
+# Configures environment variables and establishes administrative connection to PostgreSQL or SQLite.
 import os
 from dotenv import load_dotenv
 
-# Run load_dotenv BEFORE importing database modules so it picks up the correct DATABASE_URL
 load_dotenv(override=True)
 
 from sqlalchemy import create_engine, text
@@ -9,6 +16,8 @@ from database import Base, DATABASE_URL, engine as db_engine
 import models.user
 import models.crm_models
 
+# --- SECTION 2: Database Rebuild & RLS Enforcement ---
+# Drops legacy tables, creates fresh schema instances, and applies tenant isolation policies.
 def rebuild_database():
     is_sqlite = db_engine.dialect.name == "sqlite"
     if not is_sqlite:

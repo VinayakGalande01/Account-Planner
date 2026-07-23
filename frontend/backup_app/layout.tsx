@@ -1,3 +1,14 @@
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original Next.js root layout for the "Account Planner / Tactical Command Center" UI.
+// Loaded fonts, injected the pre-hydration dark/light theme script, and wrapped the
+// app in ThemeProvider / AuthProvider / DataProvider + MainLayout shell.
+//
+// --- SECTION: Font Setup (Inter, JetBrains Mono, Rajdhani, Chivo) ---
+// --- SECTION: Metadata Export ---
+// --- SECTION: RootLayout Component ---
+//   - <head> inline script: applies stored/system theme before paint
+//   - <body>: Theme/Auth/Data providers wrapping MainLayout
+
 import React from 'react';
 import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono, Rajdhani, Chivo } from 'next/font/google';

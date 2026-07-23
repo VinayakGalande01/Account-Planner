@@ -1,3 +1,11 @@
+// --------------------------------------------------------------------
+// Hero.tsx
+// Landing page hero section: status pill, headline/subhead copy with
+// primary/secondary CTAs, a mini stats strip, and an embedded compact
+// DashboardPreview HUD on the right column.
+// --- SECTION: Component ---
+// --------------------------------------------------------------------
+
 'use client';
 
 import React from 'react';
@@ -9,6 +17,7 @@ interface HeroProps {
   onCta: () => void;
 }
 
+// --- SECTION: Component ---
 export const Hero: React.FC<HeroProps> = ({ onCta }) => {
   return (
     <section

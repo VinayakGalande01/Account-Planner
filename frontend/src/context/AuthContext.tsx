@@ -1,6 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+/**
+ * AUTHENTICATION CONTEXT PROVIDER (AuthContext.tsx)
+ * Manages user session state, JWT tokens, login/signup API calls,
+ * automatic token refreshing, and authenticated HTTP fetch wrappers.
+ */
+
+// --- SECTION 1: Dependencies & User Interface Models ---
+// Imports React state/effect primitives and defines User and AuthContext interfaces.
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
 interface User {
   id: number;
@@ -22,6 +30,8 @@ interface AuthContextType {
   authFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
 
+// --- SECTION 2: Auth Provider State & Session Management ---
+// Handles JWT local storage persistence, login credentials verification, and session timeouts.
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -31,6 +41,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionType, setTransitionType] = useState<'login' | 'signup' | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
 
   const logout = useCallback(async () => {
     setUser(null);
@@ -48,44 +60,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Session refresh handler
   const refreshSession = useCallback(async (): Promise<string | null> => {
-    try {
-      const res = await fetch('/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-        },
-        credentials: 'include'
-      });
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
+    }
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.access_token) {
-          setToken(data.access_token);
-          localStorage.setItem('token', data.access_token);
+    const runRefresh = async (): Promise<string | null> => {
+      try {
+        const res = await fetch('/auth/refresh', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+          },
+          credentials: 'include'
+        });
 
-          // Get current user using the new token
-          const userRes = await fetch('/auth/me', {
-            headers: {
-              'Authorization': `Bearer ${data.access_token}`,
-              'Accept': 'application/json',
-            },
-          });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) {
+            setToken(data.access_token);
+            localStorage.setItem('token', data.access_token);
 
-          if (userRes.ok) {
-            const userData = await userRes.json();
-            setUser(userData);
-            return data.access_token;
+            // Get current user using the new token
+            const userRes = await fetch('/auth/me', {
+              headers: {
+                'Authorization': `Bearer ${data.access_token}`,
+                'Accept': 'application/json',
+              },
+            });
+
+            if (userRes.ok) {
+              const userData = await userRes.json();
+              setUser(userData);
+              return data.access_token;
+            }
           }
         }
+      } catch (err) {
+        console.error('Failed to silently refresh auth session:', err);
       }
-    } catch (err) {
-      console.error('Failed to silently refresh auth session:', err);
-    }
-    // If refresh fails, clear auth state
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('token');
-    return null;
+      // If refresh fails, clear auth state
+      setUser(null);
+      setToken(null);
+      localStorage.removeItem('token');
+      return null;
+    };
+
+    refreshPromiseRef.current = runRefresh().finally(() => {
+      refreshPromiseRef.current = null;
+    });
+
+    return refreshPromiseRef.current;
   }, []);
 
   // Initial load verification

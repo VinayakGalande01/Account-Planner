@@ -1,7 +1,17 @@
+"""
+OBSERVABILITY & TELEMETRY MODELS (models/observability_models.py)
+SQLAlchemy ORM models for request tracing, runtime performance tracking,
+prompt hash versioning, and token cost telemetry auditing.
+"""
+
+# --- SECTION 1: Dependencies & Base Imports ---
+# Imports ORM column types, date functions, and declarative base for observability tables.
 from sqlalchemy import Column, Integer, String, Boolean, Float, ForeignKey, DateTime, Text, Numeric, JSON
 from sqlalchemy.sql import func
 from database import Base
 
+# --- SECTION 2: Prompt Hash & Request Tracing Entities ---
+# Defines schema for versioned prompt templates and end-to-end telemetry trace records.
 class ObservabilityPrompt(Base):
     __tablename__ = "apex_observability_prompts"
 

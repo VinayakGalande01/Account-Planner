@@ -1,3 +1,11 @@
+"""
+EVALUATION SCHEMAS (schemas/eval_schemas.py)
+Pydantic validation models for creating, updating, and returning
+Golden Dataset evaluation benchmark cases across pipeline phases.
+"""
+
+# --- SECTION 1: Base Imports & Golden Dataset Models ---
+# Imports Pydantic models and defines base schemas for evaluation benchmark ground truths.
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -27,6 +35,8 @@ class GoldenDatasetBase(BaseModel):
 class GoldenDatasetCreate(GoldenDatasetBase):
     pass
 
+# --- SECTION 2: Evaluation Update & Response Models ---
+# Pydantic schemas for partial updates and serialized HTTP response representations.
 class GoldenDatasetUpdate(BaseModel):
     query: Optional[str] = None
     user_context: Optional[Dict[str, Any]] = None

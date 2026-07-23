@@ -1,5 +1,11 @@
 'use client'
 
+// FeatureCard: simple animated icon/title/description card used in
+// marketing/feature grids.
+// Major sections:
+// - Props
+// - Render: icon badge, title, description
+
 import { motion } from 'framer-motion'
 import { ReactNode } from 'react'
 
@@ -11,6 +17,7 @@ interface FeatureCardProps {
 }
 
 export function FeatureCard({ icon, title, description, delay = 0 }: FeatureCardProps) {
+  // --- SECTION: Render ---
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

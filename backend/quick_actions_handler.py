@@ -1,3 +1,11 @@
+"""
+QUICK ACTIONS HANDLER (quick_actions_handler.py)
+Executes targeted quick action shortcuts: Executive Email Drafting, Meeting Agenda Preparation,
+Stakeholder Mapping, and Account Strategy Playbook Generation with Cloud/Local LLM routing.
+"""
+
+# --- SECTION 1: Dependencies & Import Setup ---
+# Imports JSON parsers, datetime tools, reasoning generators, and sanitization functions.
 import os
 import json
 import datetime
@@ -5,6 +13,8 @@ from typing import Dict, Any, Optional
 from reasoning_engine import ResponseGenerator
 from agent_pipeline import clean_and_parse_json
 
+# --- SECTION 2: Quick Action Handler Classes ---
+# Implements Executive Email, Meeting Agenda, Stakeholder, and Risk Review prompt generators.
 class ExecEmailHandler:
     @staticmethod
     def handle(account_data: Dict[str, Any], query: str, active_account: Optional[str] = None, is_local: bool = True) -> Dict[str, Any]:

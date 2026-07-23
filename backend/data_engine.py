@@ -1,15 +1,47 @@
+"""
+CRM DATA ENGINE (data_engine.py)
+Loads user-isolated CRM database entities (Accounts, Opportunities, Contacts, Cases, Activities)
+into Pandas DataFrames with a 60-second TTL cache for high-speed analytical queries.
+"""
+
+# --- SECTION 1: Dependencies & Class Cache Setup ---
+# Imports data processing libraries and sets up class-level TTL memory caching.
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import os
+import time
 from typing import Optional, List, Dict, Any
 
+# --- SECTION 2: DataEngine Implementation ---
+# Manages SQL loading, cache invalidation, and dataframe aggregation utilities.
 class DataEngine:
+    _data_cache = {}
+    CACHE_TTL_SECONDS = 60.0
+
+    @classmethod
+    def invalidate_cache(cls, user_id: int):
+        if user_id in cls._data_cache:
+            try:
+                del cls._data_cache[user_id]
+            except KeyError:
+                pass
+
     def __init__(self, db, user_id: int):
         self.db = db
         self.user_id = user_id
         self.data = {}
-        self.load_data()
+        
+        now = time.time()
+        cached = DataEngine._data_cache.get(user_id)
+        if cached and (now - cached["timestamp"] < DataEngine.CACHE_TTL_SECONDS):
+            self.data = cached["data"]
+        else:
+            self.load_data()
+            DataEngine._data_cache[user_id] = {
+                "timestamp": now,
+                "data": self.data
+            }
 
     def load_data(self):
         """Loads all data for the user from the database into pandas DataFrames."""

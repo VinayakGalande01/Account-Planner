@@ -1,5 +1,13 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original dashboard page: toggled between the KPI/Pipeline/Ledger overview and a
+// single AccountDetail drill-down view based on selectedAccount from DataContext.
+//
+// --- SECTION: Imports & Data Hook ---
+// --- SECTION: DashboardPage Component ---
+//   - AnimatePresence switch: "detail" (AccountDetail) vs "dashboard" (KPI/Pipeline/Ledger)
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatTerminal from '../components/ChatTerminal';

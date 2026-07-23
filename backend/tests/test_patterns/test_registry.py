@@ -1,15 +1,24 @@
+"""
+PATTERN REGISTRY UNIT TESTS (tests/test_patterns/test_registry.py)
+Automated unit tests validating deterministic trigger conditions for domain intelligence rules:
+Pipeline Concentration, Stalled Deals, Single-Threaded Risk, Support Pressure, and Expansion Signals.
+"""
+
+# --- SECTION 1: Dependencies & Test Framework Setup ---
+# Imports pytest, environment setup, and pattern evaluation intelligence engine.
 import os
 import sys
 import pytest
 from dotenv import load_dotenv
 
-# Ensure backend directory is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 load_dotenv(override=True)
 
 from intelligence_engine import IntelligenceEngine
 from patterns.registry import get_pattern_by_id
 
+# --- SECTION 2: Pipeline Risk Pattern Tests ---
+# Validates that mock pipeline concentration and stalled deal scenarios trigger expected pattern findings.
 def test_pipeline_concentration_triggers():
     data = {
         "account_name": "Concentration Corp",

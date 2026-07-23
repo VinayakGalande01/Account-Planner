@@ -1,14 +1,15 @@
 """
-APEX Grounding Verifier
-
-Computes how many factual claims in the final narrative 
-are verifiable against the CRM account data dict.
-
-Returns a float 0.0 - 1.0 (grounding_score).
+GROUNDING VERIFIER (grounding_verifier.py)
+Computes anti-hallucination grounding scores (0.0 to 1.0) by matching narrative claims
+(deal amounts, opportunity IDs, contact names) against actual CRM database dictionaries.
 """
 
+# --- SECTION 1: Dependencies & Import Setup ---
+# Imports dictionary typing for comparing generated text against raw CRM facts.
 from typing import Dict, Any
 
+# --- SECTION 2: Grounding Score Calculation & Labeling ---
+# Extracts verifiable values, computes match ratios, and converts numeric scores to HIGH/MEDIUM/LOW labels.
 def compute_grounding_score(narrative: str, account_data: Dict[str, Any]) -> float:
     """
     Checks how many verifiable data points in the narrative

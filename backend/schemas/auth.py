@@ -1,3 +1,11 @@
+"""
+AUTHENTICATION SCHEMAS (schemas/auth.py)
+Pydantic schemas for request validation, password complexity enforcement,
+and response serialization for user authentication routes.
+"""
+
+# --- SECTION 1: Base Imports & User Registration Schemas ---
+# Defines base user models and password complexity validator regexes.
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
 import re
@@ -22,7 +30,8 @@ class UserCreate(UserBase):
             raise ValueError('Password must contain at least one special character.')
         return v
 
-
+# --- SECTION 2: User Login, Response, & Token Schemas ---
+# Schemas for user login authentication payloads, API user profiles, and JWT tokens.
 class UserLogin(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
@@ -42,3 +51,4 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     sub: int | None = None
+

@@ -1,8 +1,18 @@
+"""
+EVALUATION DATA MODELS (models/eval_models.py)
+SQLAlchemy ORM models for AI evaluation pipelines: Golden Datasets,
+Evaluation Test Runs, Phase Assertions, and Metric Tracking tables.
+"""
+
+# --- SECTION 1: Dependencies & Model Declarations ---
+# Imports column types, UUID utilities, and declarative base for evaluation schemas.
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text, Numeric, JSON
 from sqlalchemy.sql import func
 from database import Base
 import uuid
 
+# --- SECTION 2: Golden Dataset & Test Benchmark Entities ---
+# Schema for storing ground-truth expected outputs across all 4 AI pipeline phases.
 class GoldenDataset(Base):
     __tablename__ = "eval_golden_dataset"
 

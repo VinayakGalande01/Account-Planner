@@ -1,5 +1,12 @@
 'use client'
 
+// AICopilotPanel: slide-in chat panel for the APEX AI copilot, streams
+// SSE/chunked responses from the backend chat API into a message list.
+// Major sections:
+// - Message type + welcome message
+// - State/hooks + streaming send handler
+// - Render: backdrop, panel header, message list, input form
+
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, X, Sparkles } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
@@ -23,6 +30,7 @@ const defaultWelcomeMessage: Message = {
 }
 
 export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  // --- SECTION: State/Hooks ---
   const { authFetch } = useAuth()
   const { activeSessionId } = useSidebar()
   const [messages, setMessages] = useState<Message[]>([defaultWelcomeMessage])
@@ -36,6 +44,7 @@ export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // --- SECTION: Streaming Send Handler ---
   const handleSend = async (text = input) => {
     if (!text.trim() || isLoading) return
 
@@ -103,6 +112,7 @@ export function AICopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: 
     }
   }
 
+  // --- SECTION: Render ---
   return (
     <AnimatePresence>
       {isOpen && (

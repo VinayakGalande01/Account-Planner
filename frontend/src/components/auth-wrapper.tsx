@@ -1,8 +1,18 @@
 'use client'
 
+/**
+ * AUTHENTICATION LAYOUT WRAPPER (auth-wrapper.tsx)
+ * Security wrapper guarding downstream pages, displaying a sleek loading spinner
+ * on initialization, and redirecting non-authenticated users to AuthPage login screens.
+ */
+
+// --- SECTION 1: Dependencies & Hook Integrations ---
+// Imports user session validation hooks and full-screen auth page component views.
 import { useAuth } from '@/context/AuthContext'
 import AuthPage from './auth-page'
 
+// --- SECTION 2: Auth Wrapper Shield Component ---
+// Validates session state tokens, shows progress indicators, and serves nested page trees.
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
   const { user, loading, isTransitioning } = useAuth()
 

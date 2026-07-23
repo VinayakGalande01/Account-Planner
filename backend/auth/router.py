@@ -1,3 +1,11 @@
+"""
+AUTHENTICATION ROUTER (auth/router.py)
+Provides REST endpoints for user signup, login, logout, profile checks,
+and cookie/JWT session management with security logging.
+"""
+
+# --- SECTION 1: Router Dependencies & Configuration ---
+# Imports FastAPI router utilities, auth service logic, and cookie security flags.
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 import os
 import time
@@ -9,10 +17,11 @@ from schemas.auth import UserCreate, UserLogin, UserResponse, Token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Check if secure cookies are required (default to False for localhost development)
 SECURE_COOKIE = os.getenv("SECURE_COOKIE", "False").lower() in ("true", "1")
 SAMESITE_COOKIE = os.getenv("SAMESITE_COOKIE", "lax")
 
+# --- SECTION 2: Security Event Logger ---
+# Logs authentication attempts, request IDs, response times, and JWT token issuances.
 def log_auth_event(action: str, email: str, status_msg: str, jwt_issued: bool, response_time_ms: int):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     req_id = f"auth_{uuid.uuid4().hex[:6]}"

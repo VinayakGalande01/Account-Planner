@@ -1,5 +1,11 @@
 'use client'
 
+// EngagementMomentumChart: dashboard card charting email/call/meeting
+// activity trend over the last 90 days via a stacked area chart.
+// Major sections:
+// - Static series data
+// - Render: header + metrics summary, area chart, legend
+
 import { motion } from 'framer-motion'
 import {
   AreaChart,
@@ -25,6 +31,7 @@ const data = [
 ]
 
 export function EngagementMomentumChart() {
+  // --- SECTION: Render ---
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

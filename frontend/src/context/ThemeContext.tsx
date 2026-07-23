@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * THEME CONTEXT PROVIDER (ThemeContext.tsx)
+ * Controls application-wide dark/light color scheme modes, HTML root class toggles,
+ * and localStorage preference persistence.
+ */
+
+// --- SECTION 1: Dependencies & Theme Type Definition ---
+// Imports React Context primitives and defines light/dark theme types.
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark';
@@ -9,6 +17,8 @@ interface ThemeContextType {
   toggleTheme: () => void;
 }
 
+// --- SECTION 2: Theme Provider & DOM Toggles ---
+// Syncs root HTML classList and color-scheme properties with active theme state.
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

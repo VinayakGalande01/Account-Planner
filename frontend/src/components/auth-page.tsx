@@ -1,5 +1,11 @@
 'use client';
 
+// AuthPage: full-screen login/signup card with a success-transition
+// splash screen, backed by AuthContext.
+// Major sections:
+// - State/hooks + form validation/submit handler
+// - Render: login/signup form card, success splash screen
+
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,9 +13,10 @@ import { Lock, Mail, User, ShieldAlert, Eye, EyeOff, ArrowRight } from 'lucide-r
 import Image from 'next/image';
 
 export default function AuthPage() {
+  // --- SECTION: State/Hooks ---
   const { login, signup, error, loading, isTransitioning, transitionType } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
-  
+
   // Fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -17,6 +24,7 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // --- SECTION: Validation/Submit Handler ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
@@ -43,6 +51,7 @@ export default function AuthPage() {
     }
   };
 
+  // --- SECTION: Render ---
   return (
     <div className="relative min-h-screen bg-black text-foreground overflow-hidden flex flex-col justify-center items-center px-4">
       {/* Topographic scan line details */}

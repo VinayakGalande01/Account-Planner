@@ -1,8 +1,16 @@
 'use client'
 
-import { motion } from 'framer-motion'
+// APEX Intelligence chat page: conversational AI assistant over account data,
+// with session history, streaming responses, and structured contract rendering.
+// Major sections below:
+//   - SECTION: Session Message Loading
+//   - SECTION: Send Message / Streaming Handler
+//   - SECTION: Render - Header & Persona Controls
+//   - SECTION: Render - Sessions Drawer & Chat Messages
+
+import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect } from 'react'
-import { Brain, Send, Zap, Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Brain, Send, Zap, Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 import { ContractRenderer, FinalizedContractRenderer } from '@/components/apex-widgets'
 import { parseResponseContract } from '@/utils/contractParser'
 import type { ResponseContract, RecommendedAction } from '@/types/responseContract'
@@ -55,7 +63,7 @@ const suggestedPrompts = [
 
 export default function IntelligencePage() {
   const { authFetch, user } = useAuth()
-  const { activeSessionId, setActiveSessionId, sessions, loadSessions, createSession, deleteSession } = useSidebar()
+  const { activeSessionId, setActiveSessionId, sessions, loadSessions, createSession, deleteSession, isSessionsLoading } = useSidebar()
   const { isFirstVisit } = useAnimation()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
@@ -64,12 +72,9 @@ export default function IntelligencePage() {
   const [isSessionLoading, setIsSessionLoading] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(true)
   const [currentStatus, setCurrentStatus] = useState('')
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  useEffect(() => {
-    if (user) {
-      loadSessions()
-    }
-  }, [user])
   const [mounted, setMounted] = useState(false)
 
   const handleActionClick = (action: RecommendedAction) => {
@@ -82,14 +87,31 @@ export default function IntelligencePage() {
     setMounted(true)
   }, [])
 
+  // --- SECTION: Session Message Loading ---
   // Load session messages when activeSessionId changes
   useEffect(() => {
     let active = true
+    const abortController = new AbortController()
+
     const fetchSessionMessages = async () => {
-      if (!activeSessionId) return
+      // Bypasses the fetch & skeleton state if there is no real history to load
+      const isRealSession = activeSessionId && activeSessionId !== 'default_session' && sessions.some(s => s.id === activeSessionId)
+      
+      if (!isRealSession) {
+        if (active) {
+          setMessages(initialMessages)
+          setIsSessionLoading(false)
+        }
+        return
+      }
+
       setIsSessionLoading(true)
+      const startTime = Date.now()
+
       try {
-        const res = await authFetch(`/api/chat/sessions/${activeSessionId}/messages`)
+        const res = await authFetch(`/api/chat/sessions/${activeSessionId}/messages`, {
+          signal: abortController.signal
+        })
         if (res.ok && active) {
           const data = await res.json()
           if (Array.isArray(data) && data.length > 0) {
@@ -121,14 +143,26 @@ export default function IntelligencePage() {
         } else if (active) {
           setMessages(initialMessages)
         }
-      } catch (err) {
-        console.error('Error fetching session messages:', err)
-        if (active) {
-          setMessages(initialMessages)
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Error fetching session messages:', err)
+          if (active) {
+            setMessages(initialMessages)
+          }
         }
       } finally {
         if (active) {
-          setIsSessionLoading(false)
+          // Ensures loading skeleton displays for at least 450ms to prevent flickering
+          const elapsed = Date.now() - startTime
+          const delay = Math.max(0, 450 - elapsed)
+          
+          if (delay > 0) {
+            setTimeout(() => {
+              if (active) setIsSessionLoading(false)
+            }, delay)
+          } else {
+            setIsSessionLoading(false)
+          }
         }
       }
     }
@@ -138,12 +172,14 @@ export default function IntelligencePage() {
     }
     return () => {
       active = false
+      abortController.abort()
     }
-  }, [activeSessionId, mounted])
+  }, [activeSessionId, mounted, sessions])
 
   const [sessionId] = useState(() => Math.random().toString(36).substring(2, 15))
   const [activeAccount, setActiveAccount] = useState<string | null>(null)
 
+  // --- SECTION: Send Message / Streaming Handler ---
   const handleSendMessage = async (text = inputValue) => {
     if (!text.trim() || isLoading) return
 
@@ -288,8 +324,10 @@ export default function IntelligencePage() {
   }
 
   return (
-    <main className="flex-1 overflow-y-auto flex flex-col">
+    <>
+      <main className="flex-1 overflow-y-auto flex flex-col">
       <div className="flex-1 p-6 md:p-8 flex flex-col min-h-0">
+        {/* --- SECTION: Render - Header & Persona Controls --- */}
         <PageHeader
           title="Intelligence"
           subtitle="APEX V2.1 - Connected | Ask me anything about your accounts"
@@ -346,6 +384,7 @@ export default function IntelligencePage() {
           }
         />
 
+        {/* --- SECTION: Render - Sessions Drawer & Chat Messages --- */}
         {/* 2-Column Layout with Page-Scoped Session History */}
         <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
           {/* Conversation Sessions Drawer */}
@@ -369,37 +408,48 @@ export default function IntelligencePage() {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
-                {sessions.length === 0 ? (
+                {isSessionsLoading ? (
+                  <div className="space-y-2 p-1">
+                    <Skeleton className="h-8 w-full rounded-md" />
+                    <Skeleton className="h-8 w-full rounded-md" />
+                    <Skeleton className="h-8 w-full rounded-md" />
+                  </div>
+                ) : sessions.length === 0 ? (
                   <p className="text-xs text-muted-foreground/60 italic p-2">No past conversations</p>
                 ) : (
-                  sessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className={`group relative flex items-center justify-between rounded-md text-xs transition-colors ${
-                        activeSessionId === session.id
-                          ? 'bg-primary/10 text-primary font-medium border border-primary/20'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40'
-                      }`}
-                    >
-                      <button
-                        onClick={() => setActiveSessionId(session.id)}
-                        className="flex-1 text-left px-2.5 py-2 truncate flex items-center gap-2 min-w-0"
+                  <AnimatePresence initial={false}>
+                    {sessions.map((session) => (
+                      <motion.div
+                        key={session.id}
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}
+                        className={`group relative flex items-center justify-between rounded-md text-xs overflow-hidden transition-colors ${
+                          activeSessionId === session.id
+                            ? 'bg-primary/10 text-primary font-medium border border-primary/20'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40'
+                        }`}
                       >
-                        <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" aria-hidden="true" />
-                        <span className="truncate flex-1">{session.title}</span>
-                      </button>
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation()
-                          await deleteSession(session.id)
-                        }}
-                        aria-label={`Delete ${session.title}`}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-red-400 transition-opacity mr-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
-                    </div>
-                  ))
+                        <button
+                          onClick={() => setActiveSessionId(session.id)}
+                          className="flex-1 text-left px-2.5 py-2 truncate flex items-center gap-2 min-w-0"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" aria-hidden="true" />
+                          <span className="truncate flex-1">{session.title}</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSessionToDelete(session.id)
+                          }}
+                          aria-label={`Delete ${session.title}`}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-red-400 transition-opacity mr-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        </button>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
                 )}
               </div>
             </motion.div>
@@ -416,11 +466,43 @@ export default function IntelligencePage() {
             >
           <div className="space-y-4 flex flex-col">
             {isSessionLoading ? (
-              <div className="flex flex-col gap-4 p-2">
-                <div className="flex justify-end"><Skeleton className="h-10 w-64 rounded-lg" /></div>
-                <div className="flex justify-start"><Skeleton className="h-24 w-full max-w-lg rounded-lg" /></div>
-                <div className="flex justify-end"><Skeleton className="h-10 w-48 rounded-lg" /></div>
-                <div className="flex justify-start"><Skeleton className="h-32 w-full max-w-2xl rounded-lg" /></div>
+              <div className="flex flex-col gap-6 p-4 select-none">
+                {/* Labeled Progress Caption */}
+                <div className="flex items-center gap-2.5 justify-center py-2 bg-secondary/20 border border-border rounded-lg max-w-sm mx-auto w-full">
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span className="text-xs font-semibold text-muted-foreground">Retrieving conversation history...</span>
+                </div>
+
+                {/* Alternating Realistic Chat Rows Skeletons */}
+                <div className="space-y-5 mt-2">
+                  {/* Row 1: Assistant Message (Left) */}
+                  <div className="flex items-start gap-3 justify-start max-w-xl">
+                    <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                    <div className="bg-secondary/40 border border-border rounded-lg p-3 w-full space-y-2">
+                      <Skeleton className="h-3 w-3/4 rounded" />
+                      <Skeleton className="h-3 w-1/2 rounded" />
+                    </div>
+                  </div>
+
+                  {/* Row 2: User Message (Right) */}
+                  <div className="flex items-start gap-3 justify-end max-w-md ml-auto">
+                    <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 w-full space-y-2">
+                      <Skeleton className="h-3 w-5/6 rounded bg-primary/20" />
+                      <Skeleton className="h-3 w-2/3 rounded bg-primary/20" />
+                    </div>
+                    <Skeleton className="w-8 h-8 rounded-full shrink-0 bg-primary/20" />
+                  </div>
+
+                  {/* Row 3: Assistant Message (Left) */}
+                  <div className="flex items-start gap-3 justify-start max-w-2xl">
+                    <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                    <div className="bg-secondary/40 border border-border rounded-lg p-3 w-full space-y-2">
+                      <Skeleton className="h-3 w-11/12 rounded" />
+                      <Skeleton className="h-3 w-4/5 rounded" />
+                      <Skeleton className="h-3 w-1/3 rounded" />
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : messages.length === 0 ? (
               <div className="flex items-center justify-center h-full">
@@ -567,5 +649,76 @@ export default function IntelligencePage() {
       </div>
       </div>
     </main>
+
+      {/* Custom Premium Delete Confirmation Modal */}
+      <AnimatePresence>
+        {sessionToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop Blur Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSessionToDelete(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            
+            {/* Modal Card */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 12 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="relative w-full max-w-sm bg-card border border-border rounded-xl shadow-modal overflow-hidden p-5 z-50 text-foreground"
+            >
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-500" aria-hidden="true" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                    Delete Chat Session?
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                    Are you sure you want to delete this chat session? This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 mt-5">
+                <button
+                  onClick={() => setSessionToDelete(null)}
+                  disabled={isDeleting}
+                  className="px-3 py-1.5 border border-border text-xs font-semibold rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (sessionToDelete) {
+                      setIsDeleting(true)
+                      await deleteSession(sessionToDelete)
+                      setIsDeleting(false)
+                      setSessionToDelete(null)
+                    }
+                  }}
+                  disabled={isDeleting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-500 transition-colors shadow-flat disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <span>Delete Session</span>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   )
 }

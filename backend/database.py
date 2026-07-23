@@ -1,34 +1,39 @@
+"""
+DATABASE CONNECTION MANAGER (database.py)
+Manages database engines, connection pooling, and multi-tenant Row Level Security (RLS).
+Supports PostgreSQL/Supabase with an automatic fallback to local SQLite.
+"""
+
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 import os
 import contextvars
 from dotenv import load_dotenv
 
-# Ensure the .env configuration is loaded before checking env variables
+# --- SECTION 1: Environment & Context Setup ---
+# Loads database configuration from .env and initializes ContextVar for user-level RLS.
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(backend_dir, ".env")
 load_dotenv(dotenv_path=env_path, override=True)
 
-# Context variable to hold current user ID for RLS
 current_user_id_var = contextvars.ContextVar("current_user_id", default="")
-
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local_planner.db")
 
-# Normalize postgres:// to postgresql:// for SQLAlchemy
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# --- SECTION 2: Engine Initialization & Fallback ---
+# Tries establishing PostgreSQL connection pool; falls back to local SQLite if PostgreSQL fails.
 def get_engine():
     if DATABASE_URL.startswith("sqlite"):
         return create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
     try:
-        # Test connection with a short 3s timeout to avoid startup lockup
         temp_engine = create_engine(
             DATABASE_URL, 
             pool_pre_ping=True, 
-            pool_recycle=300,   # Recycle connections every 5 minutes (prevents Supabase idle drops)
-            pool_size=10,       # Keep up to 10 persistent connections
-            max_overflow=20,    # Allow bursting up to 20 temporary connections
+            pool_recycle=90,   
+            pool_size=10,       
+            max_overflow=20,    
             connect_args={"connect_timeout": 5}
         )
         with temp_engine.connect() as conn:
@@ -42,6 +47,8 @@ def get_engine():
 engine = get_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# --- SECTION 3: Row Level Security (RLS) Event Hooks ---
+# Hooks into SQLAlchemy execution events to pass current user_id down to PostgreSQL RLS sessions.
 @event.listens_for(Session, "before_flush")
 def _before_flush(session, flush_context, instances):
     user_id = session.info.get("user_id")
@@ -53,8 +60,6 @@ def _before_flush(session, flush_context, instances):
 
 @event.listens_for(Session, "do_orm_execute")
 def _do_orm_execute(execute_state):
-    # Retrieve user_id from session info (which we will set during auth)
-    # and attach it to the query's execution_options which survives thread pools!
     user_id = execute_state.session.info.get("user_id")
     if user_id:
         execute_state.statement = execute_state.statement.execution_options(user_id=user_id)
@@ -67,7 +72,6 @@ def _do_orm_execute(execute_state):
 def set_rls_user_id(conn, cursor, statement, parameters, context, executemany):
     if conn.dialect.name == "postgresql":
         if "set_config" not in statement and "SET ROLE" not in statement and "RESET ROLE" not in statement:
-            # Check connection metadata info first (highly robust for thread pool executions)
             user_id = conn.info.get("user_id")
             
             if not user_id and context and context.execution_options:
@@ -84,6 +88,8 @@ def set_rls_user_id(conn, cursor, statement, parameters, context, executemany):
             except Exception as rls_err:
                 print(f"  [WARNING] RLS set_config error (connection may be stale): {rls_err}")
 
+# --- SECTION 4: Database Declarative Base & Session Dependency ---
+# Exports base ORM model and get_db() generator for FastAPI request handling.
 Base = declarative_base()
 
 def get_db():
@@ -92,3 +98,4 @@ def get_db():
         yield db
     finally:
         db.close()
+

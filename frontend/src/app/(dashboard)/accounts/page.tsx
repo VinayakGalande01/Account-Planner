@@ -1,5 +1,13 @@
 'use client'
 
+// Accounts directory page: lists all CRM accounts in a sortable, filterable
+// table with tier badges, health scores, and pipeline value.
+// Major sections below:
+//   - SECTION: Filtering/Sorting Logic (derived account list)
+//   - SECTION: Badge/Color Helpers
+//   - SECTION: Render - Filters Toolbar
+//   - SECTION: Render - Accounts Table
+
 import { motion } from 'framer-motion'
 import { useState, useMemo } from 'react'
 import { useData } from '@/context/DataContext'
@@ -22,6 +30,7 @@ export default function AccountsPage() {
   const [filterTier, setFilterTier] = useState('ALL TIERS')
   const [sortBy, setSortBy] = useState('name')
 
+  // --- SECTION: Filtering/Sorting Logic ---
   const filteredAccounts = useMemo(() => {
     return accounts
       .filter(account => {
@@ -46,6 +55,7 @@ export default function AccountsPage() {
       })
   }, [accounts, searchTerm, filterTier, sortBy])
 
+  // --- SECTION: Badge/Color Helpers ---
   const getTierBadgeColor = (tier: string) => {
     const colors: Record<string, string> = {
       'KEY': 'bg-primary/15 text-primary',
@@ -70,6 +80,7 @@ export default function AccountsPage() {
           icon={<Briefcase className="w-6 h-6" />}
         />
 
+        {/* --- SECTION: Render - Filters Toolbar --- */}
         {/* Filters and search */}
         <motion.div
           initial={isFirstVisit ? { opacity: 0, y: 12 } : false}
@@ -113,6 +124,7 @@ export default function AccountsPage() {
           </div>
         </motion.div>
 
+        {/* --- SECTION: Render - Accounts Table --- */}
         {/* Accounts table */}
         <motion.div
           initial={isFirstVisit ? { opacity: 0 } : false}

@@ -1,33 +1,14 @@
 """
-APEX Response Blueprint System — Information Choreography Engine
-
-Architecture Position:
-    Phase 1 (Intent Classification) → query_scope computed
-    ↓
-    THIS MODULE → resolve_blueprint(intent, scope, confidence) → ResponseBlueprint
-    ↓
-    Phase 2 (Data Retrieval) — unchanged
-    ↓
-    Intelligence Layer → curate_llm_context(... blueprint) → gated context
-    ↓
-    Phase 4 (Narrative) → build_phase4_prompt(blueprint) → dynamic prompt
-
-Design Principles:
-    1. Blueprints are keyed by (ReasoningMode, QueryScope) — NEVER by query strings.
-    2. Fully deterministic. Zero LLM dependency.
-    3. The system remains generic and enterprise-grade.
-    4. Blueprints control: which sections appear, narrative depth, governance visibility.
-    5. New intents or modes can be added without touching other modules.
+RESPONSE BLUEPRINT SYSTEM (response_blueprint.py)
+Information choreography engine that maps reasoning modes (FACTUAL, OPERATIONAL, STRATEGIC, EXECUTIVE)
+and query scopes (ENTITY, PORTFOLIO, MIXED) to deterministic response layouts.
 """
 
+# --- SECTION 1: Base Imports & Reasoning Mode Enums ---
+# Imports enumeration models and defines generic reasoning mode categories.
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
-
-
-# ═══════════════════════════════════════════════════════════════
-# REASONING MODES
-# ═══════════════════════════════════════════════════════════════
 
 class ReasoningMode(str, Enum):
     """Four generic reasoning modes — not tied to specific queries."""

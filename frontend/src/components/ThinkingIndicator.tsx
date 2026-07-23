@@ -1,5 +1,11 @@
 'use client'
 
+// ThinkingIndicator: animated "AI is working" status pill that crossfades
+// status labels and rotates idle reassurance phrases when silent.
+// Major sections:
+// - State/hooks: status sync + idle rotation timers
+// - Render: pulsing brain icon, crossfading status text
+
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Brain } from 'lucide-react'
@@ -10,6 +16,7 @@ interface ThinkingIndicatorProps {
 }
 
 export function ThinkingIndicator({ status }: ThinkingIndicatorProps) {
+  // --- SECTION: State/Hooks ---
   const shouldReduceMotion = useReducedMotion()
   const [displayStatus, setDisplayStatus] = useState('')
   const [idleIndex, setIdleIndex] = useState(0)
@@ -32,6 +39,7 @@ export function ThinkingIndicator({ status }: ThinkingIndicatorProps) {
     return () => clearTimeout(timer)
   }, [displayStatus, idleIndex])
 
+  // --- SECTION: Render ---
   return (
     <div className="flex items-center gap-3 py-3 px-4 bg-secondary/30 border border-border rounded-lg max-w-md h-12 select-none">
       {/* Pulse/Glow Brain Icon */}

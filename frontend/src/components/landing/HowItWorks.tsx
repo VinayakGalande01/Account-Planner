@@ -1,9 +1,19 @@
+// --------------------------------------------------------------------
+// HowItWorks.tsx
+// Landing "Protocol" section explaining the product flow in three
+// steps: connect CRM data, automatic health analysis, and act on
+// alerts/AI to retain clients.
+// --- SECTION: Step data ---
+// --- SECTION: Section render (header + step cards) ---
+// --------------------------------------------------------------------
+
 'use client';
 
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Database, Cpu, Crosshair, LucideIcon } from 'lucide-react';
 
+// --- SECTION: Step data ---
 interface StepItem {
   n: string;
   icon: LucideIcon;
@@ -35,6 +45,7 @@ const STEPS: StepItem[] = [
   },
 ];
 
+// --- SECTION: Section render (header + step cards) ---
 export const HowItWorks: React.FC = () => {
   return (
     <section

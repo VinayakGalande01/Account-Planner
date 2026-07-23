@@ -1,5 +1,16 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original login/signup screen: toggles between Sign In and Create Account modes,
+// does client-side validation, and submits via AuthContext's login/signup calls.
+// Includes theme toggle, ambient background glows, and animated form transitions.
+//
+// --- SECTION: AuthPage Component — form state + validation/submit logic ---
+// --- SECTION: Render — Theme Toggle & Ambient Backgrounds ---
+// --- SECTION: Render — Card (Logo/Header, Error States) ---
+// --- SECTION: Render — Form Fields (Name/Email/Password) & Submit Button ---
+// --- SECTION: Render — Mode Toggle / Back Link ---
+
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';

@@ -1,19 +1,25 @@
+"""
+GOLDEN DATASET SEEDER (seed_golden_dataset.py)
+Seeds evaluation benchmark records (32 gold-standard query cases across 8 intent categories)
+into PostgreSQL or SQLite databases for evaluation testing and accuracy benchmarking.
+"""
+
+# --- SECTION 1: Dependencies & Import Setup ---
+# Imports database engines, environment variables, and evaluation model schemas.
 import os
 import sys
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Ensure the backend directory is in the python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Load environment variables from .env file
 load_dotenv()
 
 from database import SessionLocal, get_engine, DATABASE_URL
 from models.eval_models import GoldenDataset
 
-# Seed data containing 32 cases (4 cases per intent for 8 intents)
+# --- SECTION 2: Gold-Standard Seed Benchmark Cases ---
+# Defines ground-truth test cases for risk assessment, expansion, competitive, and relationship queries.
 SEED_CASES = [
     # ─── 1. RISK_ASSESSMENT ───
     {

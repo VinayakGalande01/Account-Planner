@@ -1,3 +1,11 @@
+"""
+PRE-REASONING LAYER (pre_reasoning_layer.py)
+Filters, extracts, and validates relevant CRM entity evidence (Opportunities, Contacts, Cases, Activities)
+prior to passing context down to the reasoning and recommendation engines.
+"""
+
+# --- SECTION 1: Dependencies & Pydantic Evidence Models ---
+# Imports Pydantic models for structured evidence extraction and typing schemas.
 import os
 import json
 import time
@@ -5,10 +13,8 @@ import re
 from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field
 
-# ═══════════════════════════════════════════════════════════════
-# PYDANTIC OUTPUT MODELS
-# ═══════════════════════════════════════════════════════════════
-
+# --- SECTION 2: Evidence Models & Data Schemas ---
+# Pydantic models representing opportunity, contact, case, and activity evidence structures.
 class OpportunityEvidence(BaseModel):
     id: str
     name: str

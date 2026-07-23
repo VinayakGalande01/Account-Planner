@@ -1,9 +1,19 @@
+"""
+CRM DATA MODELS (models/crm_models.py)
+SQLAlchemy ORM schema definitions for core CRM entities:
+Account, Opportunity, Contact, Case, and Activity, scoped by user_id for multi-tenancy.
+"""
+
+# --- SECTION 1: Dependencies & Imports ---
+# Imports SQLAlchemy data types, relationship mapper, and declarative base.
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
 from datetime import datetime
 
+# --- SECTION 2: Core Account & Opportunity Entities ---
+# Defines primary CRM Account entity and associated sales Opportunity pipeline records.
 class Account(Base):
     __tablename__ = "accounts"
 
@@ -58,6 +68,8 @@ class Contact(Base):
     activities = relationship("Activity", back_populates="contact")
 
 
+# --- SECTION 3: Contact, Support Case, & Engagement Activity Entities ---
+# Defines stakeholder Contact records, support Cases, and engagement Activity logs.
 class Case(Base):
     __tablename__ = "cases"
 
@@ -89,6 +101,8 @@ class Activity(Base):
     contact = relationship("Contact", back_populates="activities")
 
 
+# --- SECTION 4: Chat Persistence Models ---
+# Models for persisting user chat sessions and message histories across requests.
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 

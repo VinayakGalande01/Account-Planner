@@ -1,5 +1,12 @@
 'use client'
 
+// Header: sticky top app bar with breadcrumb, global search trigger
+// (Cmd/Ctrl+K), and notifications bell, wiring CommandPalette and
+// NotificationDropdown.
+// Major sections:
+// - State/hooks + global keydown listener + breadcrumb resolver
+// - Render: breadcrumb nav, search trigger, notification bell, modals
+
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { usePathname } from 'next/navigation'
@@ -9,6 +16,7 @@ import { CommandPalette } from '@/components/CommandPalette'
 import { NotificationDropdown } from '@/components/NotificationDropdown'
 
 export function Header() {
+  // --- SECTION: State/Hooks ---
   const pathname = usePathname()
   const { isSidebarOpen, setSidebarOpen } = useSidebar()
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
@@ -38,6 +46,7 @@ export function Header() {
 
   const { page, subtitle } = getBreadcrumb()
 
+  // --- SECTION: Render ---
   return (
     <>
       <motion.header

@@ -1,5 +1,11 @@
 'use client'
 
+// AccountHealthWidget: dashboard card showing a single account's health
+// score, key metrics grid, and an engagement-mix pie chart.
+// Major sections:
+// - Static chart data
+// - Render: header, metrics grid, health gauge + pie chart, legend
+
 import { motion } from 'framer-motion'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import { TrendingUp } from 'lucide-react'
@@ -13,6 +19,7 @@ const data = [
 export function AccountHealthWidget() {
   const healthScore = 78
 
+  // --- SECTION: Render ---
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

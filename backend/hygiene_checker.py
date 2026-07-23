@@ -1,7 +1,17 @@
+"""
+CRM DATA HYGIENE CHECKER (hygiene_checker.py)
+Performs database audit checks for CRM data quality:
+past-due close dates, missing contact details, unassigned accounts, and stale activity logs.
+"""
+
+# --- SECTION 1: Dependencies & Import Setup ---
+# Imports SQLAlchemy session dependencies, date utilities, and CRM model definitions.
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from models.crm_models import Account, Opportunity, Contact, Case, Activity
 
+# --- SECTION 2: CRM Data Quality Audit Routine ---
+# Queries user-isolated CRM records to detect stale opportunities, missing info, and unassigned accounts.
 def check_data_hygiene(db: Session, user_id: int) -> list:
     """Runs a series of database queries to check for CRM data quality warnings scoped by user_id."""
     warnings = []

@@ -1,8 +1,17 @@
 'use client';
 
+// ConfidenceWidget — APEX pipeline Level 6 widget.
+// Renders an always-visible grounding/confidence pill with a mini
+// progress bar and source list, replacing an older collapsible toggle.
+// Sections in this file:
+//   - Props/types
+//   - Data shaping (score parsing, color thresholds)
+//   - Render (pill + progress bar + sources)
+
 import React from 'react';
 import type { ConfidenceData } from '../../types/responseContract';
 
+// --- SECTION: Props ---
 interface ConfidenceWidgetProps {
   data: ConfidenceData;
 }
@@ -16,6 +25,7 @@ interface ConfidenceWidgetProps {
 export function ConfidenceWidget({ data }: ConfidenceWidgetProps) {
   if (!data) return null;
 
+  // --- SECTION: Data shaping ---
   // Parse percentage from score string (e.g., "85%" → 85)
   const scoreNum = parseFloat(data.score) || 0;
   const isHigh = scoreNum >= 80;
@@ -39,6 +49,7 @@ export function ConfidenceWidget({ data }: ConfidenceWidgetProps) {
     ? 'bg-amber-500/8'
     : 'bg-red-500/8';
 
+  // --- SECTION: Render ---
   return (
     <div
       className={`apex-confidence-pill ${bgColor} border border-white/[0.04] rounded-lg px-4 py-2.5 flex items-center gap-3`}

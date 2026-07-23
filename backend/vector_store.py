@@ -1,10 +1,16 @@
+"""
+LOCAL VECTOR STORE (vector_store.py)
+Stores activity logs in ChromaDB with SentenceTransformer embeddings for semantic search.
+Includes graceful fallback to in-memory keyword matching when ChromaDB is unavailable.
+"""
+
+# --- SECTION 1: Dependency Import & Fallback Flags ---
+# Evaluates environmental flags and gracefully imports ChromaDB / SentenceTransformer.
 import os
 import re
 
-# Support disabling ChromaDB to save RAM on free-tier hosting (e.g. Render 512MB limit)
 DISABLE_CHROMA = os.getenv("DISABLE_CHROMA", "false").lower() in ("true", "1")
 
-# Defensively handle imports to support graceful degradation
 CHROMA_AVAILABLE = False
 if not DISABLE_CHROMA:
     try:
@@ -18,6 +24,8 @@ else:
 
 _GLOBAL_VECTOR_EMBEDDING_MODEL = None
 
+# --- SECTION 2: Vector Database Store Implementation ---
+# Manages persistent vector indexing, semantic search queries, and memory fallback.
 class LocalVectorStore:
     def __init__(self, db_path: str = "./chroma_db"):
         global _GLOBAL_VECTOR_EMBEDDING_MODEL

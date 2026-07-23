@@ -1,5 +1,14 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original marketing/landing page shown to signed-out users: composes Navbar, Hero,
+// PreviewSection, Features, and HowItWorks sections, plus a scanline overlay and footer.
+//
+// --- SECTION: LandingPage Component ---
+//   - Scanline/Grid Background overlay
+//   - Composed section: Navbar, Hero, PreviewSection, Features, HowItWorks
+//   - Footer
+
 import React from 'react';
 import { Navbar } from './landing/Navbar';
 import { Hero } from './landing/Hero';

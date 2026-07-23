@@ -1,3 +1,12 @@
+// --------------------------------------------------------------------
+// Navbar.tsx
+// Fixed landing page navigation header: logo/brand, desktop nav links,
+// theme toggle, login CTA, and a collapsible mobile menu.
+// --- SECTION: Nav data ---
+// --- SECTION: State & theme hook ---
+// --- SECTION: Render (desktop nav + mobile menu) ---
+// --------------------------------------------------------------------
+
 'use client';
 
 import React, { useState } from 'react';
@@ -5,6 +14,7 @@ import { Sun, Moon, Hexagon, Menu, X } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { motion } from 'framer-motion';
 
+// --- SECTION: Nav data ---
 const NAV = [
   { label: 'CAPABILITIES', href: '#capabilities' },
   { label: 'PREVIEW', href: '#preview' },
@@ -16,9 +26,11 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onRequestAccess }) => {
+  // --- SECTION: State & theme hook ---
   const { theme, toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
 
+  // --- SECTION: Render (desktop nav + mobile menu) ---
   return (
     <motion.header
       data-testid="landing-navbar"

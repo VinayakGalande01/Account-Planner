@@ -1,8 +1,18 @@
+"""
+NARRATIVE BUILDER ENGINE (narrative_builder.py)
+Transforms CRM intelligence signals into causality narratives, alternative hypothesis scenarios,
+and disambiguation tests for strategic decision-making.
+"""
+
+# --- SECTION 1: Dependencies & Class Initialization ---
+# Imports JSON, regex utilities, and typing structures for narrative generation.
 import os
 import json
 import re
 from typing import Optional, List, Dict, Any
 
+# --- SECTION 2: Strategic Causality Narrative Builder ---
+# Builds primary narrative chains, alternative hypotheses, and disambiguation test prompts.
 class NarrativeBuilder:
     """
     Transforms CRM and intelligence signals into strategic causality narratives.

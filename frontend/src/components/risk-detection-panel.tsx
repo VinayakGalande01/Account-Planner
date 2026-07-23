@@ -1,5 +1,12 @@
 'use client'
 
+// RiskDetectionPanel: dashboard card listing AI-detected account risks
+// (stalled deals, single-threaded contacts, competitor activity) by
+// severity.
+// Major sections:
+// - Static risk data + severity style config
+// - Render: header, risk list, review-all action button
+
 import { motion } from 'framer-motion'
 import { AlertTriangle, TrendingDown, Clock, Users } from 'lucide-react'
 
@@ -57,6 +64,7 @@ const severityConfig = {
 }
 
 export function RiskDetectionPanel() {
+  // --- SECTION: Render ---
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

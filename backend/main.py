@@ -1,38 +1,42 @@
+"""
+MAIN REST API SERVER (main.py)
+Primary FastAPI application entrypoint providing endpoints for AI Chat, CRM data queries,
+quick actions, data sync, rate limiting, and telemetry instrumentation.
+"""
+
+# --- SECTION 1: Environment Setup & Core Dependencies ---
+# Configures environment variables, offline transformer modes, and imports FastAPI middleware.
 import os
+import sys
 from dotenv import load_dotenv
-# Get absolute path to the backend/.env file
+
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(backend_dir, ".env")
 load_dotenv(dotenv_path=env_path, override=True)
 
-from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import os
-import sys
-from response_formatter import format_response_for_user
-
-# Force Hugging Face offline mode to prevent network hangs on import/initialization
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
-# Set stdout/stderr encoding to utf-8 to prevent Windows terminal cp1252 issues
 try:
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
 except AttributeError:
-    pass # fallback for older python versions
+    pass
+
+from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import httpx
 import json
 import asyncio
 import pandas as pd
-from fastapi.responses import StreamingResponse
 
-# Ensure the current directory (backend) is in the python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data_engine import DataEngine
+from response_formatter import format_response_for_user
 from intelligence_layer import (
     generate_strategic_synthesis, curate_llm_context,
     RESPONSE_BUDGET, HumanizedPriority, SignalClassifier
@@ -46,7 +50,8 @@ from agent_pipeline import (
 )
 import openai
 
-# Detect if running local or cloud
+# --- SECTION 2: Logging, Rate Limiter, & App Initialization ---
+# Initializes FastAPI instance, configures slowapi rate limiting, CORS headers, and tracing middleware.
 IS_LOCAL_OLLAMA = os.getenv("LOCAL_OLLAMA", "true").lower() == "true"
 
 import logging
@@ -1275,16 +1280,41 @@ async def get_chat_sessions(current_user: User = Depends(get_current_user)):
             ChatSession.user_id == current_user.id
         ).order_by(ChatSession.created_at.desc()).all()
         
+        from sqlalchemy import func
+        
+        # Subquery to get the minimum (first) message ID for each session
+        subq = db_sess.query(
+            ChatMessage.session_id,
+            func.min(ChatMessage.id).label("min_id")
+        ).filter(
+            ChatMessage.user_id == current_user.id
+        ).group_by(
+            ChatMessage.session_id
+        ).subquery()
+        
+        # Fetch first messages for all sessions in one query
+        first_messages = db_sess.query(
+            ChatMessage.session_id,
+            ChatMessage.text
+        ).join(
+            subq,
+            ChatMessage.id == subq.c.min_id
+        ).all()
+        
+        # Map first messages by session ID
+        first_msg_map = {m.session_id: m.text for m in first_messages}
+        
         result = []
         for s in sessions:
-            first_msg = db_sess.query(ChatMessage).filter(
-                ChatMessage.session_id == s.id,
-                ChatMessage.user_id == current_user.id
-            ).order_by(ChatMessage.timestamp.asc()).first()
-            
+            msg_text = first_msg_map.get(s.id)
             title = "New Chat"
-            if first_msg:
-                title = first_msg.text[:25] + "..." if len(first_msg.text) > 25 else first_msg.text
+            if msg_text:
+                # Remove sys_meta_log progress prefixes from visual session titles
+                clean_title = msg_text
+                if "sys_meta_log|" in clean_title:
+                    clean_title = "\n".join([line for line in clean_title.split("\n") if not line.startswith("sys_meta_log|")])
+                clean_title = clean_title.strip()
+                title = clean_title[:25] + "..." if len(clean_title) > 25 else clean_title
             
             result.append({
                 "id": s.id,
@@ -1585,7 +1615,7 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             
         generator_db = SessionLocal()
         try:
-            user_engine = get_user_data_engine(generator_db, current_user)
+            user_engine = await asyncio.to_thread(get_user_data_engine, generator_db, current_user)
             
             # Dynamically determine LLM provider from frontend request headers
             provider_header = request.headers.get("x-llm-provider", "local").lower()

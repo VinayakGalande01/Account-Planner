@@ -1,5 +1,12 @@
 'use client'
 
+// AnimatedCounter: count-up number span that animates from `from` to `to`
+// once scrolled into view, with optional delay/suffix.
+// Major sections:
+// - Props
+// - State/hooks: intersection observer + counting interval
+// - Render: counter span
+
 import { motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 
@@ -12,6 +19,7 @@ interface AnimatedCounterProps {
 }
 
 export function AnimatedCounter({ from, to, duration = 2, suffix = '', delay = 0 }: AnimatedCounterProps) {
+  // --- SECTION: State/Hooks ---
   const [count, setCount] = useState(from)
   const ref = useRef(null)
   const [isInView, setIsInView] = useState(false)
@@ -47,6 +55,7 @@ export function AnimatedCounter({ from, to, duration = 2, suffix = '', delay = 0
     return () => clearTimeout(timer)
   }, [isInView, from, to, duration, delay])
 
+  // --- SECTION: Render ---
   return (
     <span ref={ref}>
       {Math.floor(count)}

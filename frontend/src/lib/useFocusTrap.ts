@@ -1,3 +1,11 @@
+/**
+ * ACCESSIBILITY FOCUS TRAP HOOK (src/lib/useFocusTrap.ts)
+ * Traps Keyboard Tab focus within active modal/dialog overlays and restores focus
+ * to triggering elements upon Escape key dismissals.
+ */
+
+// --- SECTION 1: Dependencies & Hook Options Schema ---
+// Imports React effect and ref hooks and defines focus trap configuration options.
 import { useEffect, useRef } from 'react'
 
 interface UseFocusTrapOptions {
@@ -5,6 +13,8 @@ interface UseFocusTrapOptions {
   onClose?: () => void
 }
 
+// --- SECTION 2: Focus Trap Hook Implementation ---
+// Queries focusable DOM nodes, traps Tab/Shift-Tab navigation, and listens for Escape key presses.
 export function useFocusTrap<T extends HTMLElement = HTMLDivElement>({
   isOpen,
   onClose,

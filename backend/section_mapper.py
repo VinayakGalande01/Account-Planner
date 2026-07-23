@@ -1,7 +1,17 @@
+"""
+SECTION CONTRACT MAPPER (section_mapper.py)
+Translates Pydantic Layer 3 role-specific outputs (AM, VP, SVP) into legacy
+section tag streams (__SECTION_INTENT__, __SECTION_EXECUTIVE_SUMMARY__) expected by the frontend.
+"""
+
+# --- SECTION 1: Dependencies & Imports ---
+# Imports JSON serializers, typing constructs, and Pydantic response models.
 import json
 from typing import Union, List, Optional
 from reasoning_engine import AMResponseOutput, VPResponseOutput, SVPResponseOutput, ConsensusOutput
 
+# --- SECTION 2: Section Streaming Contract Mapper ---
+# Maps structured consensus outputs to section tag delimiters for streaming HTTP responses.
 class SectionContractMapper:
     """
     Translates Pydantic Layer 3 role-specific outputs into the legacy streaming 

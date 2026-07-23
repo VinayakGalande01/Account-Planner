@@ -1,3 +1,14 @@
+/* LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+   Original global stylesheet for the "Tactical Command Center" design system:
+   Tailwind theme tokens, light/dark CSS variables, and a large library of
+   custom utility classes, keyframe animations, and decorative effects
+   (glass cards, scanlines, corner brackets, ghost-loading skeletons, etc).
+   --- SECTION: Tailwind @theme tokens (colors, radius, fonts) ---
+   --- SECTION: @layer base (:root / .dark CSS variables, resets) ---
+   --- SECTION: Component classes (.glass-card, .data-cell, .corner-brackets, ...) ---
+   --- SECTION: Keyframes & animation utility classes ---
+*/
+
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -43,6 +54,7 @@
   --font-body: var(--font-chivo);
 }
 
+/* --- SECTION: @layer base (:root / .dark CSS variables, resets) --- */
 @layer base {
   :root {
     /* LIGHT MODE (Default fallback) */
@@ -132,6 +144,7 @@
   }
 }
 
+/* --- SECTION: Component classes (.glass-card, .data-cell, .corner-brackets, ...) --- */
 /* ═══════════════════════════════════════════════════════════
    GLASS SURFACES
    ═══════════════════════════════════════════════════════════ */
@@ -183,6 +196,7 @@
    ANIMATIONS & KEYFRAMES
    ═══════════════════════════════════════════════════════════ */
 
+/* --- SECTION: Keyframes & animation utility classes --- */
 @keyframes loading-bar {
   0% { transform: scaleX(0); transform-origin: left; }
   50% { transform: scaleX(0.7); transform-origin: left; }

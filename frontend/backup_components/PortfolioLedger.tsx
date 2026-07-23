@@ -1,5 +1,15 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original account directory table: sortable/filterable/searchable ledger of accounts
+// with tier badges, health-score bars, formatted currency, and per-row hover actions.
+// Shows an animated ghost-skeleton + terminal-style log while data is loading.
+//
+// --- SECTION: Formatting/Style Helpers (currency, relative time, tier, health color) ---
+// --- SECTION: PortfolioLedger Component (sort/filter state, derived data) ---
+//   - Header Bar (search + tier filter)
+//   - Table Content (loading skeleton / empty state / data rows)
+
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, ChevronUp, MoreHorizontal, Flag, Terminal, Edit, ChevronsUpDown } from 'lucide-react';

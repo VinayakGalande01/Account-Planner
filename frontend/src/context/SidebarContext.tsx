@@ -1,6 +1,14 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+/**
+ * SIDEBAR NAVIGATION & CHAT SESSION CONTEXT (SidebarContext.tsx)
+ * Manages sidebar open/collapse toggle states, chat history sessions, session creation,
+ * deletion, and active conversation switching.
+ */
+
+// --- SECTION 1: Dependencies & Session Interfaces ---
+// Imports React hooks, AuthContext dependencies, and defines ChatSessionInfo type schemas.
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { useAuth } from './AuthContext'
 
 export interface ChatSessionInfo {
@@ -19,15 +27,19 @@ interface SidebarContextType {
   loadSessions: () => Promise<void>
   createSession: () => string
   deleteSession: (id: string) => Promise<boolean>
+  isSessionsLoading: boolean
 }
 
+// --- SECTION 2: Sidebar Provider State & Session Operations ---
+// Provides sidebar collapse state and handles async REST session persistence operations.
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined)
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const { user, authFetch } = useAuth()
+  const { user, authFetch, loading: authLoading } = useAuth()
   const [isSidebarOpen, setSidebarOpenState] = useState<boolean>(true)
   const [activeSessionId, setActiveSessionIdState] = useState<string | null>(null)
   const [sessions, setSessions] = useState<ChatSessionInfo[]>([])
+  const [isSessionsLoading, setIsSessionsLoading] = useState<boolean>(true)
 
   // Load sidebar state from localStorage on mount
   useEffect(() => {
@@ -68,16 +80,46 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const latestRequestId = useRef(0)
+
   const loadSessions = async () => {
-    if (!user) return
+    if (authLoading) return
+    if (!user) {
+      setIsSessionsLoading(false)
+      return
+    }
+    
+    latestRequestId.current += 1
+    const myRequestId = latestRequestId.current
+    
+    setIsSessionsLoading(true)
+
+    const fetchWithRetry = async (): Promise<Response> => {
+      try {
+        const res = await authFetch('/api/chat/sessions')
+        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
+        return res
+      } catch (err) {
+        console.warn('[RETRY] Initial request for chat sessions failed. Retrying in 1s...', err)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        const res = await authFetch('/api/chat/sessions')
+        if (!res.ok) throw new Error(`Retry failed: ${res.status}`)
+        return res
+      }
+    }
+
     try {
-      const res = await authFetch('/api/chat/sessions')
-      if (res.ok) {
-        const data = await res.json()
+      const res = await fetchWithRetry()
+      const data = await res.json()
+      if (myRequestId === latestRequestId.current) {
         setSessions(data || [])
       }
     } catch (err) {
       console.error('Failed to load chat sessions:', err)
+    } finally {
+      if (myRequestId === latestRequestId.current) {
+        setIsSessionsLoading(false)
+      }
     }
   }
 
@@ -90,31 +132,26 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const deleteSession = async (id: string) => {
     if (!user) return false
     
-    const isRealSession = sessions.some(s => s.id === id)
-    if (!isRealSession) {
-      if (activeSessionId === id) {
+    // Always filter out locally immediately so the UI is responsive
+    const remainingSessions = sessions.filter(s => s.id !== id)
+    setSessions(remainingSessions)
+    
+    if (activeSessionId === id) {
+      if (remainingSessions.length > 0) {
+        setActiveSessionId(remainingSessions[0].id)
+      } else {
         setActiveSessionId('default_session')
       }
-      return true
     }
 
     try {
       const res = await authFetch(`/api/chat/sessions/${id}`, {
         method: 'DELETE',
       })
-      if (res.ok || res.status === 404) {
-        await loadSessions()
-        if (activeSessionId === id) {
-          const remainingSessions = sessions.filter(s => s.id !== id)
-          if (remainingSessions.length > 0) {
-            setActiveSessionId(remainingSessions[0].id)
-          } else {
-            setActiveSessionId('default_session')
-          }
-        }
-        return true
-      }
-      return false
+      
+      // Re-sync with database in the background to ensure consistency
+      await loadSessions()
+      return res.ok || res.status === 404
     } catch (err) {
       console.error('Failed to delete chat session:', err)
       return false
@@ -123,13 +160,16 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   // Load sessions when user changes
   useEffect(() => {
-    if (user) {
-      loadSessions()
-    } else {
-      setSessions([])
-      setActiveSessionId('default_session')
+    if (!authLoading) {
+      if (user) {
+        loadSessions()
+      } else {
+        setSessions([])
+        setIsSessionsLoading(false)
+        setActiveSessionId('default_session')
+      }
     }
-  }, [user])
+  }, [user?.id, authLoading])
 
   return (
     <SidebarContext.Provider
@@ -143,6 +183,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         loadSessions,
         createSession,
         deleteSession,
+        isSessionsLoading,
       }}
     >
       {children}

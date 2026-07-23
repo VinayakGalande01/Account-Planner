@@ -1,5 +1,13 @@
 'use client'
 
+/**
+ * DASHBOARD VIEW SHELL (dashboard-shell.tsx)
+ * Orchestrates main authenticated layout boundaries, combining collapsible sidebars,
+ * top headers, nested children page views, and floating AI Copilot button toggles.
+ */
+
+// --- SECTION 1: Dependencies & Core Components ---
+// Imports motion animation frameworks, sidebars, headers, and copilot panels.
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Sidebar } from '@/components/Sidebar'
@@ -7,6 +15,8 @@ import { Header } from '@/components/header'
 import { AICopilotPanel } from '@/components/ai-copilot-panel'
 import { Sparkles } from 'lucide-react'
 
+// --- SECTION 2: Dashboard Shell Layout ---
+// Renders sidebar grid coordinates, main page sections, and floating action copilot elements.
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [isCopilotOpen, setIsCopilotOpen] = useState(false)
 

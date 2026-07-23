@@ -1,9 +1,18 @@
 'use client';
 
+// RecommendedActionsWidget — APEX pipeline Level 7 widget.
+// Renders backend-generated "what's next" suggestions as animated
+// pill/chip buttons; clicking a chip re-submits it as a user query.
+// Sections in this file:
+//   - Props/types
+//   - Helpers (priority icon lookup)
+//   - Render (divider, label, animated chip grid)
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import type { RecommendedAction } from '../../types/responseContract';
 
+// --- SECTION: Props ---
 interface RecommendedActionsWidgetProps {
   actions: RecommendedAction[];
   onActionClick?: (action: RecommendedAction) => void;
@@ -21,6 +30,7 @@ interface RecommendedActionsWidgetProps {
 export function RecommendedActionsWidget({ actions, onActionClick }: RecommendedActionsWidgetProps) {
   if (!actions || actions.length === 0) return null;
 
+  // --- SECTION: Helpers ---
   const getPriorityIcon = (priority?: string) => {
     switch (priority) {
       case 'high':
@@ -32,6 +42,7 @@ export function RecommendedActionsWidget({ actions, onActionClick }: Recommended
     }
   };
 
+  // --- SECTION: Render ---
   return (
     <div className="apex-recommended-actions">
       {/* Gradient divider */}

@@ -1,35 +1,11 @@
 """
-APEX Reasoning Engine — Intelligence Evolution Layer
-
-Architecture Position:
-    CRM Data (DataEngine)
-    ↓
-    Deterministic Intelligence (intelligence_layer.py)
-    ↓
-    THIS MODULE → Reasoning Layer
-    ↓
-    Recommendation Layer (also here)
-    ↓
-    curate_llm_context() → LLM → Response
-
-Design Principles:
-    1. Zero LLM calls. Fully deterministic and blazing fast.
-    2. Derives recommendations from observed state, not from hardcoded intent templates.
-    3. Every action is evidence-based: it references specific data facts.
-    4. The system first infers the underlying business decision, then generates recommendations
-       that serve that decision — not the surface query wording.
-    5. Generalises to any future query without new rules.
-
-Core Modules:
-    - DecisionFramework   : Infer the business decision behind any query
-    - StakeholderRanker   : Rank contacts by role relevance, stage fit, engagement, recency
-    - OpportunityAnalyzer : Assess per-opportunity state: momentum, risk, stakeholder coverage
-    - AccountAnalyzer     : Assess account-level context: health, engagement, revenue exposure
-    - NextBestActionEngine: Dynamically generate evidence-based, specific actions from observed state
-    - BusinessImpactModel : Estimate expected outcome and ignore-risk per action
-    - assemble_reasoning_package(): Master orchestrator → ReasoningPackage
+REASONING ENGINE (reasoning_engine.py)
+Fully deterministic reasoning layer that infers business decisions, ranks stakeholders,
+evaluates deal momentum, and generates evidence-based Next-Best-Actions without LLM latency.
 """
 
+# --- SECTION 1: Base Imports & Logging Setup ---
+# Imports dataclasses, pandas utilities, date arithmetic, and initializes reasoning loggers.
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -39,11 +15,8 @@ import logging
 
 logger = logging.getLogger("reasoning_engine")
 
-
-# ═══════════════════════════════════════════════════════════════
-# DATA STRUCTURES
-# ═══════════════════════════════════════════════════════════════
-
+# --- SECTION 2: Pipeline State & Decision Context Models ---
+# Data structures representing execution pipeline state, decision context, and multi-dimensional confidence.
 @dataclass
 class PipelineState:
     stage_reached: int = 0  # 1-6

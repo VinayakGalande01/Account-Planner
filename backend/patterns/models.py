@@ -1,3 +1,11 @@
+"""
+INTELLIGENCE PATTERN MODELS (patterns/models.py)
+Dataclass definitions for domain intelligence detection rules:
+Pattern definitions, compiled Findings, and overall IntelligenceBrief summaries.
+"""
+
+# --- SECTION 1: Base Imports & Pattern Rule Definition ---
+# Defines declarative Pattern dataclasses for matching CRM anomalies and opportunities.
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -16,6 +24,8 @@ class Pattern:
     confidence_weight: float       # 0.0–1.0. How reliable is this detection rule.
     tags: List[str]
 
+# --- SECTION 2: Finding & Intelligence Brief Dataclasses ---
+# Models detected finding instances and composite account intelligence briefs.
 @dataclass
 class Finding:
     id: str                        # "{pattern_id}_{account_id}"

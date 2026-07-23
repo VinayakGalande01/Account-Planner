@@ -1,5 +1,13 @@
 'use client'
 
+/**
+ * COLLAPSIBLE SIDEBAR COMPONENT (Sidebar.tsx)
+ * Renders main collapsible dashboard sidebar menu links, active page highlighting,
+ * and user chat session history list with creation and deletion capabilities.
+ */
+
+// --- SECTION 1: Dependencies & Icon Libraries ---
+// Imports animation tools, routing hooks, context hooks, and Lucide icon assets.
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
@@ -27,6 +35,9 @@ import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
 import { toast } from 'sonner'
 import Image from 'next/image'
+
+// --- SECTION 2: Sidebar Component & Routing Configuration ---
+// Configures navigation route metadata and displays primary/secondary menus.
 
 const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },

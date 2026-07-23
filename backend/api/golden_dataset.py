@@ -1,3 +1,11 @@
+"""
+GOLDEN DATASET API (api/golden_dataset.py)
+REST endpoints for managing evaluation golden datasets, ground-truth benchmarks,
+and automated test expectations for AI reasoning verification.
+"""
+
+# --- SECTION 1: Dependencies & Router Initialization ---
+# Imports FastAPI router, SQLAlchemy sessions, auth dependencies, and schemas.
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -12,10 +20,11 @@ from schemas.eval_schemas import GoldenDatasetCreate, GoldenDatasetUpdate, Golde
 router = APIRouter(prefix="/api/eval/golden", tags=["Golden Dataset"])
 
 def set_db_user_context(db: Session, user_id: int):
-    # Set context variables for database auditing/RLS
     current_user_id_var.set(str(user_id))
     db.info["user_id"] = str(user_id)
 
+# --- SECTION 2: Evaluation Benchmark Endpoints ---
+# Endpoints for creating, fetching, updating, and deleting golden dataset test cases.
 @router.post("", response_model=GoldenDatasetResponse, status_code=status.HTTP_201_CREATED)
 def create_golden_case(
     case_in: GoldenDatasetCreate,

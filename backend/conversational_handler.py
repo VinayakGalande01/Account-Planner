@@ -1,3 +1,11 @@
+"""
+CONVERSATIONAL QUERY HANDLER (conversational_handler.py)
+Handles non-analytical, casual greetings, user help queries, and system explanations
+using a warm, plain-English LLM prompt configuration with graceful fallback support.
+"""
+
+# --- SECTION 1: Dependencies & LLM Config Helper ---
+# Imports HTTP clients, logger instances, and reads cached LLM endpoint URLs.
 import os
 import json
 import httpx
@@ -7,7 +15,6 @@ from typing import Dict, Any
 logger = logging.getLogger("conversational_handler")
 
 def get_active_llm_config() -> tuple:
-    """Helper to load cached or environment-configured LLM URL and model name."""
     cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "llm_cache.json")
     if os.path.exists(cache_path):
         try:
@@ -24,6 +31,8 @@ def get_active_llm_config() -> tuple:
     primary_model = os.getenv("MODEL_NAME", "llama3.2:latest")
     return primary_url, primary_model
 
+# --- SECTION 2: Conversational LLM Handler ---
+# Formats system instructions, handles HTTP client POST execution, and returns structured responses.
 def handle_conversational_query(user_message: str) -> Dict[str, Any]:
     """
     Calls the LLM to generate a conversational, plain English response.

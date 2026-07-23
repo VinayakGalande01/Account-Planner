@@ -1,9 +1,17 @@
+// --------------------------------------------------------------------
+// PreviewSection.tsx
+// Landing "Live Preview" section: intro heading/copy followed by an
+// animated, full-size embed of the DashboardPreview component.
+// --- SECTION: Component ---
+// --------------------------------------------------------------------
+
 'use client';
 
 import React from 'react';
 import { motion } from 'framer-motion';
 import { DashboardPreview } from './DashboardPreview';
 
+// --- SECTION: Component ---
 export const PreviewSection: React.FC = () => {
   return (
     <section

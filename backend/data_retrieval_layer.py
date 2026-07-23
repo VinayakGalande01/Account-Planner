@@ -1,27 +1,11 @@
 """
-APEX Phase 2 — Data Retrieval Layer
-
-Pipeline Position:
-    Phase 1 (Planner LLM) → extract_query_context() → JSON
-    ↓
-    THIS MODULE → Phase 2: Data Retrieval Layer
-    ↓
-    Phase 3 (Reasoner LLM) → Structured Intelligence Package
-
-Purpose:
-    Takes the structured JSON output from Phase 1 (intent, decision context,
-    query parameters), queries the in-memory Pandas DataEngine, and formats
-    a clean consolidated data payload string ready for Phase 3 injection.
-
-Design Principles:
-    1. Zero LLM calls. Purely deterministic. Blazing fast.
-    2. Consumes ONLY the Phase 1 JSON contract — no raw user query parsing.
-    3. Outputs a single consolidated text string — the Phase 3 prompt payload.
-    4. Every data section is labelled with a tag (e.g. [ACCOUNTS], [OPPORTUNITIES])
-       so the Phase 3 Reasoner can parse it reliably.
-    5. Applies parameter-driven filtering (limit, time_window, stage_filter)
-       before formatting — the Reasoner never sees irrelevant rows.
+DATA RETRIEVAL LAYER (data_retrieval_layer.py)
+Phase 2 deterministic data retriever that consumes Phase 1 Planner intent JSON contracts,
+executes parameter-driven Pandas filtering, and formats pipe-delimited context for Phase 3.
 """
+
+# --- SECTION 1: Base Imports & Phase 1 Contract Schema ---
+# Imports Pandas utilities, dataclasses, and defines the Phase 1 schema data models.
 
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta

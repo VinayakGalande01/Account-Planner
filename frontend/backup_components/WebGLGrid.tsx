@@ -1,5 +1,15 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original Three.js background effect: a full-viewport point cloud that reacts to
+// the mouse with magnetic repulsion/spring physics, plus a "warp" transition mode.
+//
+// --- SECTION: Scene/Camera/Renderer Setup ---
+// --- SECTION: Particle Cloud Geometry ---
+// --- SECTION: Mouse Raycasting ---
+// --- SECTION: Animation Loop (repulsion, spring-back, transition warp) ---
+// --- SECTION: Resize/Cleanup + Component Render ---
+
 import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 

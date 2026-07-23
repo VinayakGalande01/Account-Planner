@@ -1,8 +1,17 @@
+"""
+PATTERN REGISTRY (patterns/registry.py)
+Central repository of deterministic business intelligence patterns:
+Pipeline Concentration, Stalled Deals, Single Point of Contact, Churn Risks, and Expansion Opportunities.
+"""
+
+# --- SECTION 1: Dependencies & Base Model Import ---
+# Imports pattern dataclass definitions and typing utilities.
 from dataclasses import dataclass
 from typing import List, Optional
 from patterns.models import Pattern
 
-# --- PATTERN: PIPELINE_CONCENTRATION ---
+# --- SECTION 2: Intelligence Pattern Definitions ---
+# Declarative definitions of business rules, templates, severity levels, and confidence weights.
 PIPELINE_CONCENTRATION = Pattern(
     id="PIPELINE_CONCENTRATION",
     version="1.0.0",

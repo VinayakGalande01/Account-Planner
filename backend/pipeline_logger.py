@@ -1,9 +1,11 @@
 """
-APEX Pipeline Logger & Token Accumulator.
-Provides clean boxed terminal/file logs, thread-safe token accumulation,
-and writes structured evaluation records to logs/eval_YYYY-MM-DD.jsonl.
+PIPELINE LOGGER & TOKEN ACCUMULATOR (pipeline_logger.py)
+Provides boxed console/file logging, thread-local token tracking,
+and writes structured evaluation records to JSONL log files.
 """
 
+# --- SECTION 1: Dependencies & Model Pricing Rates ---
+# Defines token cost constants for Gemini 2.5 Flash pricing calculations.
 import os
 import json
 import time
@@ -14,12 +16,12 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("pipeline")
 
-# Pricing per 1M tokens (Gemini 2.5 Flash)
 GEMINI_FLASH_INPUT_COST_PER_1M = 0.075
 GEMINI_FLASH_OUTPUT_COST_PER_1M = 0.30
 
+# --- SECTION 2: Thread-Local Token Accumulator ---
+# Tracks prompt tokens, completion tokens, call durations, and costs across thread pools.
 class TokenAccumulator:
-    """Thread-local token tracker for request lifecycle."""
     _thread_local = threading.local()
 
     @classmethod

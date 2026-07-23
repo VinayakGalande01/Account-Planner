@@ -1,3 +1,11 @@
+"""
+AUTHENTICATION DEPENDENCIES (auth/dependencies.py)
+FastAPI dependency providing JWT token extraction, user validation,
+and setting Row Level Security (RLS) context variables per request.
+"""
+
+# --- SECTION 1: Dependencies & OAuth2 Scheme Setup ---
+# Imports security dependencies, JWT decoders, and sets up OAuth2 password bearer schema.
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from auth.jwt_handler import decode_access_token
@@ -8,6 +16,8 @@ from database import current_user_id_var
 # OAuth2 scheme expects a token endpoint at /auth/login
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+# --- SECTION 2: User Authentication & Context Injection ---
+# Validates bearer token, fetches user model, and attaches user_id to session/context for RLS.
 def get_current_user(token: str = Depends(oauth2_scheme), service: AuthService = Depends()) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

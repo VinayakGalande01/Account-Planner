@@ -1,3 +1,12 @@
+// --------------------------------------------------------------------
+// DashboardPreview.tsx
+// Renders a mock "live" product dashboard used on the landing page:
+// pipeline velocity chart, relational health gauge, account directory,
+// AI assistant terminal snippet, and a risk/warning alert card.
+// --- SECTION: Mock data & helpers ---
+// --- SECTION: Component ---
+// --------------------------------------------------------------------
+
 'use client';
 
 import React from 'react';
@@ -11,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Brackets } from './Brackets';
 
+// --- SECTION: Mock data & helpers ---
 interface AccountMock {
   name: string;
   tier: string;
@@ -34,6 +44,7 @@ interface DashboardPreviewProps {
   compact?: boolean;
 }
 
+// --- SECTION: Component ---
 export const DashboardPreview: React.FC<DashboardPreviewProps> = ({ compact = false }) => {
   return (
     <div

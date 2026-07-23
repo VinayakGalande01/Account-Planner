@@ -1,8 +1,15 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from './AuthContext';
+/**
+ * CRM DATA CONTEXT PROVIDER (DataContext.tsx)
+ * Global CRM data store managing enriched account records, active search queries,
+ * active tab navigation states, account selection, and automatic retry data fetching.
+ */
 
+// --- SECTION 1: Dependencies & Data Context Schema ---
+// Imports React hooks, AuthContext integration, and defines DataContextType schema.
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { useAuth } from './AuthContext';
 
 interface DataContextType {
   accounts: any[];
@@ -18,10 +25,12 @@ interface DataContextType {
   refreshData: () => void;
 }
 
+// --- SECTION 2: Data Provider State & Fetch Handlers ---
+// Executes async REST API fetches for enriched account records with fallback retries.
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-  const { user, authFetch } = useAuth();
+  const { user, authFetch, loading: authLoading } = useAuth();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -29,34 +38,68 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
   const [aiCommand, setAiCommand] = useState<string | undefined>(undefined);
 
+  const latestRequestId = useRef(0);
 
   const fetchData = async () => {
+    if (authLoading) return;
+    
     if (!user) {
       setAccounts([]);
       setLoading(false);
       return;
     }
+    
+    latestRequestId.current += 1;
+    const myRequestId = latestRequestId.current;
+    
     setLoading(true);
+
+    const fetchWithRetry = async (url: string): Promise<Response> => {
+      try {
+        const res = await authFetch(url);
+        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+        return res;
+      } catch (err) {
+        console.warn(`[RETRY] Initial request for ${url} failed. Retrying in 1s...`, err);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const res = await authFetch(url);
+        if (!res.ok) throw new Error(`Retry failed: ${res.status}`);
+        return res;
+      }
+    };
+    
     try {
-      const res = await authFetch('/api/accounts/enriched');
+      const res = await fetchWithRetry('/api/accounts/enriched');
       const data = await res.json();
-      setAccounts(Array.isArray(data) ? data : []);
+      
+      if (myRequestId === latestRequestId.current) {
+        setAccounts(Array.isArray(data) ? data : []);
+      }
     } catch {
       try {
-        const res = await authFetch('/api/accounts');
+        const res = await fetchWithRetry('/api/accounts');
         const data = await res.json();
-        setAccounts(data || []);
+        
+        if (myRequestId === latestRequestId.current) {
+          setAccounts(data || []);
+        }
       } catch {
-        setAccounts([]);
+        if (myRequestId === latestRequestId.current) {
+          setAccounts([]);
+        }
       }
     } finally {
-      setLoading(false);
+      if (myRequestId === latestRequestId.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, [user]);
+    if (!authLoading) {
+      fetchData();
+    }
+  }, [user?.id, authLoading]);
 
 
   return (

@@ -1,10 +1,21 @@
 'use client';
 
+// TableWidget — APEX pipeline Level 3 widget (and file exports two
+// sibling widgets: TableSkeleton, TableMarkdownWidget).
+// Renders structured tabular data (TABLE_DATA) as a premium data grid,
+// with a loading skeleton and a markdown-table fallback (TABLE).
+// Sections in this file:
+//   - TableWidget (props + render)
+//   - TableSkeleton (streaming placeholder)
+//   - TableMarkdownWidget (LLM markdown-table fallback)
+//   - Formatting helpers (headers, cell values, badges)
+
 import React from 'react';
 import type { TableData } from '../../types/responseContract';
 
 // ── TableWidget (Structured JSON → Premium Data Grid) ───────
 
+// --- SECTION: TableWidget ---
 interface TableWidgetProps {
   data: TableData;
 }
@@ -61,6 +72,7 @@ export function TableWidget({ data }: TableWidgetProps) {
 }
 
 // ── TableSkeleton (Atomic Hydration Placeholder) ────────────
+// --- SECTION: TableSkeleton ---
 
 /**
  * Skeleton placeholder shown during streaming choreography.
@@ -97,6 +109,7 @@ export function TableSkeleton() {
 }
 
 // ── TableMarkdownWidget (LLM Fallback) ──────────────────────
+// --- SECTION: TableMarkdownWidget ---
 
 interface TableMarkdownWidgetProps {
   content: string;
@@ -167,6 +180,7 @@ export function TableMarkdownWidget({ content }: TableMarkdownWidgetProps) {
 }
 
 // ── Formatting Helpers ──────────────────────────────────────
+// --- SECTION: Formatting helpers ---
 
 function formatColumnHeader(col: string): string {
   return col

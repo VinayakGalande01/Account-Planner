@@ -1,5 +1,15 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original slide-out "Proactive Intel" drawer: fetches /api/insights and renders a
+// pipeline quality score, an AI strategic briefing, and a list of critical/warning/
+// opportunity anomalies each with a "Fix This Issue" action that routes into chat.
+//
+// --- SECTION: Types (Insight, InsightsData) ---
+// --- SECTION: ProactiveInsights Component — data fetch, score/icon helpers ---
+// --- SECTION: Render — Backdrop + Sliding Panel ---
+// --- SECTION: Render — Score Card, AI Briefing, Insights List, Footer CTA ---
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldAlert, AlertTriangle, Lightbulb, Zap, X, Terminal, ArrowRight, Activity, Sparkles } from 'lucide-react';

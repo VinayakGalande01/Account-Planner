@@ -1,8 +1,11 @@
 """
-Hybrid Semantic-Symbolic Intent Classifier.
-Uses local embeddings for deterministic fast-path, falling back to a local LLM Matrix Router.
+HYBRID INTENT CLASSIFIER (intent_classifier.py)
+Combines local SentenceTransformer semantic embeddings (fast-path)
+with an LLM fallback matrix to classify user business intent and extract CRM entities.
 """
 
+# --- SECTION 1: Dependencies & Model Imports ---
+# Imports array math, enum definitions, and Pydantic models for intent schema validation.
 import os
 import re
 import json
@@ -11,7 +14,6 @@ from enum import Enum
 from typing import Optional, Dict, List, Literal
 from pydantic import BaseModel, ValidationError
 
-# Defensively import sentence-transformers
 try:
     from sentence_transformers import SentenceTransformer
     SENTENCE_TRANSFORMERS_AVAILABLE = True
@@ -21,6 +23,8 @@ except ImportError:
 _GLOBAL_EMBEDDING_MODEL = None
 _GLOBAL_SEED_EMBEDDINGS = None
 
+# --- SECTION 2: Intent Enums & Schema Models ---
+# Defines primary business intent categories and extracted entity structures.
 class IntentEnum(str, Enum):
     RISK_ASSESSMENT = "risk_assessment"
     OPPORTUNITY_EXPANSION = "opportunity_expansion"

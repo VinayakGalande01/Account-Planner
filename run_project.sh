@@ -1,7 +1,15 @@
 #!/bin/bash
 
+# ==============================================================================
+# APEX LAUNCHER SCRIPT (run_project.sh)
+# Automates local ecosystem startup: Auth Service (Port 8001),
+# Main Backend API (Port 8002), and Next.js Frontend Dashboard (Port 3000).
+# ==============================================================================
+
 clear
 
+# --- SECTION 1: Initialization & Environment Checks ---
+# Clears terminal buffer and prints environment startup banner.
 echo "╔══════════════════════════════════════════════╗"
 echo "║      APEX ACCOUNT PLANNER ECOSYSTEM          ║"
 echo "╚══════════════════════════════════════════════╝"
@@ -16,12 +24,8 @@ sleep 0.4
 echo "[SUCCESS] Environment Loaded"
 echo ""
 
-#echo "[SERVICE] Local LLM Server"
-#echo "├─ Path: /Users/theabhijitjagtap/Local_server-main"
-#echo "└─ Status: STARTING"
-#osascript -e "tell application \"Terminal\" to activate" -e "tell application \"Terminal\" to do script \"cd '/Users/theabhijitjagtap/Local_server-main' && ./start.sh\"" > /dev/null
-#echo ""
-
+# --- SECTION 2: Service Orchestration & Terminal Launches ---
+# Launches Auth, Backend, and Frontend processes in dedicated macOS Terminal windows.
 sleep 1.5
 
 echo "[SERVICE] Auth System"
@@ -37,7 +41,7 @@ echo "[SERVICE] Backend Server"
 echo "├─ Port: 8002"
 echo "├─ URL : http://localhost:8002"
 echo "└─ Status: STARTING"
-osascript -e "tell application \"Terminal\" to do script \"echo '\n======================================\n       BACKEND SERVER (Port 8002)      \n======================================\n' && cd '$PWD/backend' && uvicorn main:app --reload --reload-exclude \\\"llm_cache.json\\\" --port 8002\"" > /dev/null
+osascript -e "tell application \"Terminal\" to do script \"echo '\n======================================\n       BACKEND SERVER (Port 8002)      \n======================================\n' && cd '$PWD/backend' && uvicorn main:app --workers 4 --reload-exclude \\\"llm_cache.json\\\" --port 8002\"" > /dev/null
 echo ""
 
 sleep 1.5

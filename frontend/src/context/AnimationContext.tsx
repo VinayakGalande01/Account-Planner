@@ -1,5 +1,12 @@
 'use client'
 
+/**
+ * ANIMATION CONTEXT PROVIDER (AnimationContext.tsx)
+ * Manages global entrance animation states and reduced-motion user accessibility preferences.
+ */
+
+// --- SECTION 1: Dependencies & Context Type Schema ---
+// Imports React Context hooks and Framer Motion accessibility configuration wrappers.
 import { createContext, useContext, useEffect, useState } from 'react'
 import { MotionConfig } from 'framer-motion'
 
@@ -7,6 +14,8 @@ interface AnimationContextType {
   isFirstVisit: boolean
 }
 
+// --- SECTION 2: Provider Implementation & Custom Hook ---
+// Manages first-visit entrance animation timers and exports the useAnimation hook.
 const AnimationContext = createContext<AnimationContextType>({ isFirstVisit: true })
 
 export function AnimationProvider({ children }: { children: React.ReactNode }) {

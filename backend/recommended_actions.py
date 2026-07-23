@@ -1,35 +1,21 @@
 """
-APEX Recommended Actions — Contextual Copilot Action Generator
-
-Architecture Position:
-    Intent + Account Data + Consensus + Response
-    ↓
-    THIS MODULE → Recommended Actions Generator
-    ↓
-    __SECTION_RECOMMENDED_ACTIONS__ streamed to frontend
-
-Design Principles:
-    1. Zero LLM calls. Fully deterministic and blazing fast.
-    2. Context-aware: actions vary based on intent, risk signals, health score,
-       churn probability, engagement state, and opportunity stage.
-    3. Each action carries future-proof metadata (title, action key, description, priority).
-    4. Returns 3-5 actions per response, priority-sorted.
-
-Important:
-    This module does NOT modify existing reasoning engine outputs.
-    It is a pure post-processing layer that reads existing context.
+RECOMMENDED ACTIONS ENGINE (recommended_actions.py)
+Generates context-aware Next-Best-Actions (Copilot Action Chips) for the frontend UI
+based on intent, risk signals, health scores, and pipeline stages with zero LLM latency.
 """
 
+# --- SECTION 1: Base Imports & Recommended Action Schema ---
+# Imports dataclass builders and defines the copilot RecommendedAction metadata structure.
 from dataclasses import dataclass, asdict
 from typing import List, Optional, Dict, Any
 import json
 
-
 @dataclass
 class RecommendedAction:
-    """A single recommended next-step action for the copilot UI."""
     title: str
     action: str
+    description: str = ""
+    priority: str = "medium"  # "high" | "medium" | "low"
     description: str = ""
     priority: str = "medium"  # "high" | "medium" | "low"
 

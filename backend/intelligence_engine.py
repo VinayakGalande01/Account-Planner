@@ -1,7 +1,17 @@
+"""
+DETERMINISTIC INTELLIGENCE ENGINE (intelligence_engine.py)
+Analyzes CRM account data to compute pipeline risks, stale deal alerts,
+stakeholder engagement gaps, and composite Intelligence Briefs with zero LLM calls.
+"""
+
+# --- SECTION 1: Dependencies & Class Definition ---
+# Imports JSON, datetime tools, and dictionary type hints for rule-based analysis.
 import json
 import datetime
 from typing import Dict, Any, List
 
+# --- SECTION 2: Intelligence Computation Engine ---
+# Evaluates account data against deterministic heuristics for deal velocity and risk analysis.
 class IntelligenceEngine:
     @staticmethod
     def compute(account_data: Dict[str, Any]) -> Dict[str, Any]:

@@ -1,3 +1,11 @@
+"""
+EVALUATION RUNNER ENGINE (core/runner.py)
+Executes automated benchmark evaluation suites against the AI pipeline,
+scoring intent accuracy, entity F1, retrieval precision, and narrative grounding.
+"""
+
+# --- SECTION 1: Dependencies & Metrics Scoring Setup ---
+# Imports CLI parsers, database sessions, pipeline orchestrators, and metric calculators.
 import os
 import sys
 import argparse
@@ -10,7 +18,6 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
-# Ensure backend directory is in python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal, DATABASE_URL
@@ -22,7 +29,6 @@ from observability.context import initialize_trace_context, active_spans_var
 from observability.recorder import get_telemetry_recorder
 from observability.tracking import get_git_revision_hash
 
-# Import evaluation metrics scorers
 from core.metrics.eval_metrics import (
     calculate_intent_match,
     calculate_entity_f1,
@@ -33,7 +39,8 @@ from core.metrics.eval_metrics import (
     calculate_composite_eqs
 )
 
-# Setup logging
+# --- SECTION 2: Evaluation Benchmark Execution Engine ---
+# Orchestrates test suite execution, records telemetry traces, and calculates composite scores.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("eval_runner")
 

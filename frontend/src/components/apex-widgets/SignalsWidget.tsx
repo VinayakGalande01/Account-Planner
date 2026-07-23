@@ -1,8 +1,16 @@
 'use client';
 
+// SignalsWidget — APEX pipeline Level 4 widget.
+// Renders backend-ranked trend signals as typed, icon-coded cards
+// (revenue, pipeline, risk, etc.), parsed from an optional [TYPE] prefix.
+// Sections in this file:
+//   - Types/props (signal style map, parser)
+//   - Render (signal card list)
+
 import React from 'react';
 import { renderInlineMarkdown } from '../../utils/inlineMarkdown';
 
+// --- SECTION: Types/props ---
 interface SignalsWidgetProps {
   signals: string[];
 }
@@ -50,6 +58,7 @@ function parseSignalType(signal: string): { type: string | null; text: string } 
 export function SignalsWidget({ signals }: SignalsWidgetProps) {
   if (!signals || signals.length === 0) return null;
 
+  // --- SECTION: Render ---
   return (
     <div className="apex-widget-signals">
       <div className="apex-section-label">KEY SIGNALS</div>

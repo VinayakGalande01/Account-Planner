@@ -1,6 +1,14 @@
+/**
+ * ROOT APPLICATION LAYOUT (src/app/layout.tsx)
+ * Global layout wrapper providing Google Fonts (Geist, Space Grotesk), dark mode themes,
+ * SEO metadata, toast notifications, and context providers (Auth, Sidebar, Data, Animation).
+ */
+
+// --- SECTION 1: Dependencies & Context Providers ---
+// Imports Next.js font loaders, metadata definitions, global CSS, and React Context providers.
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Geist, Geist_Mono, Space_Grotesk } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
 import { SidebarProvider } from '@/context/SidebarContext'
@@ -13,7 +21,13 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
 })
+const spaceGrotesk = Space_Grotesk({
+  variable: '--font-display',
+  subsets: ['latin'],
+})
 
+// --- SECTION 2: SEO Metadata & Viewport Configurations ---
+// Defines page titles, descriptions, theme colors, and browser icon favicon manifests.
 export const metadata: Metadata = {
   title: 'APEX - Account Planning & Execution Intelligence',
   description: 'AI-powered sales and account management platform',
@@ -42,6 +56,7 @@ export const viewport: Viewport = {
   themeColor: [{ media: '(prefers-color-scheme: dark)', color: '#09090b' }],
 }
 
+import { ThemeProvider } from '@/context/ThemeContext'
 import { SkipLink } from '@/components/SkipLink'
 
 export default function RootLayout({
@@ -52,19 +67,21 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} dark`}
+      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} dark`}
     >
       <body className="font-sans antialiased bg-background">
         <SkipLink />
-        <AnimationProvider>
-          <AuthProvider>
-            <SidebarProvider>
-              <DataProvider>
-                {children}
-              </DataProvider>
-            </SidebarProvider>
-          </AuthProvider>
-        </AnimationProvider>
+        <ThemeProvider>
+          <AnimationProvider>
+            <AuthProvider>
+              <SidebarProvider>
+                <DataProvider>
+                  {children}
+                </DataProvider>
+              </SidebarProvider>
+            </AuthProvider>
+          </AnimationProvider>
+        </ThemeProvider>
         <Toaster theme="dark" position="top-center" />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

@@ -1,5 +1,13 @@
 'use client'
 
+// Pipeline & Sales Speed page: shows pipeline stage summary and a what-if
+// simulator (win-rate, deal-size, cycle-speed levers) with forecast charts.
+// Major sections below:
+//   - SECTION: Pipeline Data Fetching
+//   - SECTION: Simulation Calculations
+//   - SECTION: Render - Simulation Levers & Metrics
+//   - SECTION: Render - Forecast/Stage Charts
+
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
@@ -31,6 +39,7 @@ export default function PipelinePage() {
   const [dealSizeExpansion, setDealSizeExpansion] = useState(1.0) // multiplier
   const [cycleAcceleration, setCycleAcceleration] = useState(0) // percent
 
+  // --- SECTION: Pipeline Data Fetching ---
   useEffect(() => {
     authFetch('/api/pipeline/summary')
       .then(res => res.json())
@@ -48,6 +57,7 @@ export default function PipelinePage() {
     return `$${val.toFixed(0)}`
   }
 
+  // --- SECTION: Simulation Calculations ---
   const totalPipeline = Object.entries(pipelineData)
     .filter(([k]) => k !== 'Closed Won' && k !== 'Closed Lost')
     .reduce((sum, [, v]) => sum + v, 0)
@@ -108,6 +118,7 @@ export default function PipelinePage() {
           </div>
         ) : (
           <>
+            {/* --- SECTION: Render - Simulation Levers & Metrics --- */}
             {/* What-If Sales Simulation Levers (Prominent Top Placement) */}
             <motion.div
               initial={isFirstVisit ? { opacity: 0, y: 12 } : false}
@@ -206,6 +217,7 @@ export default function PipelinePage() {
               transition={{ delay: isFirstVisit ? 0.15 : 0, duration: 0.4 }}
               className="bg-card border border-border rounded-lg p-5 mb-6"
             >
+              {/* --- SECTION: Render - Forecast/Stage Charts --- */}
               <h3 className="text-base font-semibold text-foreground mb-4">
                 Sales Speed: Actual vs Simulation
               </h3>

@@ -1,5 +1,11 @@
 'use client'
 
+// PageHeader: reusable page title/subtitle/icon/action row with a
+// first-visit fade-in animation.
+// Major sections:
+// - Props + animation state via AnimationContext
+// - Render: title block, optional action slot
+
 import React, { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { useAnimation } from '@/context/AnimationContext'
@@ -12,8 +18,10 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, subtitle, icon, action }: PageHeaderProps) {
+  // --- SECTION: Animation State ---
   const { isFirstVisit } = useAnimation()
 
+  // --- SECTION: Render ---
   return (
     <motion.div
       initial={isFirstVisit ? { opacity: 0, y: -12 } : false}

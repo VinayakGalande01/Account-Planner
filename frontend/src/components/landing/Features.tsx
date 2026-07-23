@@ -1,3 +1,12 @@
+// --------------------------------------------------------------------
+// Features.tsx
+// Landing page "Capabilities" section rendered as a bento-style grid
+// of feature cards: security, health scoring, sales prediction, AI
+// assistant, and risk alerts.
+// --- SECTION: Feature data ---
+// --- SECTION: Section render (header + bento grid) ---
+// --------------------------------------------------------------------
+
 'use client';
 
 import React from 'react';
@@ -11,6 +20,7 @@ import {
   LucideIcon,
 } from 'lucide-react';
 
+// --- SECTION: Feature data ---
 interface FeatureItem {
   code: string;
   icon: LucideIcon;
@@ -68,6 +78,7 @@ const FEATURES: FeatureItem[] = [
   },
 ];
 
+// --- SECTION: Section render (header + bento grid) ---
 export const Features: React.FC = () => {
   return (
     <section

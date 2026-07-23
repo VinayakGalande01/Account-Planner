@@ -1,5 +1,12 @@
 'use client'
 
+// NotificationDropdown: header bell popover listing account risk/pipeline
+// notifications with read/unread state.
+// Major sections:
+// - Mock notification data + types
+// - State/hooks: notifications list, mark-all-read handler
+// - Render: header, scrollable list, footer link
+
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, TrendingDown, CheckCircle2, X } from 'lucide-react'
@@ -60,6 +67,7 @@ interface NotificationDropdownProps {
 }
 
 export function NotificationDropdown({ isOpen, onClose }: NotificationDropdownProps) {
+  // --- SECTION: State/Hooks ---
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications)
 
   if (!isOpen) return null
@@ -70,6 +78,7 @@ export function NotificationDropdown({ isOpen, onClose }: NotificationDropdownPr
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
+  // --- SECTION: Render ---
   return (
     <AnimatePresence>
       <div className="absolute right-0 top-12 z-50 w-80 sm:w-96 bg-card border border-border rounded-xl shadow-popover overflow-hidden text-foreground">

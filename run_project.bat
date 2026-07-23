@@ -2,6 +2,14 @@
 chcp 65001 >nul
 cls
 
+:: ==============================================================================
+:: APEX WINDOWS LAUNCHER SCRIPT (run_project.bat)
+:: Automates Windows startup for Auth Service (Port 8001),
+:: Main Backend API (Port 8002), and Next.js Frontend Dashboard (Port 3000).
+:: ==============================================================================
+
+:: --- SECTION 1: System Initialization ---
+:: Sets UTF-8 encoding, clears terminal console, and displays startup logo.
 echo ╔══════════════════════════════════════════════╗
 echo ║      APEX ACCOUNT PLANNER ECOSYSTEM          ║
 echo ╚══════════════════════════════════════════════╝
@@ -16,6 +24,9 @@ timeout /t 1 >nul
 echo [SUCCESS] Environment Loaded
 echo.
 
+:: --- SECTION 2: Process Orchestration ---
+:: Spawns independent Command Prompt windows for Auth, Backend, and Frontend.
+
 echo [SERVICE] Auth System
 echo ├─ Port: 8001
 echo ├─ URL : http://localhost:8001
@@ -29,7 +40,7 @@ echo [SERVICE] Backend Server
 echo ├─ Port: 8002
 echo ├─ URL : http://localhost:8002
 echo └─ Status: STARTING
-start "APEX Backend (8002)" cmd /k "echo ====================================== && echo        BACKEND SERVER (Port 8002)      && echo ====================================== && echo. && cd backend && uvicorn main:app --reload --reload-exclude \"llm_cache.json\" --port 8002"
+start "APEX Backend (8002)" cmd /k "echo ====================================== && echo        BACKEND SERVER (Port 8002)      && echo ====================================== && echo. && cd backend && uvicorn main:app --workers 4 --reload-exclude \"llm_cache.json\" --port 8002"
 
 
 timeout /t 1 >nul

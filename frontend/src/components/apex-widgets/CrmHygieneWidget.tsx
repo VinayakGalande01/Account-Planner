@@ -1,7 +1,15 @@
 'use client';
 
+// CrmHygieneWidget — APEX pipeline Level 6 widget.
+// Renders CRM data-quality warnings as a collapsible, amber-toned
+// governance panel — secondary info, collapsed by default.
+// Sections in this file:
+//   - Props/types
+//   - Render (toggle button + collapsible warning list)
+
 import React, { useState } from 'react';
 
+// --- SECTION: Props ---
 interface CrmHygieneWidgetProps {
   warnings: string[];
 }
@@ -18,6 +26,7 @@ export function CrmHygieneWidget({ warnings }: CrmHygieneWidgetProps) {
 
   if (!warnings || warnings.length === 0) return null;
 
+  // --- SECTION: Render ---
   return (
     <div className="apex-widget-governance apex-governance-amber" id="apex-crm-hygiene">
       <button

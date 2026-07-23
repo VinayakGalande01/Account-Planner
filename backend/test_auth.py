@@ -1,8 +1,18 @@
+"""
+AUTHENTICATION INTEGRATION TEST (test_auth.py)
+Integration test script using FastAPI TestClient to verify user signup registration
+and login token generation routines against the auth microservice.
+"""
+
+# --- SECTION 1: Dependencies & Test Client Setup ---
+# Imports FastAPI TestClient and initializes app instance.
 from fastapi.testclient import TestClient
 from auth_main import app
 
 client = TestClient(app)
 
+# --- SECTION 2: Signup & Login Test Execution ---
+# Tests signup endpoint creation and validates login token authentication responses.
 print("Testing Signup...")
 signup_data = {
     "name": "Test User",

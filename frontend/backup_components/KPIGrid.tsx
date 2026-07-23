@@ -1,5 +1,12 @@
 'use client';
 
+// LEGACY/BACKUP FILE — not part of the active build (frontend/src is the live app).
+// Original top-of-dashboard KPI strip: 4 static stat cards (Global Health, Pipeline
+// Value, Risk of Client Loss, AI Usage) with icon, value, and up/down change badges.
+//
+// --- SECTION: Static KPI Data ---
+// --- SECTION: KPIGrid Component (animated card grid render) ---
+
 import React, { useState, useEffect } from 'react';
 import { Zap, PieChart, ShieldAlert, Activity, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { motion } from 'framer-motion';

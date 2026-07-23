@@ -1,3 +1,11 @@
+"""
+RESPONSE FORMATTER (response_formatter.py)
+Formats raw LLM outputs into structured JSON schemas, managing persona tone,
+urgency levels, conversation history context, and clean markdown presentation.
+"""
+
+# --- SECTION 1: Dependencies & LLM Endpoint Resolver ---
+# Imports HTTP clients, regex utilities, and loads active LLM configuration endpoints.
 import os
 import json
 import httpx
@@ -8,7 +16,6 @@ from typing import Optional, List, Dict
 logger = logging.getLogger("response_formatter")
 
 def get_active_llm_config() -> tuple:
-    """Helper to load cached or environment-configured LLM URL and model name."""
     cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "llm_cache.json")
     if os.path.exists(cache_path):
         try:
@@ -25,6 +32,8 @@ def get_active_llm_config() -> tuple:
     primary_model = os.getenv("MODEL_NAME", "llama3.2:latest")
     return primary_url, primary_model
 
+# --- SECTION 2: Persona Response Formatting Engine ---
+# Formats raw text according to specified user personas (Account Manager, Executive, AE).
 async def format_response_for_user(
     raw_output: str, 
     persona: str = "account_manager", 
