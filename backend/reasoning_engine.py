@@ -1900,7 +1900,7 @@ class ReasoningEngine:
         """Fallback regex extractor to salvage fields and match standard structures."""
         logger.warning(
             "[Fallback] Regex fallback extraction activated for reasoning thread",
-            extra={"thread": thread_name, "text_length": len(text)}
+            extra={"thread_name": thread_name, "text_length": len(text)}
         )
         # Grab base fallback structure first
         salvaged = self._fallback_for_thread(thread_name, "JSON Parsing Error")
@@ -2348,7 +2348,7 @@ Respond with JSON only:
         except Exception as e:
             logger.warning(
                 "[Fallback] Reasoning thread failed, using deterministic fallback",
-                extra={"thread": "am", "error": str(e)}
+                extra={"thread_name": "am", "error": str(e)}
             )
             if 'am' not in self.raw_reasoning_bucket:
                 self.raw_reasoning_bucket['am'] = f"Error or timeout before response: {e}"
@@ -2409,7 +2409,7 @@ Respond with JSON only:
         except Exception as e:
             logger.warning(
                 "[Fallback] Reasoning thread failed, using deterministic fallback",
-                extra={"thread": "vp", "error": str(e)}
+                extra={"thread_name": "vp", "error": str(e)}
             )
             if 'vp' not in self.raw_reasoning_bucket:
                 self.raw_reasoning_bucket['vp'] = f"Error or timeout before response: {e}"
@@ -2467,7 +2467,7 @@ Respond with JSON only:
         except Exception as e:
             logger.warning(
                 "[Fallback] Reasoning thread failed, using deterministic fallback",
-                extra={"thread": "svp", "error": str(e)}
+                extra={"thread_name": "svp", "error": str(e)}
             )
             if 'svp' not in self.raw_reasoning_bucket:
                 self.raw_reasoning_bucket['svp'] = f"Error or timeout before response: {e}"
@@ -2540,7 +2540,7 @@ Respond with JSON only:
         except Exception as e:
             logger.warning(
                 "[Fallback] Reasoning thread failed, using deterministic fallback",
-                extra={"thread": "data", "error": str(e)}
+                extra={"thread_name": "data", "error": str(e)}
             )
             if 'data' not in self.raw_reasoning_bucket:
                 self.raw_reasoning_bucket['data'] = f"Error or timeout before response: {e}"
@@ -2550,7 +2550,7 @@ Respond with JSON only:
         """Fallback if thread times out or fails."""
         logger.warning(
             "[Fallback] Deterministic fallback activated for reasoning thread",
-            extra={"thread": thread_name, "error": error}
+            extra={"thread_name": thread_name, "error": error}
         )
         if thread_name == 'am':
             return {

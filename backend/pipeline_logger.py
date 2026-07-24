@@ -86,17 +86,17 @@ class PipelineLogger:
     @staticmethod
     def start(query: str, session_id: str, user_role: str = "am", trace_id: str = ""):
         TokenAccumulator.reset()
-        border = "═" * 66
-        logger.info(f"\n╔{border}╗\n║  APEX PIPELINE START  |  Trace: {trace_id[:12]}  |  Session: {session_id[:12]}  ║\n╚{border}╝")
+        border = "=" * 66
+        logger.info(f"\n+{border}+\n|  APEX PIPELINE START  |  Trace: {trace_id[:12]}  |  Session: {session_id[:12]}  |\n+{border}+")
         logger.info(f"  [INPUT] Query: \"{query}\" | Role: {user_role}")
 
     @staticmethod
     def layer1(intent_name: str, confidence: float, complexity: str, scope: str = "ENTITY", duration_ms: int = 0):
         conf_str = "HIGH" if confidence >= 0.8 else ("MEDIUM" if confidence >= 0.5 else "LOW")
-        logger.info(f"┌─ L1 INTENT CLASSIFICATION ───────────────────────────── [{duration_ms}ms] ─┐")
-        logger.info(f"│  Intent    : {intent_name:<30} Scope: {scope:<10} │")
-        logger.info(f"│  Complexity: {complexity:<30} Conf : {confidence:.2f} ({conf_str}) │")
-        logger.info(f"└─────────────────────────────────────────────────────────────────┘")
+        logger.info(f"+- L1 INTENT CLASSIFICATION ───────────────────────────── [{duration_ms}ms] -+")
+        logger.info(f"|  Intent    : {intent_name:<30} Scope: {scope:<10} |")
+        logger.info(f"|  Complexity: {complexity:<30} Conf : {confidence:.2f} ({conf_str}) |")
+        logger.info(f"+-----------------------------------------------------------------+")
 
     @staticmethod
     def layer2(account_name: str, data_summary: Dict[str, Any], data_quality_pct: float, rag_hits: int = 0, duration_ms: int = 0):
@@ -107,12 +107,12 @@ class PipelineLogger:
         stalled_val = data_summary.get("stalled_usd", 0.0)
         health = data_summary.get("health_score", 80.0)
 
-        logger.info(f"┌─ L2 DATA RETRIEVAL ────────────────────────────────────── [{duration_ms}ms] ─┐")
-        logger.info(f"│  Account   : {account_name:<50} │")
-        logger.info(f"│  CRM Data  : Opps: {opps_cnt} | Contacts: {contacts_cnt} | Cases: {cases_cnt} | RAG Hits: {rag_hits:<6} │")
-        logger.info(f"│  Pipeline  : ${total_rev:,.0f} | Stalled: ${stalled_val:,.0f} | Health: {health:.1f}/100    │")
-        logger.info(f"│  Data Qual : {data_quality_pct:.1f}%                                               │")
-        logger.info(f"└─────────────────────────────────────────────────────────────────┘")
+        logger.info(f"+- L2 DATA RETRIEVAL ────────────────────────────────────── [{duration_ms}ms] -+")
+        logger.info(f"|  Account   : {account_name:<50} |")
+        logger.info(f"|  CRM Data  : Opps: {opps_cnt} | Contacts: {contacts_cnt} | Cases: {cases_cnt} | RAG Hits: {rag_hits:<6} |")
+        logger.info(f"|  Pipeline  : ${total_rev:,.0f} | Stalled: ${stalled_val:,.0f} | Health: {health:.1f}/100    |")
+        logger.info(f"|  Data Qual : {data_quality_pct:.1f}%                                               |")
+        logger.info(f"+-----------------------------------------------------------------+")
 
     @staticmethod
     def llm_call(stage_name: str, prompt_tokens: int, completion_tokens: int, duration_ms: int = 0):
@@ -124,21 +124,21 @@ class PipelineLogger:
     def finish(trace_id: str, session_id: str, query: str, intent_name: str, account_name: str,
                data_quality_pct: float, confidence_pct: float, duration_ms: int, status: str = "SUCCESS"):
         snapshot = TokenAccumulator.snapshot()
-        border = "═" * 66
+        border = "=" * 66
         
-        logger.info(f"┌─ L3 LLM SUMMARY ────────────────────────────────────────────────┐")
+        logger.info(f"+- L3 LLM SUMMARY ────────────────────────────────────────────────+")
         for call in snapshot["calls"]:
-            logger.info(f"│  • {call['call_name']:<22} : {call['prompt_tokens']:,}p + {call['completion_tokens']:,}c = {call['total_tokens']:,} tkn (${call['cost_usd']:.6f}) │")
-        logger.info(f"└─────────────────────────────────────────────────────────────────┘")
+            logger.info(f"|  • {call['call_name']:<22} : {call['prompt_tokens']:,}p + {call['completion_tokens']:,}c = {call['total_tokens']:,} tkn (${call['cost_usd']:.6f}) |")
+        logger.info(f"+-----------------------------------------------------------------+")
 
-        logger.info(f"\n╔{border}╗")
-        logger.info(f"║  APEX PIPELINE COMPLETE  |  Status: {status:<10} Duration: {duration_ms}ms  ║")
-        logger.info(f"╠{border}╣")
-        logger.info(f"║  LLM Calls    : {snapshot['total_llm_calls']:<3}                                           ║")
-        logger.info(f"║  Prompt Tokens: {snapshot['prompt_tokens']:,:<12} Completion Tokens: {snapshot['completion_tokens']:,:<10} ║")
-        logger.info(f"║  Total Tokens : {snapshot['total_tokens']:,:<12} Est. Cost (Flash): ${snapshot['estimated_cost_usd']:.6f} ║")
-        logger.info(f"║  Confidence   : {confidence_pct:.1f}%        Data Quality     : {data_quality_pct:.1f}%          ║")
-        logger.info(f"╚{border}╝\n")
+        logger.info(f"\n+{border}+")
+        logger.info(f"|  APEX PIPELINE COMPLETE  |  Status: {status:<10} Duration: {duration_ms}ms  |")
+        logger.info(f"+{border}+")
+        logger.info(f"|  LLM Calls    : {snapshot['total_llm_calls']:<3}                                           |")
+        logger.info(f"|  Prompt Tokens: {snapshot['prompt_tokens']:,:<12} Completion Tokens: {snapshot['completion_tokens']:,:<10} |")
+        logger.info(f"|  Total Tokens : {snapshot['total_tokens']:,:<12} Est. Cost (Flash): ${snapshot['estimated_cost_usd']:.6f} |")
+        logger.info(f"|  Confidence   : {confidence_pct:.1f}%        Data Quality     : {data_quality_pct:.1f}%          |")
+        logger.info(f"+{border}+\n")
 
         # Write structured JSONL record to logs/eval_YYYY-MM-DD.jsonl (indefinite history)
         try:
