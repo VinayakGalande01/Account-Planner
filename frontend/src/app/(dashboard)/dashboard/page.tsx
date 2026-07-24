@@ -14,7 +14,7 @@ import { EngagementMomentumChart } from '@/components/engagement-momentum-chart'
 import { RiskDetectionPanel } from '@/components/risk-detection-panel'
 import { useAnimation } from '@/context/AnimationContext'
 import { useData } from '@/context/DataContext'
-import { PageHeader } from '@/components/PageHeader'
+import { PageHeader } from '@/components/common/PageHeader'
 import { LayoutDashboard, Users, DollarSign, Activity, AlertTriangle } from 'lucide-react'
 
 const formatCurrency = (val: number): string => {

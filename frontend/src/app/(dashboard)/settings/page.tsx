@@ -13,7 +13,7 @@ import { useState, useEffect } from 'react'
 import { useAnimation } from '@/context/AnimationContext'
 import { Settings, Lock, Cpu } from 'lucide-react'
 
-import { PageHeader } from '@/components/PageHeader'
+import { PageHeader } from '@/components/common/PageHeader'
 
 // --- SECTION 2: Settings Component & Render Layout ---
 // Manages LLM server provider selections and displays security settings tab grids.

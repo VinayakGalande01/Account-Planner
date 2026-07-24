@@ -57,7 +57,7 @@ export const viewport: Viewport = {
 }
 
 import { ThemeProvider } from '@/context/ThemeContext'
-import { SkipLink } from '@/components/SkipLink'
+import { SkipLink } from '@/components/common/SkipLink'
 
 export default function RootLayout({
   children,

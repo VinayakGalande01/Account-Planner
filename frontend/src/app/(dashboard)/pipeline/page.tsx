@@ -14,7 +14,7 @@ import { useAuth } from '@/context/AuthContext'
 import { TrendingUp } from 'lucide-react'
 import { useAnimation } from '@/context/AnimationContext'
 import { Skeleton } from '@/components/ui/skeleton'
-import { PageHeader } from '@/components/PageHeader'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   ResponsiveContainer,
   LineChart,
