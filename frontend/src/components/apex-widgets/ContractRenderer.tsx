@@ -596,6 +596,30 @@ export function FinalizedContractRenderer({ contract, onActionClick }: Finalized
     );
   }
 
+  // Priority 1: If directAnswer contains a Quick Action Card JSON, render it immediately!
+  if (contract.directAnswer) {
+    try {
+      const trimmed = contract.directAnswer.trim();
+      if (trimmed.startsWith('{')) {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && parsed.type && ['EXEC_EMAIL', 'MEETING_AGENDA', 'STAKEHOLDERS', 'RISK_REVIEW'].includes(parsed.type)) {
+          if (parsed.type === 'EXEC_EMAIL') {
+            return <div className="apex-section-block"><ExecEmailCard data={parsed} /></div>;
+          } else if (parsed.type === 'MEETING_AGENDA') {
+            return <div className="apex-section-block"><MeetingAgendaCard data={parsed} /></div>;
+          } else if (parsed.type === 'STAKEHOLDERS') {
+            return <div className="apex-section-block"><StakeholderMapCard data={parsed} /></div>;
+          } else if (parsed.type === 'RISK_REVIEW') {
+            return <div className="apex-section-block"><RiskReviewCard data={parsed} /></div>;
+          }
+        }
+      }
+    } catch {
+      // Fallback to formattedJson or standard contract sections
+    }
+  }
+
+  // Priority 2: Persona-formatted JSON output
   if (contract.formattedJson) {
     return <FormattedResponseRenderer data={contract.formattedJson} onActionClick={onActionClick} />;
   }

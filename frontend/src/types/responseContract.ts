@@ -37,6 +37,16 @@ export interface RecommendedAction {
   description?: string;
   /** Priority level — affects chip styling */
   priority?: 'high' | 'medium' | 'low';
+  /**
+   * Optional quick-action type to bypass the intent classifier on chip click.
+   * Maps directly to backend dispatcher: EXEC_EMAIL | MEETING_AGENDA | SHOW_STAKEHOLDERS | REVIEW_RISKS
+   */
+  action_type?: string;
+  /**
+   * The account name this chip was generated for.
+   * Passed as active_account override on chip click to prevent cross-account contamination.
+   */
+  source_account?: string;
 }
 
 // ── Response Contract (Normalized Application State) ────────

@@ -79,7 +79,13 @@ export default function IntelligencePage() {
 
   const handleActionClick = (action: RecommendedAction) => {
     if (!isLoading) {
-      handleSendMessage(action.title)
+      // Pass action_type directly to bypass intent classifier on chip click.
+      // Pass activeAccount as override so chips always use the current session's
+      // resolved account — not a stale or null value from a different turn.
+      handleSendMessage(action.title, {
+        action_type: action.action_type ?? null,
+        override_account: action.source_account ?? activeAccount,
+      })
     }
   }
 
@@ -95,7 +101,7 @@ export default function IntelligencePage() {
 
     const fetchSessionMessages = async () => {
       // Bypasses the fetch & skeleton state if there is no real history to load
-      const isRealSession = activeSessionId && activeSessionId !== 'default_session' && sessions.some(s => s.id === activeSessionId)
+      const isRealSession = activeSessionId && activeSessionId !== 'default_session'
       
       if (!isRealSession) {
         if (active) {
@@ -174,13 +180,16 @@ export default function IntelligencePage() {
       active = false
       abortController.abort()
     }
-  }, [activeSessionId, mounted, sessions])
+  }, [activeSessionId, mounted])
 
   const [sessionId] = useState(() => Math.random().toString(36).substring(2, 15))
   const [activeAccount, setActiveAccount] = useState<string | null>(null)
 
   // --- SECTION: Send Message / Streaming Handler ---
-  const handleSendMessage = async (text = inputValue) => {
+  const handleSendMessage = async (
+    text = inputValue,
+    overrides?: { action_type?: string | null; override_account?: string | null }
+  ) => {
     if (!text.trim() || isLoading) return
 
     // Add user message
@@ -207,8 +216,13 @@ export default function IntelligencePage() {
         body: JSON.stringify({
           query: text,
           session_id: activeSessionId || 'default_session',
-          active_account: activeAccount,
+          // Use override_account (from chip) if provided, otherwise fall back to current activeAccount state.
+          // This guarantees chip clicks always reference the last resolved account (e.g. Airbus SE),
+          // not a null or stale value.
+          active_account: overrides?.override_account ?? activeAccount,
           persona: persona,
+          // Pass action_type directly so the backend dispatcher skips intent classification for chip clicks.
+          ...(overrides?.action_type ? { action_type: overrides.action_type } : {}),
           chat_history: messages.slice(-10).map(m => ({
             role: m.role,
             content: m.content

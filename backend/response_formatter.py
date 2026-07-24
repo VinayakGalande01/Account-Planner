@@ -53,13 +53,13 @@ async def format_response_for_user(
 
     # Detect if raw_output is already a quick-action JSON payload and bypass formatting
     trimmed = raw_output.strip()
-    if trimmed.startswith("{"):
-        try:
-            parsed = json.loads(trimmed)
-            if "type" in parsed and parsed["type"] in ["EXEC_EMAIL", "MEETING_AGENDA", "STAKEHOLDERS", "RISK_REVIEW"]:
-                return trimmed
-        except Exception:
-            pass
+    quick_action_keys = ["EXEC_EMAIL", "MEETING_AGENDA", "STAKEHOLDERS", "RISK_REVIEW"]
+    if any(qkey in trimmed for qkey in quick_action_keys):
+        # Checks if quick action JSON type is present in raw_output
+        for qkey in quick_action_keys:
+            if f'"type": "{qkey}"' in trimmed or f'"type":"{qkey}"' in trimmed or f'"type": \'{qkey}\'' in trimmed:
+                logger.info(f"[ResponseFormatter] Quick action payload {qkey} detected. Bypassing persona formatting.")
+                return raw_output
 
     gemini_key = os.getenv("GEMINI_API_KEY")
     if not gemini_key:
@@ -195,7 +195,24 @@ Output ONLY valid raw JSON without preamble or markdown fences.
             result_text = result_text[:-3]
         result_text = result_text.strip()
 
-        parsed = json.loads(result_text)
+        # Tier-1: Strict native parse (fastest)
+        try:
+            parsed = json.loads(result_text)
+        except json.JSONDecodeError:
+            # Tier-2: Structural repair — handles unescaped quotes, trailing commas,
+            # truncated strings — common artifacts from Gemini 2.5 Flash streaming.
+            try:
+                from json_repair import repair_json
+                repaired = repair_json(result_text, return_objects=True)
+                if isinstance(repaired, dict):
+                    parsed = repaired
+                    logger.warning("[ResponseFormatter] json_repair rescued malformed Gemini output.")
+                else:
+                    raise ValueError("json_repair returned non-dict")
+            except Exception as repair_err:
+                # Tier-3: Irrecoverable — return raw_output (graceful degradation)
+                logger.error(f"[ResponseFormatter Error] json_repair also failed: {repair_err}. Returning raw output.")
+                return raw_output
 
         # Validate required schema keys
         required = ["headline", "urgency", "summary", "opportunities", "risks", "flag", "recommended_actions", "closing_question", "next_steps_suggestions"]

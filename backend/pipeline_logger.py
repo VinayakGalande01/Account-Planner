@@ -85,60 +85,86 @@ class TokenAccumulator:
 class PipelineLogger:
     @staticmethod
     def start(query: str, session_id: str, user_role: str = "am", trace_id: str = ""):
-        TokenAccumulator.reset()
-        border = "=" * 66
-        logger.info(f"\n+{border}+\n|  APEX PIPELINE START  |  Trace: {trace_id[:12]}  |  Session: {session_id[:12]}  |\n+{border}+")
-        logger.info(f"  [INPUT] Query: \"{query}\" | Role: {user_role}")
+        try:
+            TokenAccumulator.reset()
+            border = "=" * 66
+            q_str = str(query or "")
+            s_id = str(session_id or "")[:12]
+            t_id = str(trace_id or "")[:12]
+            logger.info(f"\n+{border}+\n|  APEX PIPELINE START  |  Trace: {t_id}  |  Session: {s_id}  |\n+{border}+")
+            logger.info(f"  [INPUT] Query: \"{q_str}\" | Role: {user_role}")
+        except Exception as err:
+            logger.warning(f"[PipelineLogger] start error: {err}")
 
     @staticmethod
     def layer1(intent_name: str, confidence: float, complexity: str, scope: str = "ENTITY", duration_ms: int = 0):
-        conf_str = "HIGH" if confidence >= 0.8 else ("MEDIUM" if confidence >= 0.5 else "LOW")
-        logger.info(f"+- L1 INTENT CLASSIFICATION ───────────────────────────── [{duration_ms}ms] -+")
-        logger.info(f"|  Intent    : {intent_name:<30} Scope: {scope:<10} |")
-        logger.info(f"|  Complexity: {complexity:<30} Conf : {confidence:.2f} ({conf_str}) |")
-        logger.info(f"+-----------------------------------------------------------------+")
+        try:
+            conf_val = float(confidence) if confidence is not None else 1.0
+            conf_str = "HIGH" if conf_val >= 0.8 else ("MEDIUM" if conf_val >= 0.5 else "LOW")
+            iname = str(intent_name or "ACTION_RECOMMENDATION")
+            cmplx = str(complexity or "TACTICAL")
+            scp = str(scope or "ENTITY")
+            logger.info(f"+- L1 INTENT CLASSIFICATION ───────────────────────────── [{duration_ms}ms] -+")
+            logger.info(f"|  Intent    : {iname:<30} Scope: {scp:<10} |")
+            logger.info(f"|  Complexity: {cmplx:<30} Conf : {conf_val:.2f} ({conf_str}) |")
+            logger.info(f"+-----------------------------------------------------------------+")
+        except Exception as err:
+            logger.warning(f"[PipelineLogger] layer1 error: {err}")
 
     @staticmethod
     def layer2(account_name: str, data_summary: Dict[str, Any], data_quality_pct: float, rag_hits: int = 0, duration_ms: int = 0):
-        opps_cnt = data_summary.get("opps_count", 0)
-        contacts_cnt = data_summary.get("contacts_count", 0)
-        cases_cnt = data_summary.get("cases_count", 0)
-        total_rev = data_summary.get("total_pipeline_usd", 0.0)
-        stalled_val = data_summary.get("stalled_usd", 0.0)
-        health = data_summary.get("health_score", 80.0)
+        try:
+            acc_name = str(account_name or "Global")
+            opps_cnt = data_summary.get("opps_count", 0) if isinstance(data_summary, dict) else 0
+            contacts_cnt = data_summary.get("contacts_count", 0) if isinstance(data_summary, dict) else 0
+            cases_cnt = data_summary.get("cases_count", 0) if isinstance(data_summary, dict) else 0
+            total_rev = float(data_summary.get("total_pipeline_usd", 0.0) or 0.0) if isinstance(data_summary, dict) else 0.0
+            stalled_val = float(data_summary.get("stalled_usd", 0.0) or 0.0) if isinstance(data_summary, dict) else 0.0
+            health = float(data_summary.get("health_score", 80.0) or 80.0) if isinstance(data_summary, dict) else 80.0
+            dq_pct = float(data_quality_pct or 100.0)
 
-        logger.info(f"+- L2 DATA RETRIEVAL ────────────────────────────────────── [{duration_ms}ms] -+")
-        logger.info(f"|  Account   : {account_name:<50} |")
-        logger.info(f"|  CRM Data  : Opps: {opps_cnt} | Contacts: {contacts_cnt} | Cases: {cases_cnt} | RAG Hits: {rag_hits:<6} |")
-        logger.info(f"|  Pipeline  : ${total_rev:,.0f} | Stalled: ${stalled_val:,.0f} | Health: {health:.1f}/100    |")
-        logger.info(f"|  Data Qual : {data_quality_pct:.1f}%                                               |")
-        logger.info(f"+-----------------------------------------------------------------+")
+            logger.info(f"+- L2 DATA RETRIEVAL ────────────────────────────────────── [{duration_ms}ms] -+")
+            logger.info(f"|  Account   : {acc_name:<50} |")
+            logger.info(f"|  CRM Data  : Opps: {opps_cnt} | Contacts: {contacts_cnt} | Cases: {cases_cnt} | RAG Hits: {rag_hits:<6} |")
+            logger.info(f"|  Pipeline  : ${total_rev:,.0f} | Stalled: ${stalled_val:,.0f} | Health: {health:.1f}/100    |")
+            logger.info(f"|  Data Qual : {dq_pct:.1f}%                                               |")
+            logger.info(f"+-----------------------------------------------------------------+")
+        except Exception as err:
+            logger.warning(f"[PipelineLogger] layer2 error: {err}")
 
     @staticmethod
     def llm_call(stage_name: str, prompt_tokens: int, completion_tokens: int, duration_ms: int = 0):
-        TokenAccumulator.record_call(stage_name, prompt_tokens, completion_tokens, duration_ms)
-        tot = prompt_tokens + completion_tokens
-        logger.info(f"  [L3 LLM] {stage_name:<24} | Tokens: {prompt_tokens:,}p + {completion_tokens:,}c = {tot:,} | {duration_ms}ms")
+        try:
+            TokenAccumulator.record_call(stage_name, prompt_tokens, completion_tokens, duration_ms)
+            tot = prompt_tokens + completion_tokens
+            logger.info(f"  [L3 LLM] {stage_name:<24} | Tokens: {prompt_tokens:,}p + {completion_tokens:,}c = {tot:,} | {duration_ms}ms")
+        except Exception as err:
+            logger.warning(f"[PipelineLogger] llm_call error: {err}")
 
     @staticmethod
     def finish(trace_id: str, session_id: str, query: str, intent_name: str, account_name: str,
                data_quality_pct: float, confidence_pct: float, duration_ms: int, status: str = "SUCCESS"):
-        snapshot = TokenAccumulator.snapshot()
-        border = "=" * 66
-        
-        logger.info(f"+- L3 LLM SUMMARY ────────────────────────────────────────────────+")
-        for call in snapshot["calls"]:
-            logger.info(f"|  • {call['call_name']:<22} : {call['prompt_tokens']:,}p + {call['completion_tokens']:,}c = {call['total_tokens']:,} tkn (${call['cost_usd']:.6f}) |")
-        logger.info(f"+-----------------------------------------------------------------+")
+        try:
+            snapshot = TokenAccumulator.snapshot()
+            border = "=" * 66
+            dq_pct = float(data_quality_pct or 100.0)
+            conf_pct = float(confidence_pct or 100.0)
+            
+            logger.info(f"+- L3 LLM SUMMARY ────────────────────────────────────────────────+")
+            for call in snapshot["calls"]:
+                logger.info(f"|  • {call['call_name']:<22} : {call['prompt_tokens']:,}p + {call['completion_tokens']:,}c = {call['total_tokens']:,} tkn (${call['cost_usd']:.6f}) |")
+            logger.info(f"+-----------------------------------------------------------------+")
 
-        logger.info(f"\n+{border}+")
-        logger.info(f"|  APEX PIPELINE COMPLETE  |  Status: {status:<10} Duration: {duration_ms}ms  |")
-        logger.info(f"+{border}+")
-        logger.info(f"|  LLM Calls    : {snapshot['total_llm_calls']:<3}                                           |")
-        logger.info(f"|  Prompt Tokens: {snapshot['prompt_tokens']:,:<12} Completion Tokens: {snapshot['completion_tokens']:,:<10} |")
-        logger.info(f"|  Total Tokens : {snapshot['total_tokens']:,:<12} Est. Cost (Flash): ${snapshot['estimated_cost_usd']:.6f} |")
-        logger.info(f"|  Confidence   : {confidence_pct:.1f}%        Data Quality     : {data_quality_pct:.1f}%          |")
-        logger.info(f"+{border}+\n")
+            logger.info(f"\n+{border}+")
+            logger.info(f"|  APEX PIPELINE COMPLETE  |  Status: {status:<10} Duration: {duration_ms}ms  |")
+            logger.info(f"+{border}+")
+            logger.info(f"|  LLM Calls    : {snapshot['total_llm_calls']:<3}                                           |")
+            logger.info(f"|  Prompt Tokens: {snapshot['prompt_tokens']:,:<12} Completion Tokens: {snapshot['completion_tokens']:,:<10} |")
+            logger.info(f"|  Total Tokens : {snapshot['total_tokens']:,:<12} Est. Cost (Flash): ${snapshot['estimated_cost_usd']:.6f} |")
+            logger.info(f"|  Confidence   : {conf_pct:.1f}%        Data Quality     : {dq_pct:.1f}%          |")
+            logger.info(f"+{border}+\n")
+        except Exception as finish_err:
+            logger.warning(f"[PipelineLogger] finish formatting error: {finish_err}")
 
         # Write structured JSONL record to logs/eval_YYYY-MM-DD.jsonl (indefinite history)
         try:

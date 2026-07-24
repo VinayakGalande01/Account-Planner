@@ -8,6 +8,16 @@ database, backend, auth, llm, pipeline, and frontend operations with rotation.
 # Creates local 'logs/' directory if absent and loads standard logging modules.
 import logging.config
 import os
+import sys
+
+# --- UNICODE FIX: Force stdout/stderr to UTF-8 on Windows ---
+# Python on Windows defaults stdout/stderr to cp1252 encoding, which crashes
+# when logging any Unicode character (emoji, box-drawing, etc.).
+# This must run at import time, before any log handler is attached.
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 if not os.path.exists(LOGS_DIR):
@@ -28,6 +38,9 @@ LOGGING_CONFIG = {
             "level": "INFO",
             "formatter": "standard",
             "class": "logging.StreamHandler",
+            # Explicit UTF-8 encoding prevents UnicodeEncodeError on Windows cp1252 terminals
+            # when logging emoji or Unicode box-drawing characters from Gemini responses.
+            "stream": "ext://sys.stdout",
         },
         "database_file": {
             "level": "INFO",

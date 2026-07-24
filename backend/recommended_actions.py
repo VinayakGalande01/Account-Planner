@@ -16,8 +16,10 @@ class RecommendedAction:
     action: str
     description: str = ""
     priority: str = "medium"  # "high" | "medium" | "low"
-    description: str = ""
-    priority: str = "medium"  # "high" | "medium" | "low"
+    # action_type: maps directly to the quick-action backend dispatcher.
+    # When set, chip clicks bypass the intent classifier entirely.
+    # Values: EXEC_EMAIL | MEETING_AGENDA | SHOW_STAKEHOLDERS | REVIEW_RISKS | None
+    action_type: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -29,10 +31,10 @@ class RecommendedAction:
 
 _INTENT_ACTIONS: Dict[str, List[RecommendedAction]] = {
     "ACCOUNT_PLAN_QUERY": [
-        RecommendedAction("Generate Executive Email", "generate_email", "Draft an email for executive outreach", "high"),
-        RecommendedAction("Show Stakeholders", "show_stakeholders", "View key contacts and engagement levels", "high"),
-        RecommendedAction("Create Meeting Agenda", "meeting_agenda", "Build an agenda for the next account review", "medium"),
-        RecommendedAction("Review Risks", "review_risks", "Analyze risk factors for this account", "medium"),
+        RecommendedAction("Generate Executive Email", "generate_email", "Draft an email for executive outreach", "high", action_type="EXEC_EMAIL"),
+        RecommendedAction("Show Stakeholders", "show_stakeholders", "View key contacts and engagement levels", "high", action_type="SHOW_STAKEHOLDERS"),
+        RecommendedAction("Create Meeting Agenda", "meeting_agenda", "Build an agenda for the next account review", "medium", action_type="MEETING_AGENDA"),
+        RecommendedAction("Review Risks", "review_risks", "Analyze risk factors for this account", "medium", action_type="REVIEW_RISKS"),
         RecommendedAction("Predict Renewal", "predict_renewal", "Forecast renewal probability and timeline", "low"),
     ],
     "RISK_ANALYSIS_QUERY": [
