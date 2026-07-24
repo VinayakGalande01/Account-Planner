@@ -75,19 +75,19 @@
     
     <!-- Next.js to FastAPI -->
     <path d="M 250 370 L 370 370" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
-    <text x="310" y="360" font-family="'Inter', sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">HTTP/SSE</text>
+    <text x="310" y="360" font-family="'Inter', sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">HTTP/SSE + JWT</text>
 
     <!-- FastAPI to PostgreSQL -->
     <path d="M 500 420 L 500 490 L 760 490 L 760 490" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
-    <text x="630" y="480" font-family="'Inter', sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">psycopg2</text>
+    <text x="630" y="480" font-family="'Inter', sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">SQLAlchemy</text>
     
     <!-- FastAPI to Local Files -->
     <path d="M 500 320 L 500 240 L 760 240" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)" />
-    <text x="630" y="230" font-family="'Inter', sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">pandas.read_excel</text>
+    <text x="630" y="230" font-family="'Inter', sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">Pandas cache (60s TTL)</text>
 
     <!-- FastAPI to Ollama -->
     <path d="M 630 370 L 760 370" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrowGreen)" stroke-dasharray="4,2" />
-    <text x="695" y="360" font-family="'Inter', sans-serif" font-size="12" fill="#10b981" text-anchor="middle">REST /api/generate</text>
+    <text x="695" y="360" font-family="'Inter', sans-serif" font-size="12" fill="#10b981" text-anchor="middle">LLM_URL</text>
 
     <!-- Next.js Node -->
     <g transform="translate(70, 330)" filter="url(#shadow)">
@@ -114,22 +114,22 @@
     <!-- Local Files Node -->
     <g transform="translate(760, 200)" filter="url(#shadow)">
         <rect width="160" height="80" rx="8" fill="url(#dataGrad)" />
-        <text x="80" y="35" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">Local Filesystem</text>
-        <text x="80" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#fef3c7" text-anchor="middle">CRM .xlsx Data</text>
+        <text x="80" y="35" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">Pandas Cache</text>
+        <text x="80" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#fef3c7" text-anchor="middle">DataEngine (60s TTL)</text>
     </g>
 
     <!-- PostgreSQL Node -->
     <g transform="translate(760, 450)" filter="url(#shadow)">
         <rect width="160" height="80" rx="8" fill="url(#dataGrad)" />
         <text x="80" y="35" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">PostgreSQL DB</text>
-        <text x="80" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#fef3c7" text-anchor="middle">User &amp; Sessions (Port 5432)</text>
+        <text x="80" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#fef3c7" text-anchor="middle">CRM + Users (Port 5432)</text>
     </g>
 
     <!-- Ollama Node -->
     <g transform="translate(760, 330)" filter="url(#shadow)">
         <rect width="160" height="80" rx="8" fill="url(#aiGrad)" />
         <text x="80" y="35" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">Local Ollama</text>
-        <text x="80" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#ede9fe" text-anchor="middle">llama3.2 / phi3:mini</text>
+        <text x="80" y="55" font-family="'Inter', sans-serif" font-size="12" fill="#ede9fe" text-anchor="middle">llama3.2 (local or remote GPU)</text>
     </g>
 
     <!-- Legend -->

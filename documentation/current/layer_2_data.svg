@@ -40,9 +40,9 @@
     <!-- HOW -->
     <rect x="360" y="110" width="280" height="100" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="2" />
     <text x="380" y="140" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#fbbf24">HOW (Mechanism)</text>
-    <text x="380" y="165" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">`data_engine.py` uses Pandas.</text>
-    <text x="380" y="185" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">It loads local `.xlsx` files and</text>
-    <text x="380" y="205" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">aggregates the filtered rows.</text>
+    <text x="380" y="165" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">`data_engine.py` queries Postgres</text>
+    <text x="380" y="185" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">via SQLAlchemy, caches into Pandas</text>
+    <text x="380" y="205" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">(60s TTL) and aggregates rows.</text>
 
     <!-- WHEN -->
     <rect x="670" y="110" width="280" height="100" rx="8" fill="#1e293b" stroke="#3b82f6" stroke-width="2" />
@@ -71,7 +71,7 @@
     <!-- Local Files -->
     <g transform="translate(430, 530)" filter="url(#shadow)">
         <rect width="140" height="40" rx="4" fill="url(#dataGrad)" />
-        <text x="70" y="25" font-family="'Inter', sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">CRM.xlsx</text>
+        <text x="70" y="25" font-family="'Inter', sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">PostgreSQL</text>
     </g>
 
     <!-- Step 2: Processing Module -->
@@ -80,7 +80,7 @@
         <text x="180" y="35" font-family="'Inter', sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">Data &amp; Intelligence Engines</text>
         
         <rect x="20" y="60" width="320" height="35" rx="4" fill="#1e293b" />
-        <text x="180" y="82" font-family="'Inter', sans-serif" font-size="12" fill="#a7f3d0" text-anchor="middle">1. Pandas df.loc[df['Account'] == 'Google']</text>
+        <text x="180" y="82" font-family="'Inter', sans-serif" font-size="12" fill="#a7f3d0" text-anchor="middle">1. db.query(Account).filter(user_id=...)</text>
 
         <rect x="20" y="105" width="320" height="35" rx="4" fill="#1e293b" />
         <text x="180" y="127" font-family="'Inter', sans-serif" font-size="12" fill="#a7f3d0" text-anchor="middle">2. Calculate sum(Pipeline_Value)</text>

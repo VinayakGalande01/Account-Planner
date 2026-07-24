@@ -67,7 +67,7 @@
         <rect width="140" height="120" rx="8" fill="#334155" stroke="#ef4444" stroke-width="2" />
         <text x="70" y="30" font-family="'Inter', sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">Incoming Stream</text>
         <text x="70" y="60" font-family="'Inter', sans-serif" font-size="12" fill="#fca5a5" text-anchor="middle">Token Chunks</text>
-        <text x="70" y="80" font-family="'Inter', sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">from Ollama</text>
+        <text x="70" y="80" font-family="'Inter', sans-serif" font-size="12" fill="#cbd5e1" text-anchor="middle">from LLM</text>
         <text x="70" y="100" font-family="'Inter', sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">(Phase 3)</text>
     </g>
 

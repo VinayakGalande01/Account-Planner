@@ -43,9 +43,9 @@
     <!-- HOW -->
     <rect x="360" y="110" width="280" height="100" rx="8" fill="#1e293b" stroke="#ef4444" stroke-width="2" />
     <text x="380" y="140" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#fca5a5">HOW (Mechanism)</text>
-    <text x="380" y="165" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">`reasoning_engine.py` builds</text>
-    <text x="380" y="185" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">the system prompt and calls</text>
-    <text x="380" y="205" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">the local `Ollama` process via HTTP.</text>
+    <text x="380" y="165" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">`agent_pipeline.py` builds</text>
+    <text x="380" y="185" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">the system prompt and calls the</text>
+    <text x="380" y="205" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">configured LLM (local Ollama or remote GPU).</text>
 
     <!-- WHEN -->
     <rect x="670" y="110" width="280" height="100" rx="8" fill="#1e293b" stroke="#3b82f6" stroke-width="2" />
@@ -75,15 +75,15 @@
     <!-- Step 2: Processing Module -->
     <g transform="translate(320, 310)" filter="url(#shadow)">
         <rect width="360" height="220" rx="8" fill="url(#primary)" />
-        <text x="180" y="35" font-family="'Inter', sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">Reasoning Engine Core</text>
+        <text x="180" y="35" font-family="'Inter', sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">Agent Pipeline: run_phase3_reasoner</text>
         
         <rect x="20" y="60" width="320" height="60" rx="4" fill="#1e293b" />
         <text x="180" y="80" font-family="'Inter', sans-serif" font-size="12" fill="#c4b5fd" text-anchor="middle">Prompt Template Injection</text>
         <text x="180" y="100" font-family="'Inter', sans-serif" font-size="10" fill="#a78bfa" text-anchor="middle">"Use ONLY this data to answer the user..."</text>
 
         <rect x="20" y="140" width="320" height="60" rx="4" fill="url(#aiGrad)" />
-        <text x="180" y="160" font-family="'Inter', sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">Local Ollama API Call</text>
-        <text x="180" y="180" font-family="'Inter', sans-serif" font-size="11" fill="#fecaca" text-anchor="middle">POST /api/generate (Model: llama3.2)</text>
+        <text x="180" y="160" font-family="'Inter', sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">LLM API Call (httpx)</text>
+        <text x="180" y="180" font-family="'Inter', sans-serif" font-size="11" fill="#fecaca" text-anchor="middle">LLM_URL env var (Model: llama3.2:latest)</text>
     </g>
 
     <!-- Step 3: Output -->

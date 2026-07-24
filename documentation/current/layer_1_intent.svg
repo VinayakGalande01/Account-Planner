@@ -43,8 +43,8 @@
     <rect x="360" y="110" width="280" height="100" rx="8" fill="#1e293b" stroke="#8b5cf6" stroke-width="2" />
     <text x="380" y="140" font-family="'Inter', sans-serif" font-size="16" font-weight="700" fill="#a78bfa">HOW (Mechanism)</text>
     <text x="380" y="165" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">Via `intent_classifier.py`.</text>
-    <text x="380" y="185" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">Applies Rule-based NLP and</text>
-    <text x="380" y="205" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">Regex dictionary matching.</text>
+    <text x="380" y="185" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">Hybrid: SentenceTransformer</text>
+    <text x="380" y="205" font-family="'Inter', sans-serif" font-size="13" fill="#cbd5e1">embeddings + LLM fallback.</text>
 
     <!-- WHEN -->
     <rect x="670" y="110" width="280" height="100" rx="8" fill="#1e293b" stroke="#10b981" stroke-width="2" />
@@ -76,10 +76,10 @@
         <text x="150" y="35" font-family="'Inter', sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">Intent Classifier Core</text>
         
         <rect x="20" y="60" width="260" height="30" rx="4" fill="#1e293b" />
-        <text x="150" y="80" font-family="'Inter', sans-serif" font-size="12" fill="#93c5fd" text-anchor="middle">1. Tokenization &amp; Normalization</text>
+        <text x="150" y="80" font-family="'Inter', sans-serif" font-size="12" fill="#93c5fd" text-anchor="middle">1. SentenceTransformer Embedding</text>
 
         <rect x="20" y="100" width="260" height="30" rx="4" fill="#1e293b" />
-        <text x="150" y="120" font-family="'Inter', sans-serif" font-size="12" fill="#93c5fd" text-anchor="middle">2. Regex / Dictionary Lookup</text>
+        <text x="150" y="120" font-family="'Inter', sans-serif" font-size="12" fill="#93c5fd" text-anchor="middle">2. LLM Fallback (if low confidence)</text>
     </g>
 
     <!-- Step 3: Output -->

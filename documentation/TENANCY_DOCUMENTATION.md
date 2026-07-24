@@ -17,7 +17,7 @@ The APEX Account Planner operates on a **Logical Multi-Tenant Model** using a si
 ## 2. Database Isolation (Supabase Postgres & RLS)
 
 ### Schema Updates
-All database models in [crm_models.py](file:///e:/Account%20Planner/backend/models/crm_models.py) have been updated to include a foreign key relation to the `users` table:
+All database models in [crm_models.py](file:///Users/theabhijitjagtap/Account-Planner/backend/models/crm_models.py) have been updated to include a foreign key relation to the `users` table:
 ```python
 user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 ```
@@ -38,7 +38,7 @@ Policies are established on all tables to ensure that select, insert, update, an
 ## 3. Backend Scoping & Dependency Injection (FastAPI)
 
 ### Request-Scoped Data Engine
-Instead of utilizing a global in-memory data engine, FastAPI endpoints inject a request-scoped dependency `get_user_data_engine` defined in [main.py](file:///e:/Account%20Planner/backend/main.py):
+Instead of utilizing a global in-memory data engine, FastAPI endpoints inject a request-scoped dependency `get_user_data_engine` defined in [main.py](file:///Users/theabhijitjagtap/Account-Planner/backend/main.py):
 
 ```python
 def get_user_data_engine(
@@ -57,7 +57,7 @@ def get_user_data_engine(
 ```
 
 ### Scoped Data Loading
-The `DataEngine` in [data_engine.py](file:///e:/Account%20Planner/backend/data_engine.py) queries database tables scoped to the user session, mapping the records into local pandas DataFrames for on-the-fly tactical synthesis and health scorecard evaluations.
+The `DataEngine` in [data_engine.py](file:///Users/theabhijitjagtap/Account-Planner/backend/data_engine.py) queries database tables scoped to the user session, mapping the records into local pandas DataFrames for on-the-fly tactical synthesis and health scorecard evaluations.
 
 ### Access Checks (403 Forbidden)
 Endpoints fetching individual resources by ID (e.g. GET `/api/accounts/{account_id}/details`) perform validation checks to verify ownership. If the requested resource's owner does not match the active session user, a `403 Forbidden` exception is raised immediately.
@@ -68,7 +68,7 @@ Endpoints fetching individual resources by ID (e.g. GET `/api/accounts/{account_
 
 To prevent data leaks through semantic searches:
 1.  **Metadata Tagging:** When activities are indexed into ChromaDB, the payload includes the owner's `user_id` inside the metadata tags.
-2.  **Strict Filtering:** All vector queries in [vector_store.py](file:///e:/Account%20Planner/backend/vector_store.py) filter search results using ChromaDB's where metadata dictionary:
+2.  **Strict Filtering:** All vector queries in [vector_store.py](file:///Users/theabhijitjagtap/Account-Planner/backend/vector_store.py) filter search results using ChromaDB's where metadata dictionary:
     ```python
     where_filter = {"user_id": user_id}
     ```
@@ -78,7 +78,7 @@ To prevent data leaks through semantic searches:
 
 ## 5. Sync Daemon Isolation
 
-The sync process in [sync_daemon.py](file:///e:/Account%20Planner/backend/sync_daemon.py) is scoped with the `sync_crm_to_sqlite_for_user(db, user_id, excel_path)` function.
+The sync process in [sync_daemon.py](file:///Users/theabhijitjagtap/Account-Planner/backend/sync_daemon.py) is scoped with the `sync_crm_to_sqlite_for_user(db, user_id, excel_path)` function.
 *   It clears previous records *only* for the active `user_id`.
 *   It inserts new spreadsheet records setting their owner parameter to `user_id`.
 *   It triggers local vector indexing specifically scoped to the active `user_id`.
@@ -88,7 +88,7 @@ The sync process in [sync_daemon.py](file:///e:/Account%20Planner/backend/sync_d
 ## 6. How to Test & Verify
 
 ### Running Automated Checks
-The test script [verify_all.py](file:///e:/Account%20Planner/backend/verify_all.py) simulates multi-tenant database creations, data hygiene checks, and isolated semantic searches. Execute it to confirm all components pass checks:
+The test script [verify_all.py](file:///Users/theabhijitjagtap/Account-Planner/backend/verify_all.py) simulates multi-tenant database creations, data hygiene checks, and isolated semantic searches. Execute it to confirm all components pass checks:
 ```bash
 cd backend
 python verify_all.py

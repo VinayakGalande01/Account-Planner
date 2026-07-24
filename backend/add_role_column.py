@@ -1,6 +1,16 @@
+"""
+DATABASE MIGRATION COLUMN ADDER (add_role_column.py)
+SQL migration script that safely appends the 'role' column (VARCHAR) to the users table
+across both local SQLite files and remote PostgreSQL/Supabase databases.
+"""
+
+# --- SECTION 1: Dependencies & Engine Setup ---
+# Imports migration libraries and database engine builder modules.
 import os
 from sqlalchemy import create_engine, text
 
+# --- SECTION 2: Database Migration Implementation ---
+# Migrates local SQLite and remote PostgreSQL schemas.
 def migrate():
     print("Running migration: Adding 'role' column to users table...")
     

@@ -1,5 +1,8 @@
 # APEX Account Planner: Local LLM Optimization Guide (8GB & 16GB RAM)
 
+> [!WARNING]
+> **Optional / Historical Configuration:** This guide applies only when running APEX in local-inference mode (e.g. using Ollama). By default, the running system is configured to route prompts to the Google Gemini Cloud API for optimal speed and reasoning capability. Use this guide if you are deploying in a strict zero-data-egress network environment that requires fully offline execution.
+
 Running advanced multi-agent workflows locally requires careful resource management. Since CPU/RAM architectures (particularly on 8GB and 16GB devices) experience slow pre-fill times and low token generation speeds (1–15 tokens/sec), this guide details how to optimize the LLM server and the APEX application layer.
 
 ---
