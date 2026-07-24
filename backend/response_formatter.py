@@ -8,10 +8,13 @@ urgency levels, conversation history context, and clean markdown presentation.
 # Imports HTTP clients, regex utilities, and loads active LLM configuration endpoints.
 import os
 import json
-import httpx
 import logging
 import re
 from typing import Optional, List, Dict
+from dotenv import load_dotenv
+
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(dotenv_path=os.path.join(backend_dir, ".env"), override=True)
 
 logger = logging.getLogger("response_formatter")
 
@@ -34,6 +37,7 @@ def get_active_llm_config() -> tuple:
 
 # --- SECTION 2: Persona Response Formatting Engine ---
 # Formats raw text according to specified user personas (Account Manager, Executive, AE).
+
 async def format_response_for_user(
     raw_output: str, 
     persona: str = "account_manager", 
@@ -41,8 +45,8 @@ async def format_response_for_user(
 ) -> str:
     """
     Accepts raw LLM response, detects tone/urgency, handles conversation history memory,
-    calls local Ollama model to format output into a senior sales advisor JSON object.
-    If it fails, silently returns the original raw_output.
+    and calls Gemini 2.5 Flash API to format output into a senior sales advisor JSON object.
+    If it fails or Gemini is unavailable, silently returns the original raw_output.
     """
     if not raw_output or not raw_output.strip():
         return raw_output
@@ -57,22 +61,32 @@ async def format_response_for_user(
         except Exception:
             pass
 
-    url, model = get_active_llm_config()
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        logger.warning("[ResponseFormatter] GEMINI_API_KEY not found in env, bypassing formatting.")
+        return raw_output
 
     # STEP 2 — PERSONA LAYER
-    persona_instruction = ""
-    if persona == "account_manager":
-        persona_instruction = "Focus on deal-by-deal actions, specific stakeholder names, and what needs to happen in the next 48 hours. Be tactical and direct."
-    elif persona == "vp_sales":
-        persona_instruction = "Focus on pipeline health, revenue at risk, forecast accuracy, and team performance patterns. Be strategic and data-driven but still human."
-    elif persona == "executive":
-        persona_instruction = "Compress everything to 3 sentences max. One key number. One risk. One decision to make. No fluff whatsoever."
+    persona_norm = (persona or "account_manager").lower().replace(" ", "_")
+    if persona_norm in ["executive", "exec", "c_suite"]:
+        persona_instruction = (
+            "EXECUTIVE PERSONA (BLUF Format): Lead immediately with 'BOTTOM LINE: ...'. "
+            "Compress everything to 3-4 sentences max. Provide 1 key dollar metric, 1 core risk, "
+            "and 1 executive decision to make. No tactical fluff or long lists."
+        )
+    elif persona_norm in ["vp_sales", "vp", "sales_director", "head_of_sales"]:
+        persona_instruction = (
+            "VP OF SALES PERSONA: Focus on overall pipeline health, revenue at risk, forecast accuracy, "
+            "and team performance patterns. Highlight quarterly coverage impact and cross-account risks."
+        )
     else:
-        persona_instruction = "Focus on deal-by-deal actions and specific steps."
+        persona_instruction = (
+            "ACCOUNT MANAGER PERSONA: Focus on deal-by-deal tactical actions, specific stakeholder names, "
+            "case resolution steps, and what needs to happen in the next 48 hours. Be direct and operational."
+        )
 
     # STEP 3 — TONE DETECTION
     health_score = None
-    # Match strings like "health score of 21.3%" or "health score: 21"
     health_match = re.search(r'health\D*(\d+(?:\.\d+)?)', raw_output, re.IGNORECASE)
     if health_match:
         try:
@@ -83,17 +97,16 @@ async def format_response_for_user(
     has_zero_prob = "0%" in raw_output or "probability: 0" in raw_output or "probability of 0" in raw_output
 
     if (health_score is not None and health_score < 30) or has_zero_prob:
-        tone = "Be direct and urgent. Do not soften the message. This account needs immediate attention."
+        tone = "Be direct and urgent. Do not soften the message. Name the specific risk immediately."
     elif health_score is not None and health_score > 70:
-        # Check if there are deal probabilities > 75% in raw text
         probs = re.findall(r'(\d+)%', raw_output)
         has_high_prob = any(int(p) > 75 for p in probs if p.isdigit())
         if has_high_prob:
-            tone = "Be confident and forward-looking. Focus on maximizing momentum. Energy should feel like a team that is winning."
+            tone = "Be confident and forward-looking. Focus on accelerating momentum."
         else:
-            tone = "Be balanced. Acknowledge what is working but name the specific gaps clearly. Be honest about risk without being alarmist."
+            tone = "Be balanced. Acknowledge momentum but state specific gap items clearly."
     else:
-        tone = "Be balanced. Acknowledge what is working but name the specific gaps clearly. Be honest about risk without being alarmist."
+        tone = "Be balanced. Name the specific gaps clearly without being alarmist."
 
     # STEP 4 — CONVERSATION MEMORY
     history_summary = "None"
@@ -107,8 +120,8 @@ async def format_response_for_user(
             summary_parts.append(f"{role}: {truncated}")
         history_summary = " | ".join(summary_parts)
 
-    # STEP 1 & 5 — SYSTEM PROMPT & FORMATTING INSTRUCTIONS
-    system_prompt = f"""You are APEX, a senior revenue intelligence advisor with 15 years of enterprise sales experience. You speak directly, confidently, and always connect data to business consequences. You never just report numbers — you tell the user what those numbers mean and what they should do right now. You use 'you' and 'your team' — never 'the user' or 'the system'. You have opinions. You notice things the user didn't ask about. You sound like the smartest person in the room who is also on their side.
+    # STEP 5 — SYSTEM PROMPT & FORMATTING INSTRUCTIONS
+    system_prompt = f"""You are APEX, a senior revenue intelligence advisor. You speak directly, confidently, and always connect data to business consequences. You never just report numbers — you tell the user what those numbers mean and what they should do right now. Use 'you' and 'your team' — never 'the user' or 'the system'.
 
 TONE:
 {tone}
@@ -118,13 +131,12 @@ PERSONA ROLE INSTRUCTION:
 
 CONVERSATION CONTEXT MEMORY:
 Earlier in this conversation: {history_summary}
-Reference this context naturally if relevant to the current response. If the user asked about something before, connect it to what you are saying now.
 
 JSON SCHEMA TO EXCLUSIVELY OUTPUT:
 {{
   "headline": "one punchy line that captures the most important thing",
   "urgency": "P1 | P2 | P3",
-  "summary": "2-3 sentences written like a senior advisor speaking directly to the user. Lead with meaning not data. Connect numbers to business consequences.",
+  "summary": "Persona-tailored summary paragraph matching instructions above.",
   "opportunities": [
     {{
       "id": "string",
@@ -132,72 +144,80 @@ JSON SCHEMA TO EXCLUSIVELY OUTPUT:
       "stage": "string",
       "amount": "string",
       "probability": "string",
-      "insight": "one sentence of human commentary about what this deal actually means"
+      "insight": "one sentence of human commentary"
     }}
   ],
   "risks": [
     {{
-      "type": "string — name the risk plainly",
+      "type": "string",
       "account": "string",
-      "action": "string — written as Do X because Y"
+      "action": "Do X because Y"
     }}
   ],
-  "flag": "one thing the user did not ask about but needs to know. Start with 'I want to flag something.'",
+  "flag": "one unasked thing the user needs to know, starting with 'I want to flag something.'",
   "recommended_actions": [
     {{
       "priority": 1,
       "role": "Account Manager | VP Sales | Executive",
-      "action": "string — Do X because Y format. Specific, not generic."
+      "action": "Do X because Y format"
     }}
   ],
-  "closing_question": "one natural question that invites the user to go deeper. Should feel like a conversation not a menu.",
+  "closing_question": "one natural question inviting next step",
   "next_steps_suggestions": [
     "string", "string", "string"
   ]
 }}
 
-IMPORTANT: Do not output any preamble, markdown code fences, or explanation. Output ONLY the raw JSON string matching the schema.
+Output ONLY valid raw JSON without preamble or markdown fences.
 """
 
-    payload = {
-        "model": model,
-        "prompt": f"System: {system_prompt}\n\nUser Prompt (Raw Data output to format):\n{raw_output}\n\nOutput ONLY the valid raw JSON object.",
-        "stream": False,
-        "options": {
-            "temperature": 0.0,
-            "num_predict": 2048
-        }
-    }
-
     try:
-        limits = httpx.Timeout(timeout=25.0, connect=5.0)
-        async with httpx.AsyncClient(timeout=limits) as client:
-            response = await client.post(url, json=payload)
-            if response.status_code == 200:
-                result_text = response.json().get("response", "").strip()
-                
-                # Strip code block decorators if present
-                if result_text.startswith("```json"):
-                    result_text = result_text[7:]
-                elif result_text.startswith("```"):
-                    result_text = result_text[3:]
-                if result_text.endswith("```"):
-                    result_text = result_text[:-3]
-                result_text = result_text.strip()
-                
-                # Test parse
-                parsed = json.loads(result_text)
-                
-                # Check for required fields
-                required = ["headline", "urgency", "summary", "opportunities", "risks", "flag", "recommended_actions", "closing_question", "next_steps_suggestions"]
-                for req in required:
-                    if req not in parsed:
-                        raise ValueError(f"Missing schema key: {req}")
-                
-                return json.dumps(parsed)
-            else:
-                raise Exception(f"HTTP status {response.status_code}")
+        from reasoning_engine import call_gemini_api
+        user_prompt = f"Raw Data Output to Format:\n{raw_output}"
+        
+        result_text = call_gemini_api(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            api_key=gemini_key,
+            max_tokens=2048,
+            timeout=20
+        )
+        
+        if not result_text:
+            return raw_output
+
+        # Clean code fences if returned
+        if result_text.startswith("```json"):
+            result_text = result_text[7:]
+        elif result_text.startswith("```"):
+            result_text = result_text[3:]
+        if result_text.endswith("```"):
+            result_text = result_text[:-3]
+        result_text = result_text.strip()
+
+        parsed = json.loads(result_text)
+
+        # Validate required schema keys
+        required = ["headline", "urgency", "summary", "opportunities", "risks", "flag", "recommended_actions", "closing_question", "next_steps_suggestions"]
+        for req in required:
+            if req not in parsed:
+                raise ValueError(f"Missing schema key: {req}")
+
+        # STEP 6 — EMOJI SIGNAL INJECTION
+        # Add priority icons to recommended actions
+        for act in parsed.get("recommended_actions", []):
+            prio = act.get("priority", 2)
+            act_text = act.get("action", "")
+            if prio == 1 and not act_text.startswith("⚡"):
+                act["action"] = f"⚡ {act_text}"
+            elif prio == 2 and not act_text.startswith("📋"):
+                act["action"] = f"📋 {act_text}"
+            elif prio >= 3 and not act_text.startswith("📊"):
+                act["action"] = f"📊 {act_text}"
+
+        logger.info(f"[ResponseFormatter] Formatting succeeded for persona: {persona_norm}")
+        return json.dumps(parsed)
+
     except Exception as e:
-        logger.error(f"Failed response formatting: {e}")
-        # STEP 6 — SAFETY FALLBACK
+        logger.error(f"[ResponseFormatter Error] Failed response formatting: {e}")
         return raw_output

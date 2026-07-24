@@ -20,5 +20,6 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, nullable=False, index=True)
     hashed_password = Column(String, nullable=False)
+    role = Column(String, default="account_manager", nullable=False, server_default="account_manager")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

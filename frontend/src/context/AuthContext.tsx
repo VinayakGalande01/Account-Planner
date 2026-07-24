@@ -14,6 +14,7 @@ interface User {
   id: number;
   name: string;
   email: string;
+  role?: string;
   created_at: string;
 }
 
@@ -25,7 +26,7 @@ interface AuthContextType {
   transitionType: 'login' | 'signup' | null;
   error: string | null;
   login: (email: string, password: string, isSignupFlow?: boolean) => Promise<boolean>;
-  signup: (name: string, email: string, password: string) => Promise<boolean>;
+  signup: (name: string, email: string, password: string, role?: string) => Promise<boolean>;
   logout: () => void;
   authFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
@@ -222,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signup = async (name: string, email: string, password: string): Promise<boolean> => {
+  const signup = async (name: string, email: string, password: string, role: string = 'account_manager'): Promise<boolean> => {
     setError(null);
     setLoading(true);
     try {
@@ -232,7 +233,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, role }),
       });
 
       const data = await res.json();

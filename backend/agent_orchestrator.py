@@ -259,9 +259,27 @@ class AccountPlanningAgent:
         from observability import TraceSpanContext
         
         if pre_built_intent:
+            from intent_classifier import IntentClassificationOutput, ExtractedEntities, IntentEnum
             if isinstance(pre_built_intent, dict):
-                from intent_classifier import IntentClassificationOutput
                 intent = IntentClassificationOutput(**pre_built_intent)
+            elif isinstance(pre_built_intent, str):
+                try:
+                    parsed_dict = json.loads(pre_built_intent)
+                    if isinstance(parsed_dict, dict):
+                        intent = IntentClassificationOutput(**parsed_dict)
+                    else:
+                        raise ValueError("Not dict")
+                except Exception:
+                    intent = IntentClassificationOutput(
+                        primary_intent=IntentEnum.ACTION_RECOMMENDATION,
+                        confidence_primary=1.0,
+                        extracted_entities=ExtractedEntities(account=active_account),
+                        urgency="medium",
+                        scope="ENTITY",
+                        intent=pre_built_intent,
+                        complexity="TACTICAL",
+                        target_entities=[active_account] if active_account else []
+                    )
             else:
                 intent = pre_built_intent
             print(f"[Orchestrator] Bypassing intent classifier (Resuming with pre-built intent: {intent})")
@@ -293,7 +311,7 @@ class AccountPlanningAgent:
                 intent = self.intent_classifier.classify(query, history, user_role, active_account)
         try:
             from pipeline_logger import PipelineLogger
-            primary_val = getattr(intent, 'primary_intent', intent.intent)
+            primary_val = getattr(intent, 'primary_intent', getattr(intent, 'intent', 'ACTION_RECOMMENDATION'))
             primary_name = primary_val.value if hasattr(primary_val, 'value') else str(primary_val)
             PipelineLogger.layer1(
                 intent_name=primary_name,
@@ -305,7 +323,8 @@ class AccountPlanningAgent:
             print(f"[Layer 1] Classified Intent: {intent}")
         
         # Fast path for conversational greetings
-        if intent.complexity == "CONVERSATIONAL":
+        current_complexity = getattr(intent, 'complexity', 'TACTICAL')
+        if current_complexity == "CONVERSATIONAL":
             print("[Governance] CONVERSATIONAL complexity detected: Bypassing normal layers for greeting.")
             import httpx
             
@@ -408,8 +427,9 @@ class AccountPlanningAgent:
         
         # Check if query requires clarification due to ambiguous or missing account
         extracted_acc = intent.extracted_entities.account if hasattr(intent, 'extracted_entities') and intent.extracted_entities else None
+        target_acc = extracted_acc or active_account
         needs_clarification = False
-        if not extracted_acc:
+        if not target_acc:
             planning_indicators = ["lose", "churn", "renewal", "competitor", "stuck", "expansion", "feature", "usage"]
             if any(ind in query.lower() for ind in planning_indicators):
                 needs_clarification = True
@@ -418,10 +438,20 @@ class AccountPlanningAgent:
             exists = False
             if accounts_df is not None and not accounts_df.empty:
                 matching = accounts_df[
-                    accounts_df['Account_Name'].str.lower().str.contains(extracted_acc.lower(), na=False) |
-                    accounts_df['Account_ID'].str.lower().str.contains(extracted_acc.lower(), na=False)
+                    accounts_df['Account_Name'].str.lower().str.contains(target_acc.lower(), na=False) |
+                    accounts_df['Account_ID'].str.lower().str.contains(target_acc.lower(), na=False)
                 ]
                 exists = not matching.empty
+                # Fall back to active_account if target_acc was a contact/person name that didn't match an account directly
+                if not exists and active_account:
+                    matching_active = accounts_df[
+                        accounts_df['Account_Name'].str.lower().str.contains(active_account.lower(), na=False) |
+                        accounts_df['Account_ID'].str.lower().str.contains(active_account.lower(), na=False)
+                    ]
+                    if not matching_active.empty:
+                        exists = True
+                        if hasattr(intent, 'extracted_entities') and intent.extracted_entities:
+                            intent.extracted_entities.account = active_account
             if not exists:
                 needs_clarification = True
                 
@@ -548,13 +578,25 @@ class AccountPlanningAgent:
 
         # Fast path for explicit quick-action tasks
         QUICK_ACTION_INTENTS = {"DRAFT_EMAIL", "EXEC_EMAIL", "MEETING_AGENDA", "SHOW_STAKEHOLDERS", "REVIEW_RISKS"}
-        if intent.intent in QUICK_ACTION_INTENTS:
-            print(f"[Governance] {intent.intent} detected: Running targeted quick-action dispatch.")
+        raw_intent_str = str(getattr(intent, 'intent', '')).upper()
+        primary_enum_str = ""
+        if hasattr(intent, 'primary_intent'):
+            p_val = intent.primary_intent
+            primary_enum_str = p_val.name.upper() if hasattr(p_val, 'name') else (p_val.value.upper() if hasattr(p_val, 'value') else str(p_val).upper())
+
+        matching_action = None
+        for qai in QUICK_ACTION_INTENTS:
+            if qai == raw_intent_str or qai == primary_enum_str or qai in raw_intent_str or qai in primary_enum_str:
+                matching_action = qai
+                break
+
+        if matching_action:
+            print(f"[Governance] {matching_action} detected: Running targeted quick-action dispatch.")
             import json
             from quick_actions_handler import dispatch_quick_action
             
             action_result = dispatch_quick_action(
-                action_type=intent.intent,
+                action_type=matching_action,
                 account_data=account_data,
                 query=query,
                 active_account=active_account,
@@ -563,14 +605,15 @@ class AccountPlanningAgent:
             
             serialized_narrative = json.dumps(action_result)
             
-            intent.complexity = "FACTUAL"
+            if hasattr(intent, 'complexity'):
+                intent.complexity = "FACTUAL"
             consensus = self.reasoning_engine.run_reasoning_threads(
                 account_data=account_data,
                 market_context={},
                 complexity="FACTUAL"
             )
             
-            responses = {role: {"narrative": serialized_narrative, "why_this_matters": f"Quick action {intent.intent} executed."} for role in recipient_roles}
+            responses = {role: {"narrative": serialized_narrative, "why_this_matters": f"Quick action {getattr(intent, 'intent', '')} executed."} for role in recipient_roles}
             
             return {
                 "status": "SUCCESS",
@@ -585,7 +628,7 @@ class AccountPlanningAgent:
             }
 
         # Check if FACTUAL complexity
-        if intent.complexity == "FACTUAL":
+        if getattr(intent, 'complexity', 'TACTICAL') == "FACTUAL":
             print("[Governance] Resolving FACTUAL query directly in Python.")
             factual_answer = ""
             if intent.intent == "CONTACT_LOOKUP":

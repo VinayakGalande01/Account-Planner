@@ -120,34 +120,23 @@ export function FormattedResponseRenderer({ data, onActionClick }: FormattedResp
         {data.summary}
       </p>
 
-      {/* Two Column Layout on Desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Table & Suggestions */}
-        <div className="lg:col-span-8 space-y-4">
-          {/* Opportunities Table */}
-          {tableData && (
-            <div>
-              <TableWidget data={tableData} />
-            </div>
-          )}
-          
-          {/* Next steps suggestions */}
-          {suggestions.length > 0 && (
-            <div className="pt-2">
-              <RecommendedActionsWidget actions={suggestions} onActionClick={onActionClick} />
-            </div>
-          )}
+      {/* Full-Width Opportunities Table */}
+      {tableData && (
+        <div className="w-full">
+          <TableWidget data={tableData} />
         </div>
+      )}
 
-        {/* Right Column: Flags, Risks & Recommended Actions */}
-        <div className="lg:col-span-4 space-y-4">
+      {/* Governance Row: Flag & Risks (Side by Side 6-Cols) */}
+      {(data.flag || (data.risks && data.risks.length > 0)) && (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
           {/* Flag Section */}
           {data.flag && (
-            <div className="space-y-1.5">
+            <div className={`space-y-1.5 ${data.risks && data.risks.length > 0 ? 'md:col-span-6' : 'md:col-span-12'}`}>
               <div className="text-[11px] font-bold text-amber-500 uppercase tracking-widest font-[family-name:var(--font-mono)]">
                 ONE THING I'D FLAG
               </div>
-              <div className="border-l-4 border-l-amber-500 bg-zinc-900/40 p-4 rounded-r-xl flex items-start gap-3">
+              <div className="border-l-4 border-l-amber-500 bg-zinc-900/40 p-4 rounded-r-xl flex items-start gap-3 h-full">
                 <span className="text-lg flex-shrink-0">💡</span>
                 <p className="text-sm text-zinc-300">
                   {data.flag}
@@ -158,7 +147,7 @@ export function FormattedResponseRenderer({ data, onActionClick }: FormattedResp
 
           {/* Risks Section */}
           {data.risks && data.risks.length > 0 && (
-            <div className="space-y-2">
+            <div className={`space-y-2 ${data.flag ? 'md:col-span-6' : 'md:col-span-12'}`}>
               <div className="text-[11px] font-bold text-red-500 uppercase tracking-widest font-[family-name:var(--font-mono)]">
                 RISKS TO WATCH
               </div>
@@ -182,46 +171,46 @@ export function FormattedResponseRenderer({ data, onActionClick }: FormattedResp
               </div>
             </div>
           )}
-
-          {/* Recommended Actions */}
-          {data.recommended_actions && data.recommended_actions.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest font-[family-name:var(--font-mono)]">
-                RECOMMENDED ACTIONS
-              </div>
-              <ol className="space-y-3">
-                {data.recommended_actions.map((act: { priority: number; role: 'Account Manager' | 'VP Sales' | 'Executive'; action: string; }, index: number) => (
-                  <li key={index} className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center font-bold text-xs mt-0.5">
-                      {index + 1}
-                    </span>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        {getRoleBadge(act.role)}
-                        <span className="text-[10px] text-zinc-400 font-semibold uppercase">
-                          Priority {act.priority}
-                        </span>
-                      </div>
-                      <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                        {act.action}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
         </div>
-      </div>
+      )}
+
+      {/* Recommended Actions (Full Width) */}
+      {data.recommended_actions && data.recommended_actions.length > 0 && (
+        <div className="space-y-2 pt-2">
+          <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest font-[family-name:var(--font-mono)]">
+            RECOMMENDED ACTIONS
+          </div>
+          <ol className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {data.recommended_actions.map((act: { priority: number; role: 'Account Manager' | 'VP Sales' | 'Executive'; action: string; }, index: number) => (
+              <li key={index} className="border border-white/5 bg-zinc-900/50 p-3.5 rounded-xl flex items-start gap-3">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center font-bold text-xs mt-0.5">
+                  {index + 1}
+                </span>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    {getRoleBadge(act.role)}
+                    <span className="text-[10px] text-zinc-400 font-semibold uppercase font-[family-name:var(--font-mono)]">
+                      Priority {act.priority}
+                    </span>
+                  </div>
+                  <p className="text-sm text-zinc-300">
+                    {act.action}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {/* Closing Question */}
       {data.closing_question && (
-        <p className="text-sm italic text-zinc-500 dark:text-zinc-400 mt-4 leading-relaxed">
+        <p className="text-sm italic text-zinc-400 mt-4 leading-relaxed">
           {data.closing_question}
         </p>
       )}
 
-      {/* Next steps suggestions */}
+      {/* Next steps suggestions (Single clean footer) */}
       {suggestions.length > 0 && (
         <div className="mt-4 pt-2">
           <RecommendedActionsWidget actions={suggestions} onActionClick={onActionClick} />

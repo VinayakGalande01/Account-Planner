@@ -33,7 +33,12 @@ class AuthService:
                 detail="Email already registered",
             )
         hashed = hash_password(payload.password)
-        db_user = User(name=payload.name, email=payload.email, hashed_password=hashed)
+        db_user = User(
+            name=payload.name,
+            email=payload.email,
+            hashed_password=hashed,
+            role=payload.role if payload.role else "account_manager"
+        )
         self.db.add(db_user)
         self.db.commit()
         self.db.refresh(db_user)

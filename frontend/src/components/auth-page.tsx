@@ -21,6 +21,7 @@ export default function AuthPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('account_manager');
   const [showPassword, setShowPassword] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -47,7 +48,7 @@ export default function AuthPage() {
     if (isLogin) {
       await login(email, password);
     } else {
-      await signup(name, email, password);
+      await signup(name, email, password, role);
     }
   };
 
@@ -134,6 +135,22 @@ export default function AuthPage() {
                     placeholder="Enter your full name"
                     className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-md text-[12px] placeholder:text-zinc-400 focus:outline-none focus:border-white/30 focus:bg-white/10 text-white transition-all font-[family-name:var(--font-mono)]"
                   />
+                </div>
+
+                <div className="space-y-1 pt-2">
+                  <label htmlFor="auth-role" className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.15em] font-[family-name:var(--font-mono)]">
+                    Organizational Role
+                  </label>
+                  <select
+                    id="auth-role"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-zinc-900 border border-white/10 rounded-md text-[12px] text-white focus:outline-none focus:border-white/30 font-[family-name:var(--font-mono)] cursor-pointer"
+                  >
+                    <option value="account_manager">🧑‍💼 Account Manager (Tactical deal steps)</option>
+                    <option value="vp_sales">📈 VP of Sales (Portfolio & forecast health)</option>
+                    <option value="executive">🏢 Executive (BLUF 3-sentence summary)</option>
+                  </select>
                 </div>
               </motion.div>
             )}

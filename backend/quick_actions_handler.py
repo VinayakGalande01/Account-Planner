@@ -294,13 +294,14 @@ class RiskReviewHandler:
 
 def dispatch_quick_action(action_type: str, account_data: Dict[str, Any], query: str, active_account: Optional[str] = None, is_local: bool = True) -> Dict[str, Any]:
     """Universal dispatcher for the 4 core quick-actions."""
-    if action_type == "EXEC_EMAIL" or action_type == "DRAFT_EMAIL":
+    atype = (action_type or "").upper()
+    if atype in ["EXEC_EMAIL", "DRAFT_EMAIL"]:
         return ExecEmailHandler.handle(account_data, query, active_account, is_local)
-    elif action_type == "MEETING_AGENDA":
+    elif atype == "MEETING_AGENDA":
         return MeetingAgendaHandler.handle(account_data, query, active_account, is_local)
-    elif action_type == "SHOW_STAKEHOLDERS":
+    elif atype == "SHOW_STAKEHOLDERS":
         return StakeholderHandler.handle(account_data, query)
-    elif action_type == "REVIEW_RISKS":
+    elif atype == "REVIEW_RISKS":
         return RiskReviewHandler.handle(account_data, query)
     else:
         raise ValueError(f"Unknown action type: {action_type}")

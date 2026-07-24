@@ -13,6 +13,7 @@ import re
 class UserBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
+    role: str = Field(default="account_manager")
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)

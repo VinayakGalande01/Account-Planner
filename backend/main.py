@@ -2051,7 +2051,7 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
         # Call response formatter
         formatted_json = full_contract
         try:
-            persona = body.persona if body.persona else "account_manager"
+            persona = body.persona if (body.persona and body.persona.strip()) else getattr(current_user, "role", "account_manager")
             chat_history = body.chat_history if body.chat_history else []
             
             # Call the formatter
