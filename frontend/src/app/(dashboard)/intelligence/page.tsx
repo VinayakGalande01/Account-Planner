@@ -19,9 +19,9 @@ import { useAuth } from '@/context/AuthContext'
 import { useSidebar } from '@/context/SidebarContext'
 import { useAnimation } from '@/context/AnimationContext'
 import { Skeleton } from '@/components/ui/skeleton'
-import { PageHeader } from '@/components/PageHeader'
-import { ThinkingIndicator } from '@/components/ThinkingIndicator'
-import { ReasoningTrail } from '@/components/ReasoningTrail'
+import { PageHeader } from '@/components/common/PageHeader'
+import { ThinkingIndicator } from '@/components/common/ThinkingIndicator'
+import { ReasoningTrail } from '@/components/common/ReasoningTrail'
 
 interface Message {
   id: number;

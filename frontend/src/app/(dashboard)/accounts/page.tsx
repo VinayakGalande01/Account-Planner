@@ -14,7 +14,7 @@ import { useData } from '@/context/DataContext'
 import { Search, ChevronDown, Briefcase } from 'lucide-react'
 import { useAnimation } from '@/context/AnimationContext'
 import { Skeleton } from '@/components/ui/skeleton'
-import { PageHeader } from '@/components/PageHeader'
+import { PageHeader } from '@/components/common/PageHeader'
 
 const formatCurrency = (val: number | undefined): string => {
   if (!val && val !== 0) return '—'

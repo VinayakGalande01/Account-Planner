@@ -10,8 +10,8 @@
 // Imports motion animation frameworks, sidebars, headers, and copilot panels.
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Sidebar } from '@/components/Sidebar'
-import { Header } from '@/components/header'
+import { Sidebar } from '@/components/layout/Sidebar'
+import { Header } from '@/components/layout/header'
 import { AICopilotPanel } from '@/components/ai-copilot-panel'
 import { Sparkles } from 'lucide-react'
 

@@ -12,8 +12,8 @@ import { motion } from 'framer-motion'
 import { usePathname } from 'next/navigation'
 import { Bell, Search, ChevronRight, Menu, Command } from 'lucide-react'
 import { useSidebar } from '@/context/SidebarContext'
-import { CommandPalette } from '@/components/CommandPalette'
-import { NotificationDropdown } from '@/components/NotificationDropdown'
+import { CommandPalette } from '@/components/common/CommandPalette'
+import { NotificationDropdown } from '@/components/common/NotificationDropdown'
 
 export function Header() {
   // --- SECTION: State/Hooks ---

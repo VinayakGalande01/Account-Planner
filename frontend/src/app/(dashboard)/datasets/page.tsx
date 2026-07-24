@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/context/AuthContext'
 import { useAnimation } from '@/context/AnimationContext'
 import { toast } from 'sonner'
-import { PageHeader } from '@/components/PageHeader'
+import { PageHeader } from '@/components/common/PageHeader'
 import { 
   Database, 
   Search, 
