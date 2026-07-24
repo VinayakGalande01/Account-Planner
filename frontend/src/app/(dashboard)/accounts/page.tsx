@@ -1,13 +1,13 @@
 'use client'
 
-// Accounts directory page: lists all CRM accounts in a sortable, filterable
-// table with tier badges, health scores, and pipeline value.
-// Major sections below:
-//   - SECTION: Filtering/Sorting Logic (derived account list)
-//   - SECTION: Badge/Color Helpers
-//   - SECTION: Render - Filters Toolbar
-//   - SECTION: Render - Accounts Table
+/**
+ * CRM ACCOUNTS PAGE (accounts/page.tsx)
+ * Displays list matrices of CRM customer accounts with tier tags,
+ * pipeline health metrics, ARR sums, and sorting/filtering toolbars.
+ */
 
+// --- SECTION 1: Dependencies & Utility Helpers ---
+// Imports animation components, data contexts, and currency formatter functions.
 import { motion } from 'framer-motion'
 import { useState, useMemo } from 'react'
 import { useData } from '@/context/DataContext'

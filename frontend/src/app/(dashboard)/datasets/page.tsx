@@ -1,14 +1,13 @@
 'use client'
 
-// Golden Dataset admin page: internal QA surface for curating ground-truth
-// eval testcases used to benchmark the AI intent classifier and reasoning.
-// Major sections below:
-//   - SECTION: Data Fetching (load/filter golden cases)
-//   - SECTION: CRUD Handlers (create/update/delete testcases)
-//   - SECTION: Render - Stats & Filters
-//   - SECTION: Render - Cases Table
-//   - SECTION: Render - Create/Detail Modals
+/**
+ * GOLDEN DATASET ADMIN PAGE (datasets/page.tsx)
+ * Internal QA dashboard for creating, modifying, and executing ground-truth
+ * evaluation test cases used to audit intent classification and reasoning accuracy.
+ */
 
+// --- SECTION 1: Dependencies & Lucide Icons ---
+// Imports motion UI frameworks, auth contexts, focus traps, and icon sets.
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/context/AuthContext'

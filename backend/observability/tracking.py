@@ -1,3 +1,11 @@
+"""
+TELEMETRY CORRELATION TRACKER (tracking.py)
+Manages spans and trace parameters, resolves local Git commits,
+and calculates heuristic costs for common LLM pricing models.
+"""
+
+# --- SECTION 1: Dependencies & Tracing Context ---
+# Imports ContextVar handlers, datetime utilities, and trace recorders.
 import time
 import subprocess
 import logging
@@ -19,7 +27,8 @@ from observability.recorder import get_telemetry_recorder
 
 logger = logging.getLogger("observability")
 
-# Global prompt cache registry mapping prompt identifiers to hashes
+# --- SECTION 2: Git Revision & LLM Cost Calculation ---
+# Fetches active commit hashes and computes model pricing weights.
 _registered_prompt_hashes: Dict[str, str] = {}
 
 def get_git_revision_hash() -> str:

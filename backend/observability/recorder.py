@@ -1,3 +1,11 @@
+"""
+TELEMETRY RECORDER ENGINE (recorder.py)
+Implements SQL Storage Telemetry recorders, registering hash templates,
+traces, and telemetry metrics directly on the database.
+"""
+
+# --- SECTION 1: Dependencies & ORM Telemetry Models ---
+# Imports ORM models representing traces, prompts, spans, and metrics.
 import hashlib
 import json
 import logging
@@ -19,6 +27,8 @@ from database import SessionLocal
 
 logger = logging.getLogger("observability")
 
+# --- SECTION 2: Telemetry Recorder Interfaces & SQL Implementation ---
+# Defines base record methods and SQL persistence implementations.
 class TelemetryRecorderInterface(ABC):
     """Abstract interface for decoupling telemetry emission from the storage engine."""
     

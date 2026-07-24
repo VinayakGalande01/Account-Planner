@@ -1,3 +1,11 @@
+"""
+TELEMETRY TRACING MIDDLEWARE (middleware.py)
+FastAPI middleware handler propagating trace context headers (W3C traceparent),
+measuring request execution durations, and compiling database metrics logs.
+"""
+
+# --- SECTION 1: Dependencies & Middleware Setup ---
+# Imports request routers, timing utilities, and telemetry recorder configurations.
 import time
 import logging
 from datetime import datetime
@@ -11,6 +19,8 @@ from observability.tracking import get_git_revision_hash
 
 logger = logging.getLogger("observability")
 
+# --- SECTION 2: Request Tracing & Dispatch execution ---
+# Binds request context hooks, measures execution elapsed times, and logs results.
 class TelemetryTracingMiddleware(BaseHTTPMiddleware):
     """FastAPI Middleware to propagate trace propagation context and record execution stats."""
     

@@ -1,5 +1,13 @@
 'use client'
 
+/**
+ * SYSTEM SETTINGS PAGE (settings/page.tsx)
+ * Renders system configurations including active local/cloud LLM model servers,
+ * security encryption variables, and local caching parameters.
+ */
+
+// --- SECTION 1: Dependencies & State Hooks ---
+// Imports motion UI frameworks, configuration state variables, and page layout headers.
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAnimation } from '@/context/AnimationContext'
@@ -7,6 +15,8 @@ import { Settings, Lock, Cpu } from 'lucide-react'
 
 import { PageHeader } from '@/components/PageHeader'
 
+// --- SECTION 2: Settings Component & Render Layout ---
+// Manages LLM server provider selections and displays security settings tab grids.
 export default function SettingsPage() {
   const { isFirstVisit } = useAnimation()
   

@@ -1,12 +1,13 @@
 'use client'
 
-// Main dashboard page: shows KPI summary strip plus account health,
-// risk detection, and engagement momentum widgets for a quick overview.
-// Major sections below:
-//   - SECTION: KPI Stat Derivations
-//   - SECTION: Render - KPI Summary Strip
-//   - SECTION: Render - Widget Grid
+/**
+ * EXECUTIVE KPI DASHBOARD PAGE (dashboard/page.tsx)
+ * Displays executive summary KPIs (Active Accounts, Total Pipeline, Avg Health)
+ * alongside account health metrics, risk detection widgets, and interaction charts.
+ */
 
+// --- SECTION 1: Dependencies & Widget Components ---
+// Imports layout components, health widgets, risk charts, and currency parser helpers.
 import { motion } from 'framer-motion'
 import { AccountHealthWidget } from '@/components/account-health-widget'
 import { EngagementMomentumChart } from '@/components/engagement-momentum-chart'

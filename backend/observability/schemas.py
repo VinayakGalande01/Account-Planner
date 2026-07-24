@@ -1,3 +1,11 @@
+"""
+TELEMETRY DATA SCHEMAS (schemas.py)
+Pydantic model structures defining request traces, execution spans,
+and raw client/server metadata payload schemas.
+"""
+
+# --- SECTION 1: Dependencies & Metadata Create Schemas ---
+# Imports Pydantic base validation objects and defines global Trace schema properties.
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -27,11 +35,10 @@ class TraceMetadataCreate(BaseModel):
     validation_error: Optional[str] = None
     grounding_score: str = "HIGH"
     reflection_triggered: bool = False
-    
     backend_git_commit: str
     reasoning_engine_version: str
-
-
+# --- SECTION 2: Span & Payload Telemetry Schemas ---
+# Validates structures for nested execution timelines and raw request packages.
 class SpanCreate(BaseModel):
     trace_id: str
     stage_name: str

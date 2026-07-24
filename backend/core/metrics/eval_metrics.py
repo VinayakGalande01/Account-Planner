@@ -1,3 +1,11 @@
+"""
+EVALUATION METRICS CALCULATOR (eval_metrics.py)
+Computes mathematical evaluation metrics for AI reasoning checks:
+Intent Accuracy, Entity F1, Retriever Precision/Recall, and composite EQS score metrics.
+"""
+
+# --- SECTION 1: Dependencies & Base Metric Resolvers ---
+# Imports parsing tools, dictionary typing structures, and resolves basic intent matches.
 import json
 import re
 import logging
@@ -6,6 +14,8 @@ import httpx
 
 logger = logging.getLogger("eval_metrics")
 
+# --- SECTION 2: Advanced Entity F1 & Quality Metrics ---
+# Computes F1 statistics for extracted entities and composite EQS scores.
 def calculate_intent_match(expected_intent: str, actual_intent: str) -> bool:
     """Compare expected intent with actual intent. Case-insensitive."""
     if not expected_intent or not actual_intent:
