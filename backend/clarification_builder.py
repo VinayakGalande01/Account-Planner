@@ -7,15 +7,17 @@ have ambiguous or unspecified account references, extracting candidate entity ch
 # --- SECTION 1: Dependencies & Logging Setup ---
 # Imports backend logger and typing constructs for clarification generation.
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger("backend")
 
 # --- SECTION 2: Clarification Prompt & Candidate Extraction ---
 # Builds targeted clarification text and extracts account candidate options for frontend chips.
-def build_clarification_prompt(last_user_message: str, prior_history: List[Dict[str, str]] = None, known_accounts: List[str] = None) -> str:
+def build_clarification_prompt(last_user_message: str, prior_history: List[Dict[str, str]] = None, known_accounts: List[str] = None, unknown_name: Optional[str] = None) -> str:
     known_accounts = known_accounts or []
-    
+    if unknown_name:
+        return f"I couldn't find an account called \"{unknown_name}\" in your CRM data. Which account did you mean?"
+
     query_lower = last_user_message.lower()
     candidates = []
     for acc in known_accounts:

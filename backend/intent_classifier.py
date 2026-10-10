@@ -14,6 +14,8 @@ from enum import Enum
 from typing import Optional, Dict, List, Literal
 from pydantic import BaseModel, ValidationError
 
+from account_resolver import find_account_in_text, candidate_names, user_messages
+
 try:
     from sentence_transformers import SentenceTransformer
     SENTENCE_TRANSFORMERS_AVAILABLE = True
@@ -230,44 +232,31 @@ class IntentClassifier:
                 target_entities_val.append(resolved_acc)
                 
         if not target_entities_val and self.known_accounts:
-            for acc in self.known_accounts:
-                pattern = r'\b' + re.escape(acc.lower()) + r'\b'
-                if re.search(pattern, query_lower):
-                    target_entities_val.append(acc)
-        
-        # Contiguous capitalized word fallback
+            named_acc = find_account_in_text(query, self.known_accounts)
+            if named_acc:
+                target_entities_val.append(named_acc)
+
+        # Unknown capitalised name (e.g. "Acme Corp") so the orchestrator can report it as not found
         if not target_entities_val:
-            noise = {'Top', 'Show', 'Give', 'Get', 'Review', 'Evaluate', 'Provide', 'Who', 'What', 'Where', 'When', 'Why', 'How', 'Which', 'Are', 'Is', 'They', 'Them', 'Our', 'Your', 'Please', 'Traced'}
-            matches = re.findall(r'\b[A-Z][a-zA-Z0-9]*(?:\s+[A-Z][a-zA-Z0-9]*)*\b', query)
-            for m in matches:
-                m_words = m.split()
-                filtered_words = [w for w in m_words if w not in noise]
-                if filtered_words:
-                    target_entities_val.append(" ".join(filtered_words))
-        
+            target_entities_val.extend(candidate_names(query))
+
         # Carrying over active account from history if no account is specified and query is not global
         if not target_entities_val:
-            global_indicators = ["portfolio", "all accounts", "across accounts", "every account", "entire portfolio", "global", "high risk accounts", "top opportunities"]
+            global_indicators = ["portfolio", "all accounts", "across accounts", "every account", "entire portfolio", "global", "high risk accounts", "top opportunities", "which accounts", "what accounts", "my accounts", "any accounts", "accounts at risk"]
             is_global = any(indicator in query_lower for indicator in global_indicators)
-            
+
             if not is_global and active_account:
                 target_entities_val.append(active_account)
-            elif not is_global and history:
-                for msg in reversed(history):
-                    msg_text = msg.get("content", msg.get("text", "")).lower()
-                    found_acc = None
-                    if self.known_accounts:
-                        for acc in self.known_accounts:
-                            pattern = r'\b' + re.escape(acc.lower()) + r'\b'
-                            if re.search(pattern, msg_text):
-                                found_acc = acc
-                                break
+            elif not is_global and history and self.known_accounts:
+                # Only the user's own messages: APEX's answers mention many accounts
+                for msg_text in reversed(user_messages(history)):
+                    found_acc = find_account_in_text(msg_text, self.known_accounts)
                     if found_acc:
                         target_entities_val.append(found_acc)
                         break
-        
-        if target_entities_val:
-            entities.account = target_entities_val[0]
+
+        # Always overwrite: the legacy extractor's first capitalised word ("Which", "Tell") is not an account
+        entities.account = target_entities_val[0] if target_entities_val else None
 
         # Conversational query detection bypass
         conversational_keywords = ["hello", "hi", "hii", "hey", "greetings", "what can you do for me", "help me", "who are you"]

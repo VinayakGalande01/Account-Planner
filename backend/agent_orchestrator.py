@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data_engine import DataEngine
+from account_resolver import match_account_rows, is_contact_name
 from intent_classifier import IntentClassifier, IntentClassificationOutput
 from reasoning_engine import (
     ReasoningEngine, ResponseGenerator, ConsensusOutput
@@ -42,11 +43,7 @@ class DataRetrieval:
         acc_row = pd.DataFrame()
         
         if acc_name:
-            # Case-insensitive substring match on Account_Name or Account_ID
-            matching = accounts_df[
-                accounts_df['Account_Name'].str.lower().str.contains(acc_name.lower(), na=False) |
-                accounts_df['Account_ID'].str.lower().str.contains(acc_name.lower(), na=False)
-            ]
+            matching = match_account_rows(accounts_df, acc_name)
             if not matching.empty:
                 acc_row = matching.iloc[0]
                 
@@ -376,6 +373,13 @@ class AccountPlanningAgent:
             except Exception as e:
                 print(f"[Warning] LLM call failed for conversational greeting: {e}")
                 
+            # call_gemini_api requests JSON output, so the greeting arrives as {"response": "..."}
+            if welcome_text and welcome_text.strip().startswith("{"):
+                try:
+                    payload = json.loads(welcome_text)
+                    welcome_text = next((v for v in payload.values() if isinstance(v, str) and v.strip()), "") if isinstance(payload, dict) else ""
+                except ValueError:
+                    welcome_text = ""
             if not welcome_text:
                 welcome_text = "Hello! I am your Account Planning expert. How can I help you with your accounts or pipelines today?"
             
@@ -437,18 +441,12 @@ class AccountPlanningAgent:
             accounts_df = self.data_engine.data.get('account') if self.data_engine else None
             exists = False
             if accounts_df is not None and not accounts_df.empty:
-                matching = accounts_df[
-                    accounts_df['Account_Name'].str.lower().str.contains(target_acc.lower(), na=False) |
-                    accounts_df['Account_ID'].str.lower().str.contains(target_acc.lower(), na=False)
-                ]
-                exists = not matching.empty
-                # Fall back to active_account if target_acc was a contact/person name that didn't match an account directly
-                if not exists and active_account:
-                    matching_active = accounts_df[
-                        accounts_df['Account_Name'].str.lower().str.contains(active_account.lower(), na=False) |
-                        accounts_df['Account_ID'].str.lower().str.contains(active_account.lower(), na=False)
-                    ]
-                    if not matching_active.empty:
+                exists = not match_account_rows(accounts_df, target_acc).empty
+                # Fall back to active_account only when target_acc is a contact's name.
+                # An unknown company (e.g. "Acme Corp") must reach clarification, not be swapped silently.
+                contacts_df = self.data_engine.data.get('contact') if self.data_engine else None
+                if not exists and active_account and is_contact_name(contacts_df, target_acc):
+                    if not match_account_rows(accounts_df, active_account).empty:
                         exists = True
                         if hasattr(intent, 'extracted_entities') and intent.extracted_entities:
                             intent.extracted_entities.account = active_account
@@ -464,7 +462,7 @@ class AccountPlanningAgent:
             if accounts_df is not None and not accounts_df.empty:
                 known_accounts = accounts_df['Account_Name'].dropna().unique().tolist()
                 
-            question = build_clarification_prompt(query, history, known_accounts)
+            question = build_clarification_prompt(query, history, known_accounts, unknown_name=target_acc)
             options = extract_candidate_options(known_accounts, query)
             
             return {
@@ -592,7 +590,6 @@ class AccountPlanningAgent:
 
         if matching_action:
             print(f"[Governance] {matching_action} detected: Running targeted quick-action dispatch.")
-            import json
             from quick_actions_handler import dispatch_quick_action
             
             action_result = dispatch_quick_action(
