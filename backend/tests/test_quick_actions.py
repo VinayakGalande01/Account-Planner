@@ -19,7 +19,9 @@ MOCK_ACCOUNT_DATA = {
             "opp_id": "OPP001",
             "opp_name": "Acme Enterprise Deal",
             "amount_usd": 1500000.0,
-            "stage": "Commercial Negotiation"
+            "stage": "Commercial Negotiation",
+            "close_date": "2026-06-30",  # 14 days overdue relative to 2026-07-14
+            "competitor": "Competitor A"
         }
     ],
     "contacts": [
@@ -43,7 +45,8 @@ MOCK_ACCOUNT_DATA = {
             "case_id": "CASE001",
             "subject": "System integration issue",
             "status": "New",
-            "priority": "P1" # Critical case
+            "priority": "P1", # Critical case
+            "open_date": "2026-07-04"
         }
     ]
 }
@@ -88,14 +91,52 @@ def test_risk_review_handler():
     # Stalling (Commercial Negotiation)
     assert len(buckets["stalling_deals"]) == 1
     assert buckets["stalling_deals"][0]["opp_name"] == "Acme Enterprise Deal"
+    assert buckets["stalling_deals"][0]["days_stalled"] == 14
     
     # Critical cases
     assert len(buckets["critical_cases"]) == 1
     assert buckets["critical_cases"][0]["case_id"] == "CASE001"
+    assert buckets["critical_cases"][0]["age_days"] == 10
     
     # Competitor threat (health score < 50)
     assert len(buckets["competitor_threat"]) == 1
     assert buckets["competitor_threat"][0]["opp_name"] == "Acme Enterprise Deal"
+    assert buckets["competitor_threat"][0]["competitor"] == "Competitor A"
+
+    # One deal in several buckets is counted once
+    assert res["revenue_at_risk_usd"] == 1500000.0
+
+
+def test_risk_review_excludes_closed_deals():
+    data = dict(MOCK_ACCOUNT_DATA, opportunities=MOCK_ACCOUNT_DATA["opportunities"] + [
+        {"opp_id": "OPP002", "opp_name": "Lost Pilot", "amount_usd": 900000.0, "stage": "Closed Lost",
+         "close_date": "2026-01-01", "competitor": "Competitor B"},
+    ])
+    res = RiskReviewHandler.handle(data, "review risks")
+    names = {o["opp_name"] for bucket in res["risk_buckets"].values() for o in bucket if "opp_name" in o}
+    assert "Lost Pilot" not in names
+    assert res["revenue_at_risk_usd"] == 1500000.0
+
+
+def test_risk_review_portfolio_counts_only_unhealthy_accounts():
+    data = {
+        "account_id": None,
+        "account_name": "Global Portfolio View",
+        "health_score": 60.0,
+        "contacts": [],
+        "cases": [],
+        "portfolio_health": {"A1": 20.0, "A2": 88.0},
+        "opportunities": [
+            {"opp_id": "O1", "opp_name": "Weak account renewal", "account_id": "A1", "amount_usd": 500000.0,
+             "stage": "Negotiation/Review", "close_date": "2026-07-01", "competitor": None},
+            {"opp_id": "O2", "opp_name": "Healthy account expansion", "account_id": "A2", "amount_usd": 2000000.0,
+             "stage": "Negotiation/Review", "close_date": "2026-07-01", "competitor": "Competitor A"},
+        ],
+    }
+    res = RiskReviewHandler.handle(data, "which accounts are at risk")
+    assert res["risk_buckets"]["single_threaded"] == []
+    assert [d["opp_name"] for d in res["risk_buckets"]["stalling_deals"]] == ["Weak account renewal"]
+    assert res["revenue_at_risk_usd"] == 500000.0
 
 def test_dispatch_quick_action():
     """Verify that dispatcher correctly routes types and returns structured responses."""

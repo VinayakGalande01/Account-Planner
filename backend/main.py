@@ -539,6 +539,16 @@ def classify_intent(query: str, account_id: Optional[str]) -> str:
 
 # ─── Contract Protocol Helpers ─────────────────────────────────
 
+def display_table(table_data: Optional[dict]) -> Optional[dict]:
+    """Show record IDs without the per-user storage prefix ("1_OPP004" -> "OPP004")."""
+    if not table_data or not table_data.get("rows"):
+        return table_data
+    from direct_answers import display_id
+    rows = [{k: display_id(v) if k.endswith("_ID") and isinstance(v, str) else v for k, v in row.items()}
+            for row in table_data["rows"]]
+    return {**table_data, "rows": rows}
+
+
 def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = None, query: str = "", p1_json: Optional[dict] = None) -> Optional[dict]:
     """Compute structured table data for a given intent.
     Returns dict with 'columns' and 'rows', or None if no table applicable.
@@ -903,8 +913,13 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
 
         elif "account" in q_lower or "health" in q_lower:
             # Table of Account Health / Risk Priority
-            columns = ["Rank", "Account_ID", "Account_Name", "Account_Tier", "Risk_Score", "Classification", "Open_Critical_Cases", "Open_Pipeline_USD"]
+            columns = ["Rank", "Account_ID", "Account_Name", "Account_Tier", "Health_Score", "Risk_Score", "Classification", "Open_Critical_Cases", "Open_Pipeline_USD"]
             table_rows = []
+            # Risk flags miss accounts whose CRM health is poor (e.g. deals already lost), so the
+            # displayed level is the worse of the flag-based label and the health band.
+            risk_levels = ["🟢 LOW RISK", "🟡 MEDIUM RISK", "🟠 HIGH RISK", "🔴 CRITICAL RISK"]
+            def health_level(h):
+                return 3 if h < 30 else 2 if h < 45 else 1 if h < 60 else 0
             accounts_df = engine.data.get('account')
             opps = engine.data.get('opportunity')
             cases = engine.data.get('case')
@@ -931,26 +946,36 @@ def compute_table_for_intent(engine, intent: str, account_id: Optional[str] = No
                         acc_opps = opps[(opps["Account_ID"] == aid) & (~opps["Stage"].isin(["Closed Won", "Closed Lost"]))]
                         open_pipeline = float(acc_opps["Amount_USD"].sum())
                     
+                    health = float(acc.get("Health_Score", 80)) if pd.notna(acc.get("Health_Score")) else 80.0
+                    flag_label = risk_data.get("classification", "🟢 LOW RISK")
+                    flag_level = risk_levels.index(flag_label) if flag_label in risk_levels else 0
+                    level = max(flag_level, health_level(health))
                     rows.append({
                         "Account_ID": aid,
                         "Account_Name": acc.get("Account_Name", ""),
                         "Account_Tier": acc.get("Account_Tier", ""),
+                        "Health_Score": health,
                         "Risk_Score": risk_score,
-                        "Classification": risk_data.get("classification", "🟢 LOW RISK"),
+                        "Risk_Level": level,
+                        "Classification": risk_levels[level],
                         "Risk_Priority": risk_priority,
                         "Open_Critical_Cases": critical_cases,
                         "Open_Pipeline_USD": open_pipeline
                     })
-                
+
                 health_df = pd.DataFrame(rows)
-                # Sort by Risk Priority
-                ranked = health_df.sort_values(by="Risk_Priority", ascending=False)
-                for rank, (_, r) in enumerate(ranked.head(lim).iterrows(), 1):
+                # "At risk" questions list only High/Critical accounts
+                if "risk" in q_lower and not health_df[health_df["Risk_Level"] >= 2].empty:
+                    health_df = health_df[health_df["Risk_Level"] >= 2]
+                # Riskiest first, weakest health next; Risk_Priority is revenue-weighted, so it only breaks ties
+                ranked = health_df.sort_values(by=["Risk_Level", "Health_Score", "Risk_Priority"], ascending=[False, True, False])
+                for rank, (_, r) in enumerate(ranked.head(lim if (p1 and p1.limit) else max(lim, 10)).iterrows(), 1):
                     table_rows.append({
                         "Rank": rank,
                         "Account_ID": r["Account_ID"],
                         "Account_Name": r["Account_Name"],
                         "Account_Tier": r["Account_Tier"],
+                        "Health_Score": int(r["Health_Score"]),
                         "Risk_Score": int(r["Risk_Score"]),
                         "Classification": r["Classification"],
                         "Open_Critical_Cases": int(r["Open_Critical_Cases"]),
@@ -1045,7 +1070,7 @@ def wrap_response_contract(
     parts.append(f"__SECTION_SUMMARY__\n{summary}")
 
     if table_data is not None:
-        parts.append(f"__SECTION_TABLE_DATA__\n{json.dumps(table_data)}")
+        parts.append(f"__SECTION_TABLE_DATA__\n{json.dumps(display_table(table_data))}")
 
     if signals:
         signal_text = "\n".join([f"• {s}" for s in signals])
@@ -1636,23 +1661,28 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
                                 print(f"[History Resolution] Inherited active account from history: {resolved_active_account}")
                                 break
                             
+            # Resume a pending clarification only when this message is a short reply naming a real
+            # account (typed or a suggestion chip). Any other message is a new question.
             pre_built_intent = None
-            if pre_built_intent_data:
-                cached_intent = pre_built_intent_data.get("intent")
-                if cached_intent:
-                    if hasattr(cached_intent, "extracted_entities") and cached_intent.extracted_entities:
-                        cached_intent.extracted_entities.account = body.query
-                    elif isinstance(cached_intent, dict) and "extracted_entities" in cached_intent:
-                        cached_intent["extracted_entities"]["account"] = body.query
-                    
-                    if hasattr(cached_intent, "target_entities"):
-                        cached_intent.target_entities = [body.query]
-                    elif isinstance(cached_intent, dict):
-                        cached_intent["target_entities"] = [body.query]
-                    
-                    pre_built_intent = cached_intent
-                    yield f"sys_meta_log|[SYS_LOG] Resuming session checkpoint. Account resolved: {body.query}✓\n\n"
+            effective_query = body.query
+            original_query = (pre_built_intent_data or {}).get("original_query")
+            if original_query and user_engine:
+                from account_resolver import find_account_in_text
+                accounts_df = user_engine.data.get('account')
+                known_accounts = accounts_df['Account_Name'].dropna().tolist() if accounts_df is not None and not accounts_df.empty else []
+                answered_acc = find_account_in_text(body.query, known_accounts)
+                if answered_acc and len(body.query.split()) <= 6:
+                    unknown_name = (pre_built_intent_data or {}).get("unknown_name")
+                    if unknown_name and re.search(re.escape(unknown_name), original_query, re.IGNORECASE):
+                        effective_query = re.sub(re.escape(unknown_name), answered_acc, original_query, flags=re.IGNORECASE)
+                    else:
+                        effective_query = f"{original_query} (account: {answered_acc})"
+                    resolved_active_account = answered_acc
+                    print(f"[Checkpoint] Resumed: '{original_query}' -> '{effective_query}'")
+                    yield f"sys_meta_log|[SYS_LOG] Resuming your earlier question for {answered_acc}✓\n\n"
                     await asyncio.sleep(0.05)
+                else:
+                    print("[Checkpoint] Discarded: message is a new question, not a clarification answer.")
             
             # Setup thread-safe progress callback queue
             progress_queue = asyncio.Queue()
@@ -1666,7 +1696,7 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             query_task = asyncio.create_task(
                 asyncio.to_thread(
                     agent.process_query,
-                    query=body.query,
+                    query=effective_query,
                     user_role="sales", # Default
                     recipient_roles=[target_role],
                     history=body.chat_history if body.chat_history else chat_history,
@@ -1913,7 +1943,11 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
             account_id = res.get("account_data", {}).get("account_id")
             complexity_val = res.get("intent").complexity if hasattr(res.get("intent"), "complexity") else None
             
-            if complexity_val != "CONVERSATIONAL":
+            if "table_data" in res:
+                # Direct answers bring their own table (or deliberately none, e.g. a revenue figure)
+                if res["table_data"]:
+                    yield f"__SECTION_TABLE_DATA__\n{json.dumps(display_table(res['table_data']))}\n"
+            elif complexity_val != "CONVERSATIONAL":
                 try:
                     # Need to synthesize p1_json structure for compute_table_for_intent
                     limit_val = None
@@ -1941,7 +1975,7 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
                     }
                     table_data = compute_table_for_intent(user_engine, intent, account_id, body.query, p1_json)
                     if table_data:
-                        yield f"__SECTION_TABLE_DATA__\n{json.dumps(table_data)}\n"
+                        yield f"__SECTION_TABLE_DATA__\n{json.dumps(display_table(table_data))}\n"
                 except Exception as e:
                     print(f"[API Warning] Could not generate table data: {e}")
                 

@@ -12,6 +12,15 @@ import datetime
 from typing import Dict, Any, Optional
 from reasoning_engine import ResponseGenerator
 from agent_pipeline import clean_and_parse_json
+from intelligence_engine import reference_date as _reference_today, open_opportunities
+
+
+def _days_since(date_str: Optional[str], today: datetime.date) -> Optional[int]:
+    """Whole days from an ISO date (YYYY-MM-DD...) to today; None if missing or unparseable."""
+    try:
+        return (today - datetime.date.fromisoformat(str(date_str)[:10])).days
+    except (TypeError, ValueError):
+        return None
 
 # --- SECTION 2: Quick Action Handler Classes ---
 # Implements Executive Email, Meeting Agenda, Stakeholder, and Risk Review prompt generators.
@@ -210,60 +219,70 @@ class RiskReviewHandler:
     @staticmethod
     def handle(account_data: Dict[str, Any], query: str) -> Dict[str, Any]:
         """Deterministic grouping of open threats, stalling opportunities, and P1 support cases."""
-        opportunities = account_data.get("opportunities", [])
         contacts = account_data.get("contacts", [])
         cases = account_data.get("cases", [])
-        
+        is_portfolio = not account_data.get("account_id")
+        # Only open deals can be at risk; closed won/lost are history
+        opportunities = open_opportunities(account_data.get("opportunities", []))
+        if is_portfolio:
+            # Portfolio view: deals at accounts whose health is below 45
+            health_by_account = account_data.get("portfolio_health", {})
+            opportunities = [o for o in opportunities if health_by_account.get(o.get("account_id"), 100.0) < 45.0]
+
         single_threaded_list = []
         stalling_deals_list = []
         critical_cases_list = []
         competitor_threat_list = []
-        total_rev_at_risk = 0.0
-        
-        dm_count = sum(1 for c in contacts if any(kw in c.get("role", "").lower() for kw in ["director", "vp", "cxo", "chief", "head"]))
-        is_single_threaded = len(contacts) <= 2 or dm_count == 0
-        
-        if is_single_threaded and opportunities:
+        at_risk_opp_ids = set()
+
+        # Contacts are only loaded for a single account, so single-threading can't be judged portfolio-wide
+        dm_count = sum(1 for c in contacts if any(kw in c.get("role", "").lower() for kw in ["director", "vp", "cxo", "chief", "head", "decision maker"]))
+        is_single_threaded = not is_portfolio and (len(contacts) <= 2 or dm_count == 0)
+
+        if is_single_threaded:
             for o in opportunities:
-                val = o.get("amount_usd", 0.0)
                 single_threaded_list.append({
                     "opp_name": o.get("opp_name", "Unknown Opportunity"),
-                    "value_usd": val,
+                    "value_usd": o.get("amount_usd", 0.0),
                     "suggested_action": "Identify & engage at least two additional department sponsors."
                 })
-                total_rev_at_risk += val
-                
+                at_risk_opp_ids.add(o.get("opp_id") or o.get("opp_name"))
+
+        today = _reference_today()
         for o in opportunities:
-            stage = o.get("stage", "")
-            val = o.get("amount_usd", 0.0)
-            if any(kw in stage.lower() for kw in ["negotiation", "proposal", "commercial"]):
+            days_overdue = _days_since(o.get("close_date"), today)
+            if days_overdue and days_overdue > 0:
                 stalling_deals_list.append({
                     "opp_name": o.get("opp_name", ""),
-                    "days_stalled": 45,
-                    "stage": stage
+                    "days_stalled": days_overdue,
+                    "stage": o.get("stage", "")
                 })
-                if not is_single_threaded:
-                    total_rev_at_risk += val
-                    
+                at_risk_opp_ids.add(o.get("opp_id") or o.get("opp_name"))
+
         for c in cases:
-            priority = c.get("priority", "Medium")
-            status = c.get("status", "Closed")
-            if priority in ["High", "P1", "Critical"] and status != "Closed":
+            severity = c.get("severity") or c.get("priority") or "Medium"
+            status = str(c.get("status", "Closed"))
+            if severity in ["High", "P1", "Critical"] and status.lower() not in ("closed", "resolved"):
                 critical_cases_list.append({
                     "case_id": c.get("case_id", "Unknown"),
-                    "priority": priority,
-                    "age_days": 10
+                    "priority": severity,
+                    "age_days": _days_since(c.get("open_date"), today) or 0
                 })
-                
+
         health_score = account_data.get("health_score", 100.0)
-        if health_score < 50.0 and opportunities:
-            for o in opportunities:
-                val = o.get("amount_usd", 0.0)
+        for o in opportunities:
+            if o.get("competitor") and (is_portfolio or health_score < 50.0):
                 competitor_threat_list.append({
                     "opp_name": o.get("opp_name", ""),
-                    "competitor": "Competitor replacement threat",
-                    "value_usd": val
+                    "competitor": o["competitor"],
+                    "value_usd": o.get("amount_usd", 0.0)
                 })
+                at_risk_opp_ids.add(o.get("opp_id") or o.get("opp_name"))
+
+        # Each deal counted once, however many risk buckets it falls in
+        total_rev_at_risk = sum(
+            o.get("amount_usd", 0.0) for o in opportunities if (o.get("opp_id") or o.get("opp_name")) in at_risk_opp_ids
+        )
                 
         summary_lines = []
         if single_threaded_list:

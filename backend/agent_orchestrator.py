@@ -9,6 +9,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data_engine import DataEngine
 from account_resolver import match_account_rows, is_contact_name
+from intelligence_engine import open_opportunities
+from direct_answers import display_id
 from intent_classifier import IntentClassifier, IntentClassificationOutput
 from reasoning_engine import (
     ReasoningEngine, ResponseGenerator, ConsensusOutput
@@ -69,12 +71,17 @@ class DataRetrieval:
                 matching_opps = matching_opps[matching_opps['Stage'].str.lower().str.contains(target_stage.lower(), na=False)]
                 
             for _, r in matching_opps.iterrows():
+                probability = r.get('Probability_Pct')
+                competitor = r.get('Competitor')
                 opps_list.append({
                     "opp_id": str(r.get('Opp_ID', '')),
                     "opp_name": str(r.get('Opp_Name', '')),
+                    "account_id": str(r.get('Account_ID', '')),
                     "amount_usd": float(r.get('Amount_USD', 0.0)),
                     "stage": str(r.get('Stage', '')),
-                    "close_date": str(r.get('Close_Date', ''))
+                    "close_date": str(r.get('Close_Date', '')),
+                    "probability": int(probability) if pd.notna(probability) else None,
+                    "competitor": str(competitor) if pd.notna(competitor) and str(competitor).strip() else None
                 })
                 
         # Contacts
@@ -101,7 +108,8 @@ class DataRetrieval:
                     "case_id": str(r.get('Case_ID', '')),
                     "subject": str(r.get('Subject', '')),
                     "severity": str(r.get('Severity', '')),
-                    "status": str(r.get('Status', ''))
+                    "status": str(r.get('Status', '')),
+                    "open_date": str(r.get('Open_Date', ''))[:10] if pd.notna(r.get('Open_Date')) else ""
                 })
 
         # Activities
@@ -117,16 +125,18 @@ class DataRetrieval:
                     "date": str(r.get('Activity_Date', ''))
                 })
                 
+        # Pipeline = open deals only; closed won/lost stay in opportunities as history
+        open_opps = open_opportunities(opps_list)
         pipeline_breakdown = {}
-        if opps_list:
+        if open_opps:
             pipeline_breakdown = {
-                "total_usd": sum(o.get("amount_usd", 0.0) for o in opps_list),
+                "total_usd": sum(o.get("amount_usd", 0.0) for o in open_opps),
                 "breakdown": [
-                    f"{o['opp_name']}: ${o['amount_usd']:,.0f}" for o in opps_list
+                    f"{o['opp_name']}: ${o['amount_usd']:,.0f}" for o in open_opps
                 ]
             }
 
-        return {
+        data = {
             "account_id": acc_id,
             "account_name": acc_name,
             "health_score": health_score,
@@ -136,6 +146,13 @@ class DataRetrieval:
             "cases": cases_list,
             "pipeline_breakdown": pipeline_breakdown
         }
+        if not acc_id:
+            # Portfolio scope: per-account health lets portfolio views tell at-risk accounts apart
+            data["portfolio_health"] = {
+                str(r['Account_ID']): float(r['Health_Score'])
+                for _, r in accounts_df.iterrows() if pd.notna(r.get('Health_Score'))
+            }
+        return data
 
     def get_market_context(self) -> Dict[str, Any]:
         """
@@ -225,6 +242,8 @@ class AccountPlanningAgent:
                         acc_name = r.get('Account_Name')
                         if opp_id and acc_name:
                             known_opportunities[str(opp_id).lower()] = str(acc_name)
+                            # Tables show IDs without the per-user prefix ("OPP004"), so users may type that form
+                            known_opportunities[display_id(opp_id).lower()] = str(acc_name)
                 except Exception as merge_err:
                     print(f"Warning: Failed to merge opportunities and accounts: {merge_err}")
         
@@ -254,7 +273,14 @@ class AccountPlanningAgent:
         """
         # LAYER 1: Intent Classification
         from observability import TraceSpanContext
-        
+
+        # Data questions answerable from CRM tables skip the classifier too: its LLM router
+        # call is the slowest part of these answers on free models.
+        if not pre_built_intent and not action_type:
+            direct = self._try_direct_answer_before_classification(query)
+            if direct:
+                return direct
+
         if pre_built_intent:
             from intent_classifier import IntentClassificationOutput, ExtractedEntities, IntentEnum
             if isinstance(pre_built_intent, dict):
@@ -403,6 +429,13 @@ class AccountPlanningAgent:
                 "account_data": {}
             }
         
+        # Data questions answered straight from the CRM tables (no LLM): portfolio lists when no
+        # account is named, revenue/health/contacts/opportunities for a named account.
+        if not action_type:
+            direct = self._try_direct_answer(query, intent)
+            if direct:
+                return direct
+
         # Intent Gatekeeper: Reject low confidence
         if intent.confidence_primary < 0.5:
             # SKIP Layer 2 & 3 if intent is weak
@@ -469,6 +502,8 @@ class AccountPlanningAgent:
                 "status": "CLARIFICATION_REQUIRED",
                 "message": question,
                 "question": question,
+                "original_query": query,
+                "unknown_name": target_acc,
                 "suggested_options": options,
                 "intent": intent,
                 "responses": {
@@ -779,6 +814,65 @@ class AccountPlanningAgent:
             "raw_reasoning_bucket": self.reasoning_engine.raw_reasoning_bucket,
             "raw_response_bucket": self.response_generator.raw_response_bucket,
             "account_data": account_data
+        }
+
+    def _try_direct_answer_before_classification(self, query: str) -> Optional[Dict[str, Any]]:
+        """Direct answer using only whole-word account resolution (no LLM). None if it doesn't apply."""
+        from account_resolver import find_account_in_text, candidate_names
+        from intent_classifier import IntentClassificationOutput, ExtractedEntities, IntentEnum
+        named = find_account_in_text(query, self.intent_classifier.known_accounts)
+        if not named and candidate_names(query):
+            return None  # an unknown name: the classifier and clarification step handle it
+        stub = IntentClassificationOutput(
+            primary_intent=IntentEnum.ACTION_RECOMMENDATION,
+            confidence_primary=1.0,
+            extracted_entities=ExtractedEntities(account=named),
+            urgency="low",
+            scope="ENTITY" if named else "PORTFOLIO",
+            intent="DIRECT_ANSWER",
+            complexity="FACTUAL",
+            target_entities=[named] if named else [],
+            context_summary="Direct CRM answer (pre-classification)",
+        )
+        return self._try_direct_answer(query, stub)
+
+    def _try_direct_answer(self, query: str, intent: Any) -> Optional[Dict[str, Any]]:
+        """Deterministic answer from CRM tables, or None to continue with the reasoning pipeline."""
+        from direct_answers import account_answer, portfolio_answer
+        data = self.data_engine.data if self.data_engine else {}
+        accounts_df = data.get('account')
+        target = intent.extracted_entities.account if getattr(intent, 'extracted_entities', None) else None
+
+        account_rows = match_account_rows(accounts_df, target) if target else pd.DataFrame()
+        if not account_rows.empty:
+            account = account_rows.iloc[0]
+            answer = account_answer(query, account, data)
+            account_data = {"account_id": str(account['Account_ID']), "account_name": str(account['Account_Name']),
+                            "health_score": float(account.get('Health_Score', 0) or 0)}
+        elif not target:
+            answer = portfolio_answer(query, data)
+            account_data = {"account_id": None, "account_name": "Global Portfolio View"}
+        else:
+            return None  # unknown name: let the clarification step handle it
+        if not answer:
+            return None
+
+        print(f"[Direct Answer] {answer['kind']} answered from CRM data (no LLM).")
+        intent.complexity = "FACTUAL"
+        intent.intent = answer['kind']
+        consensus = self.reasoning_engine.run_reasoning_threads(account_data=account_data, market_context={}, complexity="FACTUAL")
+        return {
+            "status": "SUCCESS",
+            "intent": intent,
+            "consensus": consensus,
+            "responses": {role: {"narrative": answer['narrative'], "why_this_matters": "Answered directly from CRM data."}
+                          for role in ["am", "vp", "svp"]},
+            "data_quality_score": 100.0,
+            "confidence": 1.0,
+            "raw_reasoning_bucket": {},
+            "raw_response_bucket": {},
+            "account_data": account_data,
+            "table_data": answer['table_data'],
         }
 
     def _get_market_context(self):
