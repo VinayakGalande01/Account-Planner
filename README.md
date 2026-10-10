@@ -1,103 +1,110 @@
-# APEX — Account Planning & Execution Intelligence
+# APEX: AI Co-pilot for Account Planning
 
-## ❓ What it does?
-**APEX** is a sophisticated, enterprise-grade AI-powered account planning assistant designed for sales teams, account managers, and revenue leaders. It automates the manual grind of account analysis by acting as a "human-in-the-loop" AI colleague. 
+**APEX reads your CRM, tells you which accounts are about to slip and why, and writes the account plan to save them.**
 
-Key capabilities include:
-- **Account Health Scoring:** Automatically calculates scores (0-100) based on revenue, engagement, and deal progression.
-- **Engagement Momentum:** Analyzes interaction frequency and breadth to detect account warmth.
-- **Risk Detection:** Identifies "single-threaded" deals, stalled opportunities, and unresolved critical support cases.
-- **AI Chat Interface:** Natural language interface to query account details and stream structured, multi-perspective strategic plans.
-- **AI Evaluation & Observability:** Internal metrics tracking, prompt evaluation runner, and end-to-end request trace telemetry.
+Built by **[Dataosis AI](https://dataosis.in)** as a working reference for what we implement on Salesforce and Agentforce.
+
+![APEX dashboard: portfolio health and AI-detected risks](docs/images/dashboard.png)
 
 ---
 
-## 🛠️ Tech Stack
+## The business problem
 
-### Backend
-- **Framework:** FastAPI
-- **Data Processing:** Pandas, NumPy
-- **Database Layer:** Supabase-hosted PostgreSQL (Primary) with SQLAlchemy connection pooling, falling back automatically to local **SQLite** (`local_planner.db`) on connection timeout.
-- **AI Integration:** Google Gemini Cloud API (Primary routing) with configurable local LLM fallback (Ollama running Llama/Qwen) for zero-data-egress requirements.
-- **Vector Search:** ChromaDB for local semantic RAG.
+Renewals and expansions rarely die without warning. The signs are already in the CRM: a $1M deal with only one contact, an opportunity no one has touched in three months, a critical support case the customer's CFO is escalating. They're spread across Opportunities, Contacts, Activities and Cases, so nobody sees them until the deal slips.
 
-### Frontend
-- **Framework:** Next.js 15+ (React 19)
-- **Styling:** Vanilla CSS (Tailwind CSS in legacy backup components)
-- **Animations:** Framer Motion
-- **Visualization:** Recharts
-- **Language:** TypeScript
+## What APEX does
 
----
+| | |
+|---|---|
+| **Account health score (0–100)** | Calculated for every account from pipeline vs. business won, contact coverage, engagement recency, deal progression and support quality. |
+| **Automatic risk detection** | Flags single-threaded deals, stalled strategic accounts, deals past close date, open critical cases and low CSAT. These are deterministic rules, so you can see exactly why an account is flagged. |
+| **One-click AI account plan** | Click a flagged account and APEX writes a plan grounded in that account's records: who to call, what's at stake and what to do this week. |
+| **Answers for each role** | The same data is framed for an Account Manager, a VP of Sales or an executive. |
+| **Grounding checks** | Each AI answer is scored against the CRM values it cites, and pipeline totals are itemised by a calculation auditor. |
 
-## 🧠 Architecture Overview
-The system employs a decoupled 4-phase AI reasoning pipeline:
-1. **Phase 1 - Intent Classification:** Parses the user's natural language query to determine the intent and extracts target entities.
-2. **Phase 2 - Retrieval Layer:** Queries the database (Postgres/SQLite) and performs semantic searches (ChromaDB) to fetch target-scoped context.
-3. **Phase 3 - Reasoning Engine:** Analyzes data across multiple personas (Account Manager, VP, and Data perspective) to produce a Structured Intelligence Package (SIP).
-4. **Phase 4 - Narrative Streamer:** Crafts role-specific responses and streams markdown-formatted strategies to the user in real-time.
+| Accounts ranked by health | AI account plan for an at-risk account (one click from the dashboard) |
+|---|---|
+| ![Accounts](docs/images/accounts.png) | ![Account plan](docs/images/account-plan.png) |
+
+> All companies, people and numbers in the demo are fictional (see [`backend/demo_dataset.py`](backend/demo_dataset.py)).
 
 ---
 
-## 🚦 Getting Started
+## Run the demo (one command)
 
-### 1. Prerequisites & Environment Setup
-Create a `.env` file inside the `backend` directory with the following variables:
-```env
-# AI API Key (Required for Gemini mode)
-GEMINI_API_KEY=your_gemini_api_key_here
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
-# Database Config (Defaults to SQLite if omitted or offline)
-DATABASE_URL=postgresql://postgres:password@db.supabase.co:5432/postgres
+```bash
+# Optional, enables AI account plans (dashboard and risk detection work without it)
+echo "OPENROUTER_API_KEY=your_key_here" > .env
 
-# Model Configuration
-MODEL_NAME=gemini-1.5-flash
+docker compose up --build
 ```
 
-### 2. Setup the Backend
-1. **Navigate to the backend directory:**
-   ```bash
-   cd backend
-   ```
-2. **Install Dependencies:**
-   ```bash
-   poetry install
-   # Or using pip: pip install -r requirements.txt
-   ```
-3. **Seed the database (Optional):**
-   ```bash
-   python seed_golden_dataset.py
-   ```
-4. **Run the Server:**
-   ```bash
-   uvicorn main:app --reload --port 8001
-   ```
-   *The API will be live at `http://localhost:8001`.*
+Open **http://localhost:3000**, click **Log In**, then **Use demo account** (`demo@apex.example` / `ApexDemo#2026`).
 
-### 3. Setup the Frontend
-1. **Navigate to the frontend directory:**
-   ```bash
-   cd frontend
-   ```
-2. **Install Dependencies:**
-   ```bash
-   npm install
-   ```
-3. **Run the Development Server:**
-   ```bash
-   npm run dev
-   ```
-   *The dashboard will be live at `http://localhost:3000`.*
+The first build downloads Python ML dependencies and takes several minutes. Later starts are fast.
+
+> **Model:** AI calls go through [OpenRouter](https://openrouter.ai) (default model `google/gemini-2.5-flash-lite`; change it with `OPENROUTER_MODEL`). An account plan takes about 45 seconds and roughly 8 model calls. A direct `GEMINI_API_KEY` also works, but the Gemini free tier (20 requests per day) is too small for live demos.
 
 ---
 
-## 📊 Documentation
-For in-depth explanations, check the dedicated [documentation directory](./documentation/):
-- [README Index](./documentation/README.md): Index of system topologies and diagrams.
-- [Architectural Blueprint](./documentation/apex_architectural_blueprint.md): Detailed high/low level designs and sequence flows.
-- [Database Architecture](./documentation/database_architecture.md): Hybrid Postgres/SQLite configurations and schema references.
-- [Multi-Tenancy Guide](./documentation/TENANCY_DOCUMENTATION.md): Logical user isolation and access check mechanisms.
-- [Local LLM Optimization](./documentation/local_llm_optimization_guide.md): Guide for running APEX in local-offline Ollama mode.
+## How it works
 
-## 📝 License
-Proprietary. All rights reserved.
+```mermaid
+flowchart LR
+    CRM[(CRM data<br/>Accounts · Opportunities<br/>Contacts · Activities · Cases)] --> DB[(PostgreSQL / Supabase<br/>SQLite fallback)]
+    DB --> ENG[Deterministic engines<br/>health score · risk rules · CRM hygiene]
+    ENG --> UI[Next.js dashboard]
+    UI -- "Build an account plan for X" --> P1
+
+    subgraph AI[AI pipeline, FastAPI]
+        P1[1. Intent classification] --> P2[2. Retrieval<br/>account records + ChromaDB<br/>search over activity notes]
+        P2 --> P3[3. Multi-perspective reasoning<br/>AM · VP · analyst]
+        P3 --> P4[4. Role-specific answer<br/>+ grounding score]
+    end
+
+    P2 <--> DB
+    P3 <--> LLM{{OpenRouter / Gemini API<br/>or local Ollama}}
+    P4 --> UI
+```
+
+- **Backend:** Python, FastAPI, SQLAlchemy, pandas, ChromaDB, sentence-transformers
+- **Frontend:** Next.js, React, TypeScript, Recharts, Framer Motion
+- **Data:** PostgreSQL / Supabase with multi-tenant row-level isolation, SQLite fallback for local runs
+- **AI:** any OpenRouter model (default Gemini 2.5 Flash-Lite), Google Gemini directly, or Ollama (fully local, no data leaves your network)
+- **Ops:** Docker Compose, GitHub Actions CI, eval harness and request tracing
+
+More detail: [architecture docs](docs/architecture/README.md) · [case study](docs/CASE_STUDY.md)
+
+---
+
+## Use your own data
+
+APEX loads the built-in demo dataset by default. To load a Salesforce-style Excel export instead (sheets: `Account`, `Opportunity`, `Contact`, `Activity`, `Case`), set `DATA_PATH=/path/to/export.xlsx` for the backend. The column format is shown in [`backend/demo_crm_data.xlsx`](backend/demo_crm_data.xlsx), which you can regenerate with `python backend/demo_dataset.py`. Early Salesforce and HubSpot API sync functions are in [`backend/sync_daemon.py`](backend/sync_daemon.py). They're untested against a live org.
+
+## Local development (without Docker)
+
+```bash
+# Backend (http://localhost:8002)
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8002
+
+# Frontend (http://localhost:3000), in a second terminal
+cd frontend
+npm install
+BACKEND_URL=http://localhost:8002 AUTH_URL=http://localhost:8002 npm run dev
+```
+
+Without `DATABASE_URL` the backend uses a local SQLite file. Optional backend settings (environment variables or `backend/.env`): `OPENROUTER_API_KEY` / `OPENROUTER_MODEL`, `GEMINI_API_KEY`, `DATABASE_URL`, `LLM_URL` / `MODEL_NAME` for a local Ollama model.
+
+---
+
+## Want this on your Salesforce?
+
+We implement this pattern inside your org, as Agentforce actions or a custom app on your real pipeline, with your own risk rules.
+
+**Dataosis AI**: [dataosis.in](https://dataosis.in)
+
+*Proprietary. All rights reserved.*
