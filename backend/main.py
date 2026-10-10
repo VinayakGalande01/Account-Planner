@@ -7,6 +7,7 @@ quick actions, data sync, rate limiting, and telemetry instrumentation.
 # --- SECTION 1: Environment Setup & Core Dependencies ---
 # Configures environment variables, offline transformer modes, and imports FastAPI middleware.
 import os
+import re
 import sys
 from dotenv import load_dotenv
 
@@ -36,7 +37,7 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data_engine import DataEngine
-from response_formatter import format_response_for_user
+from response_formatter import format_response_for_user, should_skip_formatting, compute_urgency
 from intelligence_layer import (
     generate_strategic_synthesis, curate_llm_context,
     RESPONSE_BUDGET, HumanizedPriority, SignalClassifier
@@ -1545,7 +1546,6 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
         for msg in reversed(db_history):
             text = msg.text or ""
             if msg.sender == "assistant" and "__SECTION_" in text:
-                import re
                 match = re.search(r'__SECTION_(?:SUMMARY|HEADLINE)__\n(.*?)(?=__SECTION_|\Z)', text, re.DOTALL)
                 text = match.group(1).strip() if match else text[:300]
             chat_history.append({
@@ -1615,7 +1615,7 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
                         fname = str(row.get('First_Name', '')).strip().lower()
                         lname = str(row.get('Last_Name', '')).strip().lower()
                         full_name = f"{fname} {lname}".strip()
-                        if (fname and fname in query_lower) or (full_name and full_name in query_lower):
+                        if (len(fname) >= 3 and re.search(r'\b' + re.escape(fname) + r'\b', query_lower)) or (full_name and re.search(r'\b' + re.escape(full_name) + r'\b', query_lower)):
                             acc_id = row.get('Account_ID')
                             if accounts_df is not None and not accounts_df.empty:
                                 acc_match = accounts_df[accounts_df['Account_ID'] == acc_id]
@@ -1624,17 +1624,17 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
                                     print(f"[Contact Resolution] Auto-resolved {full_name} -> Account: {resolved_active_account}")
                                     break
                 
-                if not resolved_active_account and chat_history:
-                    for h_msg in reversed(chat_history):
-                        h_text = h_msg.get("text", "")
-                        if accounts_df is not None and not accounts_df.empty:
-                            for acc_name in accounts_df['Account_Name'].tolist():
-                                if acc_name and acc_name.lower() in h_text.lower():
-                                    resolved_active_account = acc_name
-                                    print(f"[History Resolution] Inherited active account from history: {resolved_active_account}")
-                                    break
-                        if resolved_active_account:
-                            break
+                # Inherit from history only when the query names no account, and only from the
+                # user's own messages (APEX's answers mention many accounts).
+                if not resolved_active_account and chat_history and accounts_df is not None and not accounts_df.empty:
+                    from account_resolver import find_account_in_text, candidate_names, user_messages
+                    known_accounts = accounts_df['Account_Name'].dropna().tolist()
+                    if not find_account_in_text(body.query, known_accounts) and not candidate_names(body.query):
+                        for h_text in reversed(user_messages(chat_history)):
+                            resolved_active_account = find_account_in_text(h_text, known_accounts)
+                            if resolved_active_account:
+                                print(f"[History Resolution] Inherited active account from history: {resolved_active_account}")
+                                break
                             
             pre_built_intent = None
             if pre_built_intent_data:
@@ -1919,13 +1919,11 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
                     limit_val = None
                     intent_obj = res.get("intent")
                     if intent_obj and hasattr(intent_obj, "extracted_entities") and intent_obj.extracted_entities.metric:
-                        import re
                         metric_str = str(intent_obj.extracted_entities.metric)
                         digit_match = re.search(r'\d+', metric_str)
                         if digit_match:
                             limit_val = int(digit_match.group())
                     if not limit_val:
-                        import re
                         digit_match = re.search(r'\b(top|limit|show|first)\s+(\d+)\b', body.query.lower())
                         if digit_match:
                             limit_val = int(digit_match.group(2))
@@ -2023,14 +2021,19 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
         try:
             persona = body.persona if (body.persona and body.persona.strip()) else getattr(current_user, "role", "account_manager")
             chat_history = body.chat_history if body.chat_history else []
-            
-            # Call the formatter
-            formatted_json = await format_response_for_user(
-                raw_output=full_contract, 
-                persona=persona,
-                conversation_history=chat_history
-            )
-            
+            intent_obj = trace_payload.get("intent")
+            complexity = intent_obj.get("complexity") if isinstance(intent_obj, dict) else getattr(intent_obj, "complexity", None)
+
+            if should_skip_formatting(full_contract, complexity):
+                print(f"[ResponseFormatter] Skipped for complexity={complexity}; showing pipeline output as-is.")
+            else:
+                formatted_json = await format_response_for_user(
+                    raw_output=full_contract,
+                    persona=persona,
+                    conversation_history=chat_history,
+                    urgency=compute_urgency(trace_payload.get("account_data"))
+                )
+
             # If the formatter returned something different than full_contract (meaning it succeeded),
             # yield it with the separator.
             if formatted_json != full_contract:

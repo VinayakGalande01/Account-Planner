@@ -10,7 +10,7 @@ import os
 import json
 import logging
 import re
-from typing import Optional, List, Dict
+from typing import Any, Optional, List, Dict
 from dotenv import load_dotenv
 from system_prompt import APEX_SYSTEM_PROMPT
 
@@ -39,10 +39,79 @@ def get_active_llm_config() -> tuple:
 # --- SECTION 2: Persona Response Formatting Engine ---
 # Formats raw text according to specified user personas (Account Manager, Executive, AE).
 
+# Pipeline-internal labels that must never reach the user.
+INTERNAL_TERMS = re.compile(
+    r"test_to_disambiguate|Strategic Narrative Builder|Crucible|primary narrative|alternative narrative|"
+    r"intelligence brief|reasoning plan|evidence bundle",
+    re.IGNORECASE,
+)
+PLACEHOLDER = re.compile(r"\[(?:insert|placeholder|tbd|name of|contact name)[^\]]*\]", re.IGNORECASE)
+
+
+def should_skip_formatting(raw_output: str, complexity: Optional[str]) -> bool:
+    """Greetings, clarifications and factual lookups are shown as-is: the card format makes the LLM pad them with invented risks."""
+    if complexity in ("CONVERSATIONAL", "FACTUAL"):
+        return True
+    trimmed = (raw_output or "").lstrip()
+    return trimmed.startswith("{") and ('"type": "clarification"' in trimmed[:200] or '"type": "conversational"' in trimmed[:200])
+
+
+def compute_urgency(account_data: Optional[Dict[str, Any]]) -> Optional[str]:
+    """P1/P2/P3 from the account's health score and open cases; None when no single account is in scope."""
+    if not account_data or not account_data.get("account_id"):
+        return None
+    try:
+        health = float(account_data.get("health_score", 80))
+    except (TypeError, ValueError):
+        health = 80.0
+    open_severities = {
+        str(c.get("severity", "")).lower()
+        for c in account_data.get("cases", [])
+        if str(c.get("status", "")).lower() not in ("closed", "resolved")
+    }
+    if health < 35 or "critical" in open_severities:
+        return "P1"
+    if health < 60 or "high" in open_severities:
+        return "P2"
+    return "P3"
+
+
+def _ground_to_source(parsed: Dict[str, Any], raw_output: str) -> Dict[str, Any]:
+    """Drop items the formatter invented: opportunities and risk accounts absent from the source, placeholders, internal labels."""
+    source = raw_output.lower()
+
+    def in_source(value: Any) -> bool:
+        words = re.findall(r"[a-z0-9]+", str(value or "").lower())
+        return bool(words) and (str(value).lower() in source or words[0] in source)
+
+    parsed["opportunities"] = [
+        o for o in parsed.get("opportunities", [])
+        if (o.get("id") and str(o["id"]).lower() in source) or (o.get("name") and str(o["name"]).lower() in source)
+    ]
+    parsed["risks"] = [r for r in parsed.get("risks", []) if not r.get("account") or in_source(r.get("account"))]
+
+    def clean(text: Any) -> Any:
+        return PLACEHOLDER.sub("the relevant contact", text) if isinstance(text, str) else text
+
+    for key in ("headline", "summary", "flag", "closing_question"):
+        parsed[key] = clean(parsed.get(key))
+    for key in ("risks", "recommended_actions"):
+        parsed[key] = [
+            {k: clean(v) for k, v in item.items()}
+            for item in parsed.get(key, [])
+            if isinstance(item, dict) and not INTERNAL_TERMS.search(json.dumps(item))
+        ]
+    parsed["next_steps_suggestions"] = [
+        clean(s) for s in parsed.get("next_steps_suggestions", []) if not INTERNAL_TERMS.search(str(s))
+    ]
+    return parsed
+
+
 async def format_response_for_user(
-    raw_output: str, 
-    persona: str = "account_manager", 
-    conversation_history: Optional[List[Dict[str, str]]] = None
+    raw_output: str,
+    persona: str = "account_manager",
+    conversation_history: Optional[List[Dict[str, str]]] = None,
+    urgency: Optional[str] = None,
 ) -> str:
     """
     Accepts raw LLM response, detects tone/urgency, handles conversation history memory,
@@ -169,6 +238,12 @@ JSON SCHEMA TO EXCLUSIVELY OUTPUT:
   ]
 }}
 
+GROUNDING RULES (never break):
+- Use ONLY companies, people, deals, IDs, amounts and dates that appear in the Raw Data Output. Never invent any.
+- If the Raw Data Output has no opportunities or risks, return empty arrays for them.
+- Never write placeholders such as "[Insert name]". If a name is unknown, say "the decision maker" or similar.
+- Never mention internal pipeline terms (Crucible, test_to_disambiguate, Strategic Narrative Builder, primary/alternative narrative).
+
 Output ONLY valid raw JSON without preamble or markdown fences.
 """
 
@@ -220,6 +295,10 @@ Output ONLY valid raw JSON without preamble or markdown fences.
         for req in required:
             if req not in parsed:
                 raise ValueError(f"Missing schema key: {req}")
+
+        parsed = _ground_to_source(parsed, raw_output)
+        if urgency:
+            parsed["urgency"] = urgency
 
         # STEP 6 — EMOJI SIGNAL INJECTION
         # Add priority icons to recommended actions
