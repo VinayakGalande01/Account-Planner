@@ -88,7 +88,7 @@ export default function GoldenDatasetPage() {
   const [formPriority, setFormPriority] = useState('MEDIUM')
   const [formStatus, setFormStatus] = useState('ACTIVE')
   const [formTags, setFormTags] = useState('')
-  const [formEntities, setFormEntities] = useState('{\n  "account": "Wipro"\n}')
+  const [formEntities, setFormEntities] = useState('{\n  "account": "Northwind Logistics"\n}')
   const [formRecType, setFormRecType] = useState('RISK_MITIGATION')
   const [formNotes, setFormNotes] = useState('')
 
@@ -287,7 +287,7 @@ export default function GoldenDatasetPage() {
     setFormPriority('MEDIUM')
     setFormStatus('ACTIVE')
     setFormTags('')
-    setFormEntities('{\n  "account": "Wipro"\n}')
+    setFormEntities('{\n  "account": "Northwind Logistics"\n}')
     setFormRecType('RISK_MITIGATION')
     setFormNotes('')
     setSelectedCase(null)
@@ -568,7 +568,7 @@ export default function GoldenDatasetPage() {
                     required
                     value={formQuery}
                     onChange={(e) => setFormQuery(e.target.value)}
-                    placeholder="e.g. Give me the action plan to unblock Wipro stuck deal"
+                    placeholder="e.g. Give me the action plan to unblock Northwind Logistics stuck deal"
                     className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-foreground"
                   />
                 </div>
@@ -640,7 +640,7 @@ export default function GoldenDatasetPage() {
                       type="text"
                       value={formTags}
                       onChange={(e) => setFormTags(e.target.value)}
-                      placeholder="e.g. risk, stuck_deal, Wipro"
+                      placeholder="e.g. risk, stuck_deal, Northwind Logistics"
                       className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-primary text-foreground"
                     />
                   </div>

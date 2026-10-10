@@ -7,6 +7,10 @@
 // - Render: login/signup form card, success splash screen
 
 import React, { useState } from 'react';
+
+// Seeded by the backend on startup (see backend/sync_daemon.py); data is fictional
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL || 'demo@apex.example';
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD || 'ApexDemo#2026';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Mail, User, ShieldAlert, Eye, EyeOff, ArrowRight } from 'lucide-react';
@@ -215,6 +219,16 @@ export default function AuthPage() {
               </span>
             )}
           </button>
+
+          {isLogin && (
+            <button
+              type="button"
+              onClick={() => { setEmail(DEMO_EMAIL); setPassword(DEMO_PASSWORD); }}
+              className="w-full py-2.5 border border-white/15 rounded-md text-[11px] text-zinc-300 hover:bg-white/5 transition-colors font-[family-name:var(--font-mono)]"
+            >
+              Use demo account · {DEMO_EMAIL}
+            </button>
+          )}
         </form>
 
         {/* Toggle Mode */}

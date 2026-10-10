@@ -80,7 +80,7 @@ export const DashboardPreview: React.FC<DashboardPreviewProps> = ({ compact = fa
             $4.82<span className="text-primary font-sans font-medium">M</span>
           </div>
           <div className="text-[11px] font-mono text-muted-foreground text-left mt-1">
-            Weighted ACV · +12.4% wow
+            Weighted ACV · sample data
           </div>
 
           {/* mini bar chart */}

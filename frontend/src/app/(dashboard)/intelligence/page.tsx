@@ -9,7 +9,7 @@
 //   - SECTION: Render - Sessions Drawer & Chat Messages
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Brain, Send, Zap, Plus, MessageSquare, Trash2, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 import { ContractRenderer, FinalizedContractRenderer } from '@/components/apex-widgets'
 import { parseResponseContract } from '@/utils/contractParser'
@@ -184,6 +184,19 @@ export default function IntelligencePage() {
 
   const [sessionId] = useState(() => Math.random().toString(36).substring(2, 15))
   const [activeAccount, setActiveAccount] = useState<string | null>(null)
+
+  // --- SECTION: Deep-link Query ---
+  // Dashboard risk cards link here with ?q=<prompt>; send it once, then clean the URL.
+  const deepLinkSent = useRef(false)
+  useEffect(() => {
+    if (!mounted || !user || deepLinkSent.current) return
+    const q = new URLSearchParams(window.location.search).get('q')
+    if (!q) return
+    deepLinkSent.current = true
+    window.history.replaceState(null, '', window.location.pathname)
+    handleSendMessage(q)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, user])
 
   // --- SECTION: Send Message / Streaming Handler ---
   const handleSendMessage = async (

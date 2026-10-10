@@ -117,9 +117,9 @@ export const Hero: React.FC<HeroProps> = ({ onCta }) => {
               data-testid="hero-stats-strip"
             >
               {[
-                { icon: Activity, value: '+38%', label: 'More Deals Closed' },
-                { icon: Radio, value: 'Instant', label: 'Answers & Info' },
-                { icon: ShieldCheck, value: '94%', label: 'Happy Clients Kept' },
+                { icon: Activity, value: '5-factor', label: 'Account Health Score' },
+                { icon: Radio, value: '4 signals', label: 'Automatic Risk Detection' },
+                { icon: ShieldCheck, value: 'Grounded', label: 'Every Number From CRM' },
               ].map((s) => (
                 <div
                   key={s.label}

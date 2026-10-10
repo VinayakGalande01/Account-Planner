@@ -10,7 +10,6 @@
 // Imports layout components, health widgets, risk charts, and currency parser helpers.
 import { motion } from 'framer-motion'
 import { AccountHealthWidget } from '@/components/account-health-widget'
-import { EngagementMomentumChart } from '@/components/engagement-momentum-chart'
 import { RiskDetectionPanel } from '@/components/risk-detection-panel'
 import { useAnimation } from '@/context/AnimationContext'
 import { useData } from '@/context/DataContext'
@@ -25,21 +24,22 @@ const formatCurrency = (val: number): string => {
 
 export default function Dashboard() {
   const { isFirstVisit } = useAnimation()
-  const { accounts } = useData()
+  const { accounts, loading } = useData()
 
   // --- SECTION: KPI Stat Derivations ---
-  const activeAccountsCount = accounts.length > 0 ? accounts.length : 6
-  const totalPipelineVal = accounts.reduce((acc, a) => acc + (a.arr_usd || a.revenue_usd || 1200000), 0)
+  // All values derive from /api/accounts/enriched; nothing is estimated client-side.
+  const activeAccountsCount = accounts.length
+  const totalPipelineVal = accounts.reduce((acc, a) => acc + (a.total_pipeline_value || 0), 0)
   const avgHealth = accounts.length > 0
-    ? Math.round(accounts.reduce((acc, a) => acc + (a.health_score || 50), 0) / accounts.length)
-    : 72
-  const atRiskCount = accounts.filter(a => (a.health_score || 50) < 40).length
+    ? Math.round(accounts.reduce((acc, a) => acc + (a.health_score || 0), 0) / accounts.length)
+    : 0
+  const atRiskCount = accounts.filter(a => (a.health_score || 0) < 30).length
 
   const stats = [
     { label: 'Active Accounts', value: activeAccountsCount.toString(), icon: Users, color: 'text-primary' },
-    { label: 'Total Pipeline', value: formatCurrency(totalPipelineVal), icon: DollarSign, color: 'text-emerald-400' },
+    { label: 'Open Pipeline', value: formatCurrency(totalPipelineVal), icon: DollarSign, color: 'text-emerald-400' },
     { label: 'Avg Health Score', value: `${avgHealth}/100`, icon: Activity, color: 'text-amber-400' },
-    { label: 'At-Risk Deals', value: atRiskCount.toString(), icon: AlertTriangle, color: 'text-red-400' },
+    { label: 'Critical Accounts', value: atRiskCount.toString(), icon: AlertTriangle, color: 'text-red-400' },
   ]
 
   return (
@@ -47,7 +47,7 @@ export default function Dashboard() {
       <div className="p-6 md:p-8">
         <PageHeader
           title="Dashboard"
-          subtitle="Real-time account intelligence and insights"
+          subtitle="Portfolio health and AI-detected risks from your CRM data. Click any account for an AI account plan."
           icon={<LayoutDashboard className="w-6 h-6" />}
         />
 
@@ -72,7 +72,7 @@ export default function Dashboard() {
                 <stat.icon className={`w-4 h-4 ${stat.color}`} aria-hidden="true" />
               </div>
               <p className="text-2xl font-bold text-foreground tracking-tight">
-                {stat.value}
+                {loading ? '–' : stat.value}
               </p>
             </motion.div>
           ))}
@@ -91,9 +91,6 @@ export default function Dashboard() {
             <RiskDetectionPanel />
           </div>
         </div>
-
-        {/* Engagement chart - full width */}
-        <EngagementMomentumChart />
       </div>
     </main>
   )
