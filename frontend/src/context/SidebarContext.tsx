@@ -34,6 +34,8 @@ interface SidebarContextType {
 // Provides sidebar collapse state and handles async REST session persistence operations.
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined)
 
+const newSessionId = () => `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const { user, authFetch, loading: authLoading } = useAuth()
   const [isSidebarOpen, setSidebarOpenState] = useState<boolean>(true)
@@ -49,11 +51,12 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         setSidebarOpenState(saved === 'true')
       }
       
+      // Every conversation gets its own id; a shared 'default_session' mixed history across chats.
       const savedSession = localStorage.getItem('active_session_id')
-      if (savedSession) {
+      if (savedSession && savedSession !== 'default_session') {
         setActiveSessionIdState(savedSession)
       } else {
-        setActiveSessionIdState('default_session')
+        setActiveSessionId(newSessionId())
       }
     }
   }, [])
@@ -124,7 +127,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   }
 
   const createSession = () => {
-    const newId = `session_${Date.now()}`
+    const newId = newSessionId()
     setActiveSessionId(newId)
     return newId
   }
@@ -140,7 +143,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       if (remainingSessions.length > 0) {
         setActiveSessionId(remainingSessions[0].id)
       } else {
-        setActiveSessionId('default_session')
+        setActiveSessionId(newSessionId())
       }
     }
 
@@ -166,7 +169,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       } else {
         setSessions([])
         setIsSessionsLoading(false)
-        setActiveSessionId('default_session')
+        setActiveSessionId(newSessionId())
       }
     }
   }, [user?.id, authLoading])

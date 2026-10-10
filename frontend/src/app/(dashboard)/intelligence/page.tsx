@@ -21,6 +21,7 @@ import { useAnimation } from '@/context/AnimationContext'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/common/PageHeader'
 import { ThinkingIndicator } from '@/components/common/ThinkingIndicator'
+import { ModelLimitNotice } from '@/components/common/ModelLimitNotice'
 import { ReasoningTrail } from '@/components/common/ReasoningTrail'
 
 interface Message {
@@ -184,6 +185,11 @@ export default function IntelligencePage() {
 
   const [sessionId] = useState(() => Math.random().toString(36).substring(2, 15))
   const [activeAccount, setActiveAccount] = useState<string | null>(null)
+
+  // The active account belongs to one conversation; don't carry it into another.
+  useEffect(() => {
+    setActiveAccount(null)
+  }, [activeSessionId])
 
   // --- SECTION: Deep-link Query ---
   // Dashboard risk cards link here with ?q=<prompt>; send it once, then clean the URL.
@@ -604,9 +610,10 @@ export default function IntelligencePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2 }}
-                className="flex justify-start"
+                className="flex flex-col items-start"
               >
                 <ThinkingIndicator status={currentStatus} />
+                <ModelLimitNotice />
               </motion.div>
             )}
           </div>
@@ -671,6 +678,9 @@ export default function IntelligencePage() {
               <Send className="w-4 h-4" aria-hidden="true" />
             </button>
           </form>
+          <p className="text-[11px] text-muted-foreground/80 px-1">
+            Running on free AI models: about 6 full AI plans per day. Data questions are instant and unlimited.
+          </p>
         </motion.div>
       </div>
       </div>
