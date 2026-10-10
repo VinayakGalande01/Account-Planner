@@ -1,4 +1,6 @@
-version: '3.8'
+# One-command demo:  docker compose up --build   ->  http://localhost:3000
+# Demo login: demo@apex.example / ApexDemo#2026 (fictional data, seeded on first start)
+# Optional: put OPENROUTER_API_KEY=... (or GEMINI_API_KEY=...) in a .env file next to this one to enable AI account plans.
 
 services:
   db:
@@ -31,11 +33,19 @@ services:
       - SECURE_COOKIE=false
       - SAMESITE_COOKIE=lax
       - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - LOCAL_OLLAMA=false # Set to false to force Gemini API usage if key is provided
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - LOCAL_OLLAMA=false
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
     volumes:
       - chroma_data:/app/chroma_db
 
@@ -43,14 +53,14 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        BACKEND_URL: http://backend:8002
     container_name: apex-frontend
     ports:
       - "3000:3000"
-    environment:
-      - BACKEND_URL=http://backend:8002
-      - AUTH_URL=http://backend:8002
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:

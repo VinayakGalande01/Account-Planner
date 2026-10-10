@@ -46,3 +46,15 @@ local_planner.db
 backend/logs/
 backend/server.log
 backend/stream.txt
+
+# Runtime artifacts (never commit)
+*.db
+*.sqlite
+*.sqlite3
+*.log
+llm_cache.json
+.env.*
+!.env.example
+
+# Real-name legacy dataset (use DATA_PATH to load your own export)
+backend/SF_AccountingAgent_DummyData.xlsx
