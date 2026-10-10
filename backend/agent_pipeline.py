@@ -19,11 +19,12 @@ from dataclasses import dataclass, asdict
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from system_prompt import APEX_SYSTEM_PROMPT, get_apex_system_prompt
 from data_engine import DataEngine
 from data_retrieval_layer import execute_data_retrieval
 
 logger = logging.getLogger("llm")
-LLM_URL = os.getenv("LLM_URL", "http://10.181.43.105:8000/api/generate")
+LLM_URL = os.getenv("LLM_URL", "http://localhost:11434/api/generate")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2:latest")
 
 # --- SECTION 2: Anti-Hallucination & JSON Healing Utilities ---
@@ -323,7 +324,7 @@ async def _get_active_llm_config(client: httpx.AsyncClient) -> tuple[str, str]:
         except Exception:
             pass
             
-    primary_url = os.getenv("LLM_URL", "http://10.181.43.105:8000/api/generate")
+    primary_url = os.getenv("LLM_URL", "http://localhost:11434/api/generate")
     primary_model = os.getenv("MODEL_NAME", "llama3.2:latest")
     
     # 3. Try to ping primary endpoint using its configured URL directly (probe base server or model list)

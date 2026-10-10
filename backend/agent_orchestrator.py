@@ -345,7 +345,7 @@ class AccountPlanningAgent:
             
             welcome_text = ""
             try:
-                gemini_key = os.getenv("GEMINI_API_KEY")
+                gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
                 if gemini_key:
                     try:
                         print("[Cloud Route] Routing conversational greeting to Google Gemini API...")

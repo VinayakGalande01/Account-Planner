@@ -1,3 +1,4 @@
+
 import os
 import sys
 from dotenv import load_dotenv
@@ -6,18 +7,17 @@ from dotenv import load_dotenv
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(override=True)
 
+from database import SessionLocal
 from data_engine import DataEngine
 from agent_orchestrator import AccountPlanningAgent
 
 def test():
     print("=== STARTING AGENT ORCHESTRATOR TEST ===")
     
-    # Initialize live DataEngine
-    dataset_1 = r"C:\Users\VINAYAK\Downloads\SF_AccountingAgent_DummyData.xlsx"
-    dataset_2 = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "SF_AccountingAgent_DummyData.xlsx")
-    p = dataset_1 if os.path.exists(dataset_1) else dataset_2
-    print(f"Loading database: {p}")
-    engine = DataEngine(p)
+    # Initialize live DataEngine with database session
+    db_session = SessionLocal()
+    engine = DataEngine(db_session, user_id=1)
+
     
     # Instantiate the planning agent
     agent = AccountPlanningAgent(data_engine=engine)

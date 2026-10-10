@@ -26,6 +26,7 @@ load_dotenv(dotenv_path=env_path, override=True)
 @dataclass
 class TestCase:
     """Single test case definition"""
+    __test__ = False
     test_id: str
     name: str
     query: str
@@ -40,6 +41,7 @@ class TestCase:
 @dataclass
 class TestResult:
     """Result of a test execution"""
+    __test__ = False
     test_id: str
     name: str
     passed: bool
@@ -134,6 +136,7 @@ class YourAPEXAgent:
 
 class TestRunner:
     """Execute and evaluate test cases against agent"""
+    __test__ = False
     
     def __init__(self, agent):
         self.agent = agent

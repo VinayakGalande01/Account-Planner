@@ -183,13 +183,19 @@ class DataEngine:
         # A. REVENUE HEALTH (25%)
         opps_acc = opps[opps['Account_ID'] == account_id]
         open_opps = opps_acc[~opps_acc['Stage'].isin(['Closed Won', 'Closed Lost'])]
-        total_open_amount = open_opps['Amount_USD'].sum()
-        revenue = acc_row['Annual_Revenue_USD']
-        rev_score = min(100, (total_open_amount / revenue) * 100) if revenue > 0 else 0
-        # Bonus for recent Closed Won
-        recent_won = opps_acc[(opps_acc['Stage'] == 'Closed Won')]
-        if not recent_won.empty:
-            rev_score = min(100, rev_score + 15)
+        # Deals past their close date are stale and don't count as healthy pipeline
+        close_dates = pd.to_datetime(open_opps['Close_Date'], errors='coerce')
+        total_open_amount = open_opps[~(close_dates < datetime.now())]['Amount_USD'].sum()
+        # Pipeline is measured against business already won with this account, not the
+        # customer's total company revenue (which made this factor ~0 for every account).
+        won_amount = opps_acc[opps_acc['Stage'] == 'Closed Won']['Amount_USD'].sum()
+        if won_amount > 0:
+            rev_score = min(100, 50 + 50 * (total_open_amount / won_amount))
+        else:
+            rev_score = min(100, (total_open_amount / 1_000_000) * 50)
+        # Penalise recent losses
+        lost_count = len(opps_acc[opps_acc['Stage'] == 'Closed Lost'])
+        rev_score = max(0, rev_score - 15 * lost_count)
 
         # B. RELATIONSHIP DEPTH (20%)
         contacts_acc = contacts[contacts['Account_ID'] == account_id]

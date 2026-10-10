@@ -108,7 +108,7 @@ class DecisionFramer:
     
     def _llm_frame(self, query: str, account_context: dict) -> dict:
         """LLM-based framing."""
-        gemini_key = os.getenv("GEMINI_API_KEY")
+        gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
         if not gemini_key:
             # Fallback to health assessment if no API key
             return {

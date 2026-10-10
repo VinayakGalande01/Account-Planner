@@ -12,9 +12,10 @@ import logging
 import re
 from typing import Optional, List, Dict
 from dotenv import load_dotenv
+from system_prompt import APEX_SYSTEM_PROMPT
 
 backend_dir = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(dotenv_path=os.path.join(backend_dir, ".env"), override=True)
+load_dotenv(dotenv_path=os.path.join(backend_dir, ".env"), override=False)
 
 logger = logging.getLogger("response_formatter")
 
@@ -31,7 +32,7 @@ def get_active_llm_config() -> tuple:
         except Exception:
             pass
     
-    primary_url = os.getenv("LLM_URL", "http://10.181.43.105:8000/api/generate")
+    primary_url = os.getenv("LLM_URL", "http://localhost:11434/api/generate")
     primary_model = os.getenv("MODEL_NAME", "llama3.2:latest")
     return primary_url, primary_model
 
@@ -61,7 +62,7 @@ async def format_response_for_user(
                 logger.info(f"[ResponseFormatter] Quick action payload {qkey} detected. Bypassing persona formatting.")
                 return raw_output
 
-    gemini_key = os.getenv("GEMINI_API_KEY")
+    gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
     if not gemini_key:
         logger.warning("[ResponseFormatter] GEMINI_API_KEY not found in env, bypassing formatting.")
         return raw_output

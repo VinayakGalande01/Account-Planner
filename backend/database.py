@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Loads database configuration from .env and initializes ContextVar for user-level RLS.
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(backend_dir, ".env")
-load_dotenv(dotenv_path=env_path, override=True)
+load_dotenv(dotenv_path=env_path, override=False)
 
 current_user_id_var = contextvars.ContextVar("current_user_id", default="")
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local_planner.db")

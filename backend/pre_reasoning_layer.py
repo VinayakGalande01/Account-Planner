@@ -101,7 +101,7 @@ class ReasoningPlan(BaseModel):
 
 def _call_model(task_type: str, system_prompt: str, user_prompt: str, timeout: int = 15) -> str:
     """Invokes Google Gemini API with task specific token sizing."""
-    gemini_key = os.getenv("GEMINI_API_KEY")
+    gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
     if not gemini_key:
         raise ValueError("GEMINI_API_KEY environment variable is not configured.")
     

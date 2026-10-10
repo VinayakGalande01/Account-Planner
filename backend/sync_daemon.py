@@ -21,26 +21,9 @@ from models.crm_models import Account, Opportunity, Contact, Case, Activity
 # --- SECTION 2: Dataset Path Resolution & Value Sanitization ---
 # Resolves the local Excel file location and cleans pandas NaN/NaT values for database safety.
 def get_data_path():
+    """Returns DATA_PATH if it points at a real Excel export; otherwise None (use built-in demo data)."""
     data_path = os.getenv("DATA_PATH", "")
-    if not data_path or not os.path.exists(data_path):
-        dataset_1 = r"C:\Users\VINAYAK\Downloads\SF_AccountingAgent_DummyData.xlsx"
-        dataset_2 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "SF_AccountingAgent_DummyData.xlsx")
-        
-        if os.path.exists(dataset_1):
-            data_path = dataset_1
-        elif os.path.exists(dataset_2):
-            data_path = dataset_2
-        else:
-            possible_paths = [
-                "SF_AccountingAgent_DummyData.xlsx",
-                "../SF_AccountingAgent_DummyData.xlsx",
-                "/Users/theabhijitjagtap/Projects/Account_Planner/SF_AccountingAgent_DummyData.xlsx"
-            ]
-            for p in possible_paths:
-                if os.path.exists(p):
-                    data_path = p
-                    break
-    return data_path
+    return data_path if data_path and os.path.exists(data_path) else None
 
 def clean_value(val):
     if pd.isna(val):
@@ -56,12 +39,13 @@ def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = Non
     
     if not excel_path:
         excel_path = get_data_path()
-    if not excel_path or not os.path.exists(excel_path):
-        print(f"Error: Excel data file not found at path: {excel_path}")
-        return False
-
-    print(f"Starting database sync for user {user_id} from Excel: {excel_path}")
-    sheets = pd.read_excel(excel_path, sheet_name=None)
+    if excel_path:
+        print(f"Starting database sync for user {user_id} from Excel: {excel_path}")
+        sheets = pd.read_excel(excel_path, sheet_name=None)
+    else:
+        from demo_dataset import build_demo_sheets
+        print(f"Starting database sync for user {user_id} from built-in demo dataset")
+        sheets = build_demo_sheets()
     data = {name.lower(): df for name, df in sheets.items()}
 
     try:
@@ -144,16 +128,16 @@ def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = Non
         cases_df = data.get("case")
         if cases_df is not None:
             for _, r in cases_df.iterrows():
-                csat = r.get("CSAT_Score", 0)
-                if pd.isna(csat):
-                    csat = 0.0
+                csat = r.get("CSAT_Score")
+                # Open cases have no CSAT yet; keep NULL so averages are not dragged to 0
+                csat = None if csat is None or pd.isna(csat) else float(csat)
                 c = Case(
                     Case_ID=f"{user_id}_{clean_value(r.get('Case_ID'))}",
                     Account_ID=f"{user_id}_{clean_value(r.get('Account_ID'))}",
                     Subject=clean_value(r.get("Subject")),
                     Status=clean_value(r.get("Status")),
                     Severity=clean_value(r.get("Severity")),
-                    CSAT_Score=float(csat),
+                    CSAT_Score=csat,
                     Open_Date=clean_value(r.get("Open_Date")),
                     user_id=user_id
                 )
@@ -203,38 +187,28 @@ def sync_crm_to_sqlite_for_user(db: Session, user_id: int, excel_path: str = Non
         print(f"Error during database sync for user {user_id}: {e}")
         return False
 
+DEMO_USER_EMAIL = os.getenv("DEMO_USER_EMAIL", "demo@apex.example")
+DEMO_USER_PASSWORD = os.getenv("DEMO_USER_PASSWORD", "ApexDemo#2026")
+
+
+def ensure_demo_user(db: Session):
+    """Get or create the demo login shown on the sign-in page."""
+    from models.user import User
+    from auth.password import hash_password
+    user = db.query(User).filter(User.email == DEMO_USER_EMAIL).first()
+    if not user:
+        user = User(name="Demo Account Manager", email=DEMO_USER_EMAIL, hashed_password=hash_password(DEMO_USER_PASSWORD))
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
 def sync_crm_to_sqlite() -> bool:
-    # Backwards compatibility fallback (e.g. for verify_all.py or admin sync)
+    # Backwards compatibility entrypoint (e.g. for verify_all.py or admin sync): reseeds the demo user.
     db = SessionLocal()
     try:
-        from models.user import User
-        from auth.password import hash_password
-        
-        # Get or create default admin user for Company-A
-        default_user = db.query(User).filter(User.email == "admin@apex.com").first()
-        if not default_user:
-            default_user = User(name="Default Admin", email="admin@apex.com", hashed_password=hash_password("admin"))
-            db.add(default_user)
-            db.commit()
-            db.refresh(default_user)
-            
-        # Get or create AbhiTech admin user for Company-B
-        abhitech_user = db.query(User).filter(User.email == "abhitech_admin@apex.com").first()
-        if not abhitech_user:
-            abhitech_user = User(name="AbhiTech Admin", email="abhitech_admin@apex.com", hashed_password=hash_password("admin123"))
-            db.add(abhitech_user)
-            db.commit()
-            db.refresh(abhitech_user)
-
-        # Sync original dataset for default admin
-        success_1 = sync_crm_to_sqlite_for_user(db, default_user.id)
-        
-        # Sync AbhiTech dataset for AbhiTech admin
-        abhitech_dataset_path = "/Users/theabhijitjagtap/Downloads/AbhiTech_DummyData_100Companies.xlsx"
-        print(f"Syncing secondary dataset from: {abhitech_dataset_path}")
-        success_2 = sync_crm_to_sqlite_for_user(db, abhitech_user.id, excel_path=abhitech_dataset_path)
-        
-        return success_1 and success_2
+        return sync_crm_to_sqlite_for_user(db, ensure_demo_user(db).id)
     finally:
         db.close()
 

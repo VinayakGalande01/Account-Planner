@@ -26,7 +26,7 @@ def get_active_llm_config() -> tuple:
         except Exception:
             pass
     
-    primary_url = os.getenv("LLM_URL", "http://10.181.43.105:8000/api/generate")
+    primary_url = os.getenv("LLM_URL", "http://localhost:11434/api/generate")
     primary_model = os.getenv("MODEL_NAME", "llama3.2:latest")
     return primary_url, primary_model
 
@@ -37,6 +37,10 @@ def classify_query(user_message: str) -> str:
     Calls the LLM to classify the user query into DATA, GENERAL, or UNCLEAR.
     Returns "DATA" on failure or timeout as a safe fallback.
     """
+    # With a cloud model configured, the downstream intent classifier handles routing;
+    # don't block on a local model that may not exist.
+    if os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY"):
+        return "DATA"
     url, model = get_active_llm_config()
     
     system_prompt = (
@@ -60,7 +64,7 @@ def classify_query(user_message: str) -> str:
         # Use sync client as this is called before async streaming in main.py, but FastAPI endpoints can handle blocking or we can make it sync. Wait, the main.py endpoint `generate_stream()` might be async.
         # Actually, let's make it sync for simplicity if we are calling it sequentially, or we can use httpx.Client().
         # Wait, the instruction says "classify_query(user_message)", not async def.
-        with httpx.Client(timeout=12.0) as client:
+        with httpx.Client(timeout=4.0) as client:
             payload = {
                 "model": model,
                 "prompt": system_prompt,

@@ -9,6 +9,7 @@ Health Scores (30%), Stale Deals (25%), Dead Deals (20%), Single Threading (15%)
 import pandas as pd
 from typing import List, Dict, Any
 from datetime import datetime
+from intelligence_engine import reference_date
 
 # --- SECTION 2: Account Risk Radar Scoring Engine ---
 # Evaluates multi-dimensional risk components and ranks accounts by risk score descending.
@@ -46,7 +47,7 @@ def score_account_risk(acc_id: str, acc_name: str, health: float, engine) -> Dic
                 reasons.append(f"{len(dead_lost)} Dead/Lost deals ({dead_ratio:.0%} of pipeline)")
 
             # 3. Stale Deals (25%)
-            today = datetime(2026, 7, 14) # system anchor date
+            today = datetime.combine(reference_date(), datetime.min.time())
             stale_count = 0
             for _, r in matching_opps.iterrows():
                 close_date_str = str(r.get('Close_Date', ''))

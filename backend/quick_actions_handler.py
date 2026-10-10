@@ -34,7 +34,7 @@ class ExecEmailHandler:
         
         raw_output = ""
         try:
-            gemini_key = os.getenv("GEMINI_API_KEY")
+            gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
             if gemini_key:
                 try:
                     print("[Cloud Route] Routing quick action EXEC_EMAIL to Google Gemini API...")
@@ -83,7 +83,7 @@ class MeetingAgendaHandler:
         
         raw_output = ""
         try:
-            gemini_key = os.getenv("GEMINI_API_KEY")
+            gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
             if gemini_key:
                 try:
                     print("[Cloud Route] Routing quick action MEETING_AGENDA to Google Gemini API...")

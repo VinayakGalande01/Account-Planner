@@ -7,13 +7,14 @@ if os.path.exists("backend/.env"):
     load_dotenv("backend/.env", override=True)
 else:
     load_dotenv(override=True)
-from database import SessionLocal, current_user_id_var, DATABASE_URL
+from database import SessionLocal, current_user_id_var, engine
 from models.user import User
 from models.crm_models import Account
 
 def test_rls_multi_tenancy_isolation():
     # Only run on PostgreSQL because SQLite doesn't support RLS
-    if not DATABASE_URL.startswith("postgresql"):
+    # Check the live engine, not DATABASE_URL: an unreachable Postgres URL falls back to SQLite.
+    if engine.dialect.name != "postgresql":
         pytest.skip("Skipping RLS test on non-PostgreSQL database")
 
     db = SessionLocal()

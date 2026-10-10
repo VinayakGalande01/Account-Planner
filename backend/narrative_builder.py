@@ -28,7 +28,7 @@ class NarrativeBuilder:
         Build causality chains, primary narrative, alternative hypothesis, 
         and a test to tell them apart.
         """
-        gemini_key = os.getenv("GEMINI_API_KEY")
+        gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
         if not gemini_key:
             # Fallback if no API key is set
             return {

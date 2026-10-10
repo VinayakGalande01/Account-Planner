@@ -27,7 +27,7 @@ def get_active_llm_config() -> tuple:
         except Exception:
             pass
     
-    primary_url = os.getenv("LLM_URL", "http://10.181.43.105:8000/api/generate")
+    primary_url = os.getenv("LLM_URL", "http://localhost:11434/api/generate")
     primary_model = os.getenv("MODEL_NAME", "llama3.2:latest")
     return primary_url, primary_model
 

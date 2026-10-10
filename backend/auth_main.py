@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from auth.router import router as auth_router

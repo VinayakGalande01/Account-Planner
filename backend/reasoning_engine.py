@@ -1553,7 +1553,10 @@ def summarize_large_dataset(account_data: Dict[str, Any], requested_count: int =
     
     # 2. Filter opportunities count dynamically
     total_count = len(opps)
-    total_val = sum((o.get("amount_usd", 0.0) or 0.0) for o in opps)
+    # Pipeline = open deals only; closed won/lost deals stay in the list as history
+    from intelligence_engine import open_opportunities
+    open_opps = open_opportunities(opps)
+    total_val = sum((o.get("amount_usd", 0.0) or 0.0) for o in open_opps)
     
     # Sort by value descending and keep requested_count
     sorted_opps = sorted(
@@ -1578,7 +1581,9 @@ def summarize_large_dataset(account_data: Dict[str, Any], requested_count: int =
         
     cleaned_data["opportunities"] = cleaned_opps
     cleaned_data["total_opportunities_count"] = total_count
+    cleaned_data["open_opportunities_count"] = len(open_opps)
     cleaned_data["total_pipeline_value_usd"] = total_val
+    cleaned_data["pipeline_definition"] = "total_pipeline_value_usd sums OPEN opportunities only (excludes Closed Won / Closed Lost)."
     cleaned_data["opportunities_summary_note"] = (
         f"Showing top {len(cleaned_opps)} opportunities out of {total_count} total by value to optimize context size."
     )
@@ -1586,9 +1591,73 @@ def summarize_large_dataset(account_data: Dict[str, Any], requested_count: int =
     return cleaned_data
 
 
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def call_openrouter_api(system_prompt: str, user_prompt: str, max_tokens: int = 400, timeout: int = 1500) -> str:
+    """Calls OpenRouter's chat completions API and returns the raw (JSON) text content."""
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash-lite")
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt + "\nOutput ONLY valid raw JSON."},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0.0,
+        "response_format": {"type": "json_object"},
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "X-Title": "APEX Account Planner",
+    }
+
+    def _execute_api_call():
+        # Callers' timeouts were tuned for direct Gemini; large-context calls via OpenRouter need more headroom,
+        # and cutting them off just before completion (then retrying) only multiplies latency.
+        with httpx.Client(timeout=httpx.Timeout(timeout=float(max(timeout, 60)), connect=5.0)) as client:
+            response = client.post(OPENROUTER_URL, json=payload, headers=headers)
+        if response.status_code != 200:
+            raise Exception(f"OpenRouter API error {response.status_code}: {response.text[:500]}")
+        res_json = response.json()
+        try:
+            text_content = (res_json["choices"][0]["message"]["content"] or "").strip()
+        except (KeyError, IndexError, TypeError):
+            raise Exception(f"Unexpected OpenRouter response structure: {str(res_json)[:500]}")
+        # Some models wrap JSON in markdown fences despite response_format
+        if text_content.startswith("```"):
+            text_content = text_content.strip("`").removeprefix("json").strip()
+        usage = res_json.get("usage", {}) or {}
+        try:
+            from pipeline_logger import TokenAccumulator
+            TokenAccumulator.record_call("llm_call", int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0)))
+        except Exception:
+            pass
+        return text_content
+
+    from api_retry import call_with_backoff
+    return call_with_backoff(_execute_api_call, max_retries=3, base_delay=1.5)
+
+
+# Circuit breaker: once Gemini reports the *daily* quota is exhausted, retrying is pointless.
+# Fail fast for a while so the pipeline's deterministic fallbacks answer in seconds instead of minutes.
+_GEMINI_QUOTA_COOLDOWN_SECONDS = 600
+_gemini_quota_blocked_until = 0.0
+
+
 def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_tokens: int = 400, timeout: int = 1500) -> str:
     """Fallback router to Gemini API when key is configured."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    global _gemini_quota_blocked_until
+    import time as _time
+    # OpenRouter takes precedence when configured (OpenAI-compatible API, any hosted model)
+    if os.getenv("OPENROUTER_API_KEY"):
+        return call_openrouter_api(system_prompt, user_prompt, max_tokens=max_tokens, timeout=timeout)
+    if _time.time() < _gemini_quota_blocked_until:
+        raise Exception("Gemini daily quota exhausted (circuit open); skipping call")
+    # API key travels in a header (not the URL) so it never appears in request logs
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
     
     # Format prompts nicely
     full_prompt = f"System: {system_prompt}\n\nUser Prompt: {user_prompt}\nOutput ONLY valid raw JSON."
@@ -1615,7 +1684,10 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
     generation_config = {
         "temperature": 0.0,
         "maxOutputTokens": max_tokens,
-        "responseMimeType": "application/json"
+        "responseMimeType": "application/json",
+        # Disable 2.5-flash "thinking": it adds seconds per call and its tokens count
+        # against maxOutputTokens, which truncated structured JSON responses.
+        "thinkingConfig": {"thinkingBudget": 0}
     }
 
     # If the system prompt requests Matrix Routing, enforce the schema
@@ -1640,7 +1712,7 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
         print(f"  [LLM CONNECT] Attempting Gemini proxy connection to: {url}")
         with httpx.Client(timeout=httpx_timeout) as client:
             print(f"  [LLM REQUEST] Sending Gemini proxy payload to: {url}...")
-            headers = {"Content-Type": "application/json"}
+            headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
             response = client.post(url, json=payload, headers=headers)
             print(f"  [LLM RESPONSE] Received Gemini proxy status {response.status_code} from: {url}")
             if response.status_code == 200:
@@ -1685,7 +1757,13 @@ def call_gemini_api(system_prompt: str, user_prompt: str, api_key: str, max_toke
                 raise Exception(f"Gemini API error {response.status_code}: {response.text}")
 
     from api_retry import call_with_backoff
-    return call_with_backoff(_execute_api_call, max_retries=3, base_delay=1.5)
+    try:
+        return call_with_backoff(_execute_api_call, max_retries=3, base_delay=1.5)
+    except Exception as e:
+        if "PerDay" in str(e):
+            _gemini_quota_blocked_until = _time.time() + _GEMINI_QUOTA_COOLDOWN_SECONDS
+            logger.error("[Gemini] Daily quota exhausted; skipping Gemini calls for 10 minutes. Enable billing on the API key's project.")
+        raise
 
 
 def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1746,7 +1824,8 @@ def generate_contextual_fallback_data(account_data: Dict[str, Any]) -> Dict[str,
     
     bullets = signals.get("narrative_bullets", [])
     account_name = account_data.get("account_name") or "Global Portfolio"
-    opps = account_data.get("opportunities") or []
+    from intelligence_engine import open_opportunities
+    opps = open_opportunities(account_data.get("opportunities") or [])
     num_opps = len(opps)
     total_rev = sum(opp.get("amount_usd", 0.0) or opp.get("amount", 0.0) for opp in opps)
     rev_str = f"${total_rev:,.2f}"
@@ -1841,7 +1920,7 @@ class ReasoningEngine:
 
     def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 60) -> str:
         # Check for Gemini API integration (Cloud Primary)
-        gemini_key = os.getenv("GEMINI_API_KEY")
+        gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
         if gemini_key:
             last_exception = None
             for attempt in range(2):  # attempt 0 = initial, attempt 1 = retry
@@ -2770,7 +2849,7 @@ class ResponseGenerator:
 
     def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 60) -> str:
         # Check for Gemini API integration (Cloud Primary Route)
-        gemini_key = os.getenv("GEMINI_API_KEY")
+        gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
         if gemini_key:
             last_exception = None
             for attempt in range(2):  # attempt 0 = initial, attempt 1 = retry

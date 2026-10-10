@@ -75,30 +75,30 @@ SEED_QUERIES = [
     {"query": "prepare an agenda", "intent": "MEETING_AGENDA", "complexity": "TACTICAL", "primary_intent": IntentEnum.MEETING_AGENDA},
     
     # ACT_REVIEW
-    {"query": "strategic account plan for Wipro", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
-    {"query": "playbook for Wipro", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "strategic account plan for Northwind Logistics", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "playbook for Northwind Logistics", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
     {"query": "TCS strategy mitigation plan", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
-    {"query": "objections for Wipro alignment", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
-    {"query": "Show Wipro account", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
-    {"query": "Give me a high-level summary of the Wipro pipeline for my VP", "intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
-    {"query": "Wipro executive briefing", "intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "objections for Northwind Logistics alignment", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "Show Northwind Logistics account", "intent": "ACT_REVIEW", "complexity": "STRATEGIC", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "Give me a high-level summary of the Northwind Logistics pipeline for my VP", "intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
+    {"query": "Northwind Logistics executive briefing", "intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
     {"query": "board review summary for TCS", "intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "primary_intent": IntentEnum.ACTION_RECOMMENDATION},
     
     # RISK_TRIAGE
-    {"query": "stale activity notes for Wipro", "intent": "RISK_TRIAGE", "complexity": "TACTICAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
-    {"query": "Write an email to the Wipro CIO about their open security ticket", "intent": "RISK_TRIAGE", "complexity": "TACTICAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
+    {"query": "stale activity notes for Northwind Logistics", "intent": "RISK_TRIAGE", "complexity": "TACTICAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
+    {"query": "Write an email to the Northwind Logistics CIO about their open security ticket", "intent": "RISK_TRIAGE", "complexity": "TACTICAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
     {"query": "critical open support cases for TCS", "intent": "RISK_TRIAGE", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
     {"query": "high risk accounts in my portfolio", "intent": "RISK_TRIAGE", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
     {"query": "TCS open support tickets and blockers", "intent": "RISK_TRIAGE", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
-    {"query": "value at risk for Wipro account", "intent": "RISK_TRIAGE", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
+    {"query": "value at risk for Northwind Logistics account", "intent": "RISK_TRIAGE", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.RISK_ASSESSMENT},
     
     # DEAL_VELOCITY
     {"query": "Top opportunities stalling in TCS", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
-    {"query": "opportunities list for Wipro", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+    {"query": "opportunities list for Northwind Logistics", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
     {"query": "active pipeline for this month", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
     {"query": "weighted forecast review", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
     {"query": "TCS largest deals in negotiation", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
-    {"query": "Wipro close rate and deal velocity", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
+    {"query": "Northwind Logistics close rate and deal velocity", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
     {"query": "forecast summary for the quarter", "intent": "DEAL_VELOCITY", "complexity": "OPERATIONAL", "primary_intent": IntentEnum.PIPELINE_SUMMARY},
     
     # SHOW_STAKEHOLDERS
@@ -287,7 +287,10 @@ class IntentClassifier:
 
         # Factual query detection bypass
         factual_keywords = ["who is", "who are", "what is", "where is", "how many", "list of", "show me contacts", "get contacts", "decision maker", "contact details"]
-        is_factual = any(kw in query_lower for kw in factual_keywords)
+        # Planning words override generic openers like "what is" ("What is the 7-day playbook for X?" needs reasoning).
+        planning_keywords = ["playbook", "plan", "strategy", "recommend", "briefing", "next steps", "should"]
+        is_planning = any(re.search(r'\b' + kw + r'\b', query_lower) for kw in planning_keywords)
+        is_factual = not is_planning and any(kw in query_lower for kw in factual_keywords)
         if is_factual:
             return IntentClassificationOutput(
                 primary_intent=primary_intent_val,
@@ -347,11 +350,11 @@ TACTICAL = Daily tasks, emails, immediate next steps
 STRATEGIC = Multi-day playbooks, risk analysis
 EXECUTIVE = Macro revenue summaries, VP-level outputs"""
 
-            few_shots = """Input: "Write an email to the Wipro CIO about their open security ticket."
-Output: {"intent": "RISK_TRIAGE", "complexity": "TACTICAL", "target_entity": "Wipro", "focus_area": "security ticket"}
+            few_shots = """Input: "Write an email to the Northwind Logistics CIO about their open security ticket."
+Output: {"intent": "RISK_TRIAGE", "complexity": "TACTICAL", "target_entity": "Northwind Logistics", "focus_area": "security ticket"}
 
-Input: "Give me a high-level summary of the Wipro pipeline for my VP."
-Output: {"intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "target_entity": "Wipro", "focus_area": "pipeline"}"""
+Input: "Give me a high-level summary of the Northwind Logistics pipeline for my VP."
+Output: {"intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "target_entity": "Northwind Logistics", "focus_area": "pipeline"}"""
 
             user_prompt = f"Analyze and classify this input:\nInput: \"{query}\""
             
@@ -437,7 +440,7 @@ Output: {"intent": "ACT_REVIEW", "complexity": "EXECUTIVE", "target_entity": "Wi
 
     def _call_llm(self, system_prompt: str, user_prompt: str, timeout: int = 60) -> str:
         # Check for Gemini API integration (Primary Cloud Route)
-        gemini_key = os.getenv("GEMINI_API_KEY")
+        gemini_key = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
         if gemini_key:
             try:
                 print("[Cloud Route] Routing Layer 1 Intent Classification call to Google Gemini API...")

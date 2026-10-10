@@ -8,7 +8,22 @@ stakeholder engagement gaps, and composite Intelligence Briefs with zero LLM cal
 # Imports JSON, datetime tools, and dictionary type hints for rule-based analysis.
 import json
 import datetime
+import os
 from typing import Dict, Any, List
+
+
+CLOSED_STAGES = {"Closed Won", "Closed Lost", "Dead/Lost"}
+
+
+def open_opportunities(opportunities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Closed deals are history, not active pipeline."""
+    return [o for o in opportunities if o.get("stage", "") not in CLOSED_STAGES]
+
+
+def reference_date() -> datetime.date:
+    """Date that deal staleness is measured against: today, or APEX_REFERENCE_DATE (YYYY-MM-DD) for reproducible tests."""
+    override = os.getenv("APEX_REFERENCE_DATE")
+    return datetime.date.fromisoformat(override) if override else datetime.date.today()
 
 # --- SECTION 2: Intelligence Computation Engine ---
 # Evaluates account data against deterministic heuristics for deal velocity and risk analysis.
@@ -19,7 +34,7 @@ class IntelligenceEngine:
         Analyzes CRM account data deterministically and generates strategic alerts & insights.
         Zero LLM calls. Extremely fast and robust.
         """
-        opportunities = account_data.get("opportunities", [])
+        opportunities = open_opportunities(account_data.get("opportunities", []))
         contacts = account_data.get("contacts", [])
         cases = account_data.get("cases", [])
         activities = account_data.get("activities", [])
@@ -27,7 +42,7 @@ class IntelligenceEngine:
         account_name = account_data.get("account_name", "Global Portfolio")
 
         # Configuration constants
-        anchor_date = datetime.date(2026, 7, 14)
+        anchor_date = reference_date()
         
         # 1. Stale Deals Analysis
         stale_deals = []
@@ -136,7 +151,7 @@ class IntelligenceEngine:
             )
             
         if case_opp_overlap:
-            overlap_names = ", ".join([f"'{c['case_subject']}'" for c in case_opp_overlap[:2]])
+            overlap_names = ", ".join(f"'{name}'" for name in list(dict.fromkeys(c['case_subject'] for c in case_opp_overlap))[:2])
             narrative_bullets.append(
                 f"🔴 critical ticket overlap: Open escalation ({overlap_names}) is directly threatening active pipeline value of ${total_pipeline:,.0f}."
             )
@@ -186,7 +201,7 @@ class IntelligenceEngine:
         account_name = account_data.get("account_name", "Global Portfolio")
 
         # Config anchor date matching the rest of the file
-        anchor_date = datetime.date(2026, 7, 14)
+        anchor_date = reference_date()
 
         # Observations mapping
         observations = {}

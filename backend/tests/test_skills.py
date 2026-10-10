@@ -84,7 +84,7 @@ def test_reasoning_engine_factual():
     print("Operational Consensus Output:")
     print(f"  Recommendation action: {res_op.consensus_recommendation.get('action')}")
     print(f"  Final Confidence: {res_op.final_confidence}")
-    assert res_op.final_confidence == 0.3
+    assert res_op.final_confidence == 0.9  # deterministic data display, no LLM synthesis
     assert res_op.consensus_recommendation.get("action") == "Displaying data quality and core metrics."
     
     print("\n[OK] Reasoning Engine Governance tests passed!")

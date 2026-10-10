@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(backend_dir, ".env")
-load_dotenv(dotenv_path=env_path, override=True)
+load_dotenv(dotenv_path=env_path, override=False)
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -158,47 +158,18 @@ async def startup_event():
             print(f"[STARTUP WARNING] Router warm-up failed (non-fatal): {e}")
     await asyncio.get_event_loop().run_in_executor(None, _warmup)
 
-DATA_PATH = os.getenv("DATA_PATH", "")
-if not DATA_PATH or not os.path.exists(DATA_PATH):
-    # Two custom data paths for dynamic local developer environments
-    dataset_1 = r"C:\Users\VINAYAK\Downloads\SF_AccountingAgent_DummyData.xlsx"
-    dataset_2 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "SF_AccountingAgent_DummyData.xlsx")
-    
-    if os.path.exists(dataset_1):
-        DATA_PATH = dataset_1
-    elif os.path.exists(dataset_2):
-        DATA_PATH = dataset_2
-    else:
-        # General fallbacks
-        possible_paths = [
-            "SF_AccountingAgent_DummyData.xlsx",
-            "../SF_AccountingAgent_DummyData.xlsx",
-            "/Users/theabhijitjagtap/Projects/Account_Planner/SF_AccountingAgent_DummyData.xlsx"
-        ]
-        for p in possible_paths:
-            if os.path.exists(p):
-                DATA_PATH = p
-                break
-
-# Create default admin user and seed if empty on startup
+# Ensure the demo login exists and has demo CRM data (see demo_dataset.py)
 from sqlalchemy.orm import Session
 from database import SessionLocal
 try:
     with SessionLocal() as startup_db:
-        from models.user import User
-        default_user = startup_db.query(User).filter(User.id == 1).first()
-        if not default_user:
-            from auth.password import hash_password
-            default_user = User(id=1, name="Default Admin", email="admin@apex.com", hashed_password=hash_password("admin"))
-            startup_db.add(default_user)
-            startup_db.commit()
-            startup_db.refresh(default_user)
-        
+        from sync_daemon import ensure_demo_user, sync_crm_to_sqlite_for_user
         from models.crm_models import Account
-        if startup_db.query(Account).filter(Account.user_id == 1).count() == 0:
-            print("Seeding default admin user data...")
-            from sync_daemon import sync_crm_to_sqlite_for_user
-            sync_crm_to_sqlite_for_user(startup_db, 1)
+        demo_user = ensure_demo_user(startup_db)
+        startup_db.info["user_id"] = str(demo_user.id)
+        if startup_db.query(Account).filter(Account.user_id == demo_user.id).count() == 0:
+            print("Seeding demo CRM data for demo user...")
+            sync_crm_to_sqlite_for_user(startup_db, demo_user.id)
 except Exception as startup_db_err:
     print(f"  [WARNING] Database startup seeding skipped: {startup_db_err}")
 
@@ -252,11 +223,10 @@ def normalize_url(url: str) -> str:
     rest = re.sub(r'/+', '/', rest)
     return f"{scheme}://{rest}"
 
-LLM_URL = normalize_url(os.getenv("LLM_URL", ""))
-if not LLM_URL:
-    raise RuntimeError("[STARTUP ERROR] LLM_URL is not set in .env. Please configure it before starting the server.")
+GEMINI_KEY = (os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
+# Local Ollama endpoint is only required when no Gemini key is configured
+LLM_URL = normalize_url(os.getenv("LLM_URL", "http://localhost:11434/api/generate"))
 MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2:latest")
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 print("\n=============================================")
 print("  [STARTUP] APEX INTELLIGENCE SYSTEM STARTING UP")
@@ -2434,10 +2404,10 @@ async def get_insights(
                     "id": f"ins-case-{c_row['Case_ID']}",
                     "type": "critical",
                     "title": f"Critical Case: {c_row['Subject']}",
-                    "description": f"Unresolved critical case found on {acc_name} ({acc_id}). Case Owner: {c_row.get('Owner', 'N/A')}.",
+                    "description": f"{c_row.get('Severity', 'High')} severity case on {acc_name} is still {str(c_row.get('Status', 'open')).lower()} (opened {c_row.get('Open_Date', 'recently')}).",
                     "targetAccount": acc_name,
                     "targetAccountId": acc_id,
-                    "suggestedAction": f"Escalate case {c_row['Case_ID']} to engineering team immediately."
+                    "suggestedAction": f"Escalate case {str(c_row['Case_ID']).split('_', 1)[-1]} to engineering and brief the account owner before the next customer call."
                 })
 
         # 2. Single-threaded Deals

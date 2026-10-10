@@ -416,8 +416,9 @@ _STRICT_RULES = """STRICT RULES:
 1. Do not output any conversational preambles or postambles. Only output the section headers and content.
 2. Use the exact __SECTION_*__ headers as shown above. Do not invent new ones.
 3. Replace the "<confidence_pct>" placeholders with the actual confidence percentage from the SIP JSON.
-4. Every recommendation MUST cite its supporting evidence from the data. Unearned recommendations are forbidden.
-5. Do NOT include sections that are not listed in the RESPONSE CONTRACT above.
+4. GROUNDING & ZERO HALLUCINATION: All factual claims must be strictly grounded in provided data. Never fabricate metrics, dates, sentiment, or contacts. If data is unavailable, state: "Insufficient evidence in the available account data."
+5. BUSINESS RECOMMENDATION RULE: Every recommendation MUST strictly follow: Evidence → Insight → Business Implication → Recommended Action. Every recommendation MUST explicitly cite its supporting evidence (e.g., [Source: Account Record], [Source: Usage Data], [Source: Support Record], [Source: CRM Interaction]).
+6. Do NOT include sections that are not listed in the RESPONSE CONTRACT above.
 
 __SECTION_END__"""
 
