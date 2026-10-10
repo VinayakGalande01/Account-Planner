@@ -34,7 +34,8 @@ services:
       - SAMESITE_COOKIE=lax
       - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-google/gemini-2.5-flash-lite}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      - OPENROUTER_FALLBACK_MODELS=${OPENROUTER_FALLBACK_MODELS:-google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - LOCAL_OLLAMA=false
     depends_on:

@@ -24,8 +24,10 @@ def call_with_backoff(fn, *args, max_retries: int = 3, base_delay: float = 2.0, 
             err_msg = str(e).lower()
             is_transient = any(msg in err_msg for msg in ["503", "unavailable", "rate limit", "quota", "429", "timeout"])
             
-            # Daily quotas don't reset in seconds, and a timed-out call usually times out again
-            if attempt == max_retries or "perday" in err_msg or "timed out" in err_msg:
+            # Daily quotas don't reset in seconds, and a timed-out call usually times out again.
+            # Billing/auth errors (out of credits, bad key) never succeed on retry.
+            is_permanent = any(code in err_msg for code in ["error 401", "error 402", "error 403", "requires more credits", "invalid api key"])
+            if attempt == max_retries or "perday" in err_msg or "per-day" in err_msg or "timed out" in err_msg or is_permanent:
                 logger.error(f"[API Retry] Attempt {attempt}/{max_retries} failed. Max retries reached. Error: {e}")
                 raise e
             

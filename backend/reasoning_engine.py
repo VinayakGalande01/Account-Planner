@@ -1592,14 +1592,21 @@ def summarize_large_dataset(account_data: Dict[str, Any], requested_count: int =
 
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# Free models by default (no paid usage). Picked on 2026-10-10 for valid JSON output and latency;
+# free models come and go, so override with OPENROUTER_MODEL / OPENROUTER_FALLBACK_MODELS.
+DEFAULT_OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+DEFAULT_OPENROUTER_FALLBACKS = "google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free"
 
 
 def call_openrouter_api(system_prompt: str, user_prompt: str, max_tokens: int = 400, timeout: int = 1500) -> str:
     """Calls OpenRouter's chat completions API and returns the raw (JSON) text content."""
     api_key = os.getenv("OPENROUTER_API_KEY")
-    model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash-lite")
+    model = os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
+    fallbacks = [m.strip() for m in os.getenv("OPENROUTER_FALLBACK_MODELS", DEFAULT_OPENROUTER_FALLBACKS).split(",") if m.strip()]
     payload = {
         "model": model,
+        # OpenRouter tries these in order when the primary is rate-limited or down (common for :free models)
+        **({"models": [model] + [m for m in fallbacks if m != model]} if fallbacks else {}),
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt + "\nOutput ONLY valid raw JSON."},
@@ -1626,6 +1633,8 @@ def call_openrouter_api(system_prompt: str, user_prompt: str, max_tokens: int = 
             text_content = (res_json["choices"][0]["message"]["content"] or "").strip()
         except (KeyError, IndexError, TypeError):
             raise Exception(f"Unexpected OpenRouter response structure: {str(res_json)[:500]}")
+        # Reasoning models may prepend their thinking; keep only the answer
+        text_content = re.sub(r"<think>.*?</think>", "", text_content, flags=re.DOTALL).strip()
         # Some models wrap JSON in markdown fences despite response_format
         if text_content.startswith("```"):
             text_content = text_content.strip("`").removeprefix("json").strip()
