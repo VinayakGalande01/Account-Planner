@@ -33,7 +33,7 @@ into a client-facing demo for Dataosis AI. Seven tasks were set:
 | 6 | Demo path | Ran end to end on 2026-10-09 (an account plan takes ~35s in the UI through OpenRouter). Re-check in Docker. | — |
 | 7 | Loom script and case study | Done | `docs/demo/LOOM_SCRIPT.md`, `docs/CASE_STUDY.md` |
 
-LLM path: OpenRouter when `OPENROUTER_API_KEY` is set (default model `google/gemini-2.5-flash-lite`, override with `OPENROUTER_MODEL`).
+LLM path: OpenRouter when `OPENROUTER_API_KEY` is set. Since 2026-10-10 free models only: `nvidia/nemotron-3-super-120b-a12b:free`, with Gemma 4 `:free` fallbacks (override with `OPENROUTER_MODEL` / `OPENROUTER_FALLBACK_MODELS`). Free tier: 50 requests/day.
 
 ---
 

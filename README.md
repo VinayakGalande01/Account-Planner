@@ -45,7 +45,7 @@ Open **http://localhost:3000**, click **Log In**, then **Use demo account** (`de
 
 The first build downloads Python ML dependencies and takes several minutes. Later starts are fast.
 
-> **Model:** AI calls go through [OpenRouter](https://openrouter.ai) (default model `google/gemini-2.5-flash-lite`; change it with `OPENROUTER_MODEL`). An account plan takes about 45 seconds and roughly 8 model calls. A direct `GEMINI_API_KEY` also works, but the Gemini free tier (20 requests per day) is too small for live demos.
+> **Model:** AI calls go through [OpenRouter](https://openrouter.ai) using free models only: `nvidia/nemotron-3-super-120b-a12b:free`, falling back to Gemma 4 when it is busy (change with `OPENROUTER_MODEL` / `OPENROUTER_FALLBACK_MODELS`). An account plan uses about 8 model calls. OpenRouter's free tier allows 50 requests per day, roughly 6 AI plans; data questions (revenue, contacts, at-risk lists) use none.
 
 ---
 
