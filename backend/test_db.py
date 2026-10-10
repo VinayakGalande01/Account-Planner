@@ -9,7 +9,7 @@ import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-URL = "postgresql://postgres.hqofkucrppxzgtajpjxh:APEX%242026006@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres"
+URL = os.environ["DATABASE_URL"]
 engine = create_engine(URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
 db = SessionLocal()

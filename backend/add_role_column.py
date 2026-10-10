@@ -28,7 +28,10 @@ def migrate():
                 print(f"  [SQLite Notice] {e}")
 
     # 2. Try PostgreSQL / Supabase
-    pg_url = os.getenv("ADMIN_DATABASE_URL", "postgresql://postgres:APEX%242026006@db.hqofkucrppxzgtajpjxh.supabase.co:5432/postgres")
+    pg_url = os.getenv("ADMIN_DATABASE_URL")
+    if not pg_url:
+        print("  [PostgreSQL] ADMIN_DATABASE_URL not set; skipping.")
+        return
     try:
         pg_engine = create_engine(pg_url, connect_args={"connect_timeout": 5})
         with pg_engine.connect() as conn:

@@ -24,7 +24,7 @@ def main():
     
     # Check if target is postgres and use admin_url if so, similar to rebuild_db.py
     if DATABASE_URL.startswith("postgresql") or "aws-1-ap-southeast-2.pooler.supabase.com" in DATABASE_URL:
-        admin_url = "postgresql://postgres.hqofkucrppxzgtajpjxh:APEX%242026006@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres"
+        admin_url = os.getenv("ADMIN_DATABASE_URL", DATABASE_URL)
         print("[INFO] PostgreSQL detected. Using admin credentials for table creation...")
         engine = create_engine(admin_url)
     else:

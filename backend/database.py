@@ -21,6 +21,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local_planner.db")
 
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# Name the installed driver explicitly: SQLAlchemy 2.1 defaults plain postgresql:// to psycopg (v3),
+# but requirements.txt installs psycopg2-binary.
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 # --- SECTION 2: Engine Initialization & Fallback ---
 # Tries establishing PostgreSQL connection pool; falls back to local SQLite if PostgreSQL fails.

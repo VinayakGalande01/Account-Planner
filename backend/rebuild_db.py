@@ -21,7 +21,7 @@ import models.crm_models
 def rebuild_database():
     is_sqlite = db_engine.dialect.name == "sqlite"
     if not is_sqlite:
-        admin_url = "postgresql://postgres.hqofkucrppxzgtajpjxh:APEX%242026006@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres"
+        admin_url = os.getenv("ADMIN_DATABASE_URL", DATABASE_URL)
         engine = create_engine(admin_url)
         db_name = admin_url.split('@')[-1]
     else:
