@@ -27,7 +27,8 @@ jobs:
       - name: Run Pytest
         run: |
           cd backend
-          pytest
+          # Only the test suite: backend/test_*.py are admin scripts that need a live database
+          pytest tests
 
   frontend-build:
     runs-on: ubuntu-latest
