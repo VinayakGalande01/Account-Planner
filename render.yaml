@@ -1,0 +1,28 @@
+# Render Blueprint for the public APEX demo backend (free plan, lite mode).
+# Secrets marked sync: false are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: apex-backend
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./deploy/render/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: OPENROUTER_MODEL
+        value: nvidia/nemotron-3-super-120b-a12b:free
+      # Used in order when the first model is rate-limited or down.
+      - key: OPENROUTER_FALLBACK_MODELS
+        value: google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free
+      - key: LOCAL_OLLAMA
+        value: "false"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        sync: false

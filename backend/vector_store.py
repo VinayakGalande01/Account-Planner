@@ -1,13 +1,18 @@
 """
 LOCAL VECTOR STORE (vector_store.py)
-Stores activity logs in ChromaDB with SentenceTransformer embeddings for semantic search.
+Stores activity logs in ChromaDB (or in-memory vectors) with MiniLM embeddings for semantic search.
 Includes graceful fallback to in-memory keyword matching when ChromaDB is unavailable.
 """
 
 # --- SECTION 1: Dependency Import & Fallback Flags ---
-# Evaluates environmental flags and gracefully imports ChromaDB / SentenceTransformer.
+# Evaluates environmental flags and gracefully imports ChromaDB. The embedding
+# model comes from embeddings.py (sentence-transformers or FastEmbed).
+# Without ChromaDB, activities are searched over in-memory vectors instead.
 import os
 import re
+import numpy as np
+
+from embeddings import get_embedding_model
 
 DISABLE_CHROMA = os.getenv("DISABLE_CHROMA", "false").lower() in ("true", "1")
 
@@ -15,36 +20,28 @@ CHROMA_AVAILABLE = False
 if not DISABLE_CHROMA:
     try:
         import chromadb
-        from sentence_transformers import SentenceTransformer
         CHROMA_AVAILABLE = True
     except ImportError:
-        print("Warning: chromadb or sentence-transformers not found. Local RAG will fall back to keyword matching.")
+        print("Info: chromadb not installed. Activity search uses in-memory vectors.")
 else:
-    print("Info: ChromaDB and Sentence-Transformers disabled via DISABLE_CHROMA. Using keyword-matching fallback.")
-
-_GLOBAL_VECTOR_EMBEDDING_MODEL = None
+    print("Info: ChromaDB disabled via DISABLE_CHROMA. Activity search uses in-memory vectors.")
 
 # --- SECTION 2: Vector Database Store Implementation ---
 # Manages persistent vector indexing, semantic search queries, and memory fallback.
 class LocalVectorStore:
     def __init__(self, db_path: str = "./chroma_db"):
-        global _GLOBAL_VECTOR_EMBEDDING_MODEL
         self.db_path = os.path.abspath(db_path)
         self.collection_name = "activity_logs"
-        self.model = None
         self.chroma_client = None
         self.collection = None
         self.fallback_db = [] # Fallback list of dicts: {"text": str, "metadata": dict, "id": str}
+        self.memory_vectors = {} # activity id -> embedding, used when ChromaDB is not installed
 
-        if CHROMA_AVAILABLE:
+        self.model = get_embedding_model()
+        if CHROMA_AVAILABLE and self.model is not None:
             try:
                 # Initialize persistent ChromaDB client
                 self.chroma_client = chromadb.PersistentClient(path=self.db_path)
-                
-                # Load a fast, lightweight SentenceTransformer model (downloads on first run, ~90MB)
-                if _GLOBAL_VECTOR_EMBEDDING_MODEL is None:
-                    _GLOBAL_VECTOR_EMBEDDING_MODEL = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
-                self.model = _GLOBAL_VECTOR_EMBEDDING_MODEL
                 
                 # Get or create collection
                 self.collection = self.chroma_client.get_or_create_collection(
@@ -58,9 +55,6 @@ class LocalVectorStore:
                     if os.path.exists(self.db_path):
                         shutil.rmtree(self.db_path)
                     self.chroma_client = chromadb.PersistentClient(path=self.db_path)
-                    if _GLOBAL_VECTOR_EMBEDDING_MODEL is None:
-                        _GLOBAL_VECTOR_EMBEDDING_MODEL = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
-                    self.model = _GLOBAL_VECTOR_EMBEDDING_MODEL
                     self.collection = self.chroma_client.get_or_create_collection(
                         name=self.collection_name
                     )
@@ -133,6 +127,13 @@ class LocalVectorStore:
                 print(f"Successfully indexed {len(ids)} activities in ChromaDB for user {user_id}.")
             except Exception as e:
                 print(f"Error indexing to ChromaDB: {e}")
+        elif self.model is not None:
+            try:
+                for act_id, emb in zip(ids, self.model.encode(documents)):
+                    self.memory_vectors[act_id] = np.asarray(emb, dtype=np.float32)
+                print(f"Indexed {len(ids)} activities in memory vectors for user {user_id}.")
+            except Exception as e:
+                print(f"Error embedding activities: {e}")
         else:
             print(f"Indexed {len(ids)} activities in fallback memory DB for user {user_id}.")
 
@@ -176,10 +177,29 @@ class LocalVectorStore:
             except Exception as e:
                 print(f"Chroma query error: {e}. Falling back to keyword match...")
 
+        # Without ChromaDB: cosine similarity over the in-memory vectors
+        if not self.collection and self.model is not None and self.memory_vectors:
+            try:
+                query_vector = np.asarray(self.model.encode(query), dtype=np.float32)
+                scored = []
+                for item in self._dedup_fallback():
+                    meta = item["metadata"]
+                    if meta.get("user_id") != user_id or (account_id and meta["account_id"] != account_id):
+                        continue
+                    vec = self.memory_vectors.get(item["id"])
+                    if vec is None:
+                        continue
+                    denom = float(np.linalg.norm(vec) * np.linalg.norm(query_vector)) or 1.0
+                    scored.append((float(np.dot(vec, query_vector)) / denom, item))
+                scored.sort(key=lambda x: x[0], reverse=True)
+                return [{"text": item["text"], "metadata": item["metadata"]} for _, item in scored[:limit]]
+            except Exception as e:
+                print(f"Memory vector search error: {e}. Falling back to keyword match...")
+
         # Fallback to simple keyword/regex matching
         query_words = [w.lower() for w in re.split(r'\W+', query) if len(w) > 2]
         matches = []
-        for item in self.fallback_db:
+        for item in self._dedup_fallback():
             # Apply user_id filter
             if item["metadata"].get("user_id") != user_id:
                 continue
@@ -195,6 +215,10 @@ class LocalVectorStore:
         # Sort matches by score descending
         matches.sort(key=lambda x: x[0], reverse=True)
         return [{"text": item["text"], "metadata": item["metadata"]} for score, item in matches[:limit]]
+
+    def _dedup_fallback(self):
+        """Latest copy of each activity; re-syncs append the same ids again."""
+        return list({item["id"]: item for item in self.fallback_db}.values())
 
 # Singleton instance
 vector_store = LocalVectorStore()

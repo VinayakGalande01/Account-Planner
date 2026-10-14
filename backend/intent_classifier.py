@@ -1,6 +1,6 @@
 """
 HYBRID INTENT CLASSIFIER (intent_classifier.py)
-Combines local SentenceTransformer semantic embeddings (fast-path)
+Combines local MiniLM semantic embeddings (fast-path, see embeddings.py)
 with an LLM fallback matrix to classify user business intent and extract CRM entities.
 """
 
@@ -16,11 +16,7 @@ from pydantic import BaseModel, ValidationError
 
 from account_resolver import find_account_in_text, candidate_names, user_messages
 
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
+from embeddings import get_embedding_model
 
 _GLOBAL_EMBEDDING_MODEL = None
 _GLOBAL_SEED_EMBEDDINGS = None
@@ -129,15 +125,16 @@ class IntentClassifier:
     def _init_embeddings(self):
         """Lazy load sentence transformers and calculate seed embeddings."""
         global _GLOBAL_EMBEDDING_MODEL, _GLOBAL_SEED_EMBEDDINGS
-        if _GLOBAL_EMBEDDING_MODEL is None and SENTENCE_TRANSFORMERS_AVAILABLE:
+        if _GLOBAL_EMBEDDING_MODEL is None:
             try:
-                print("[Router] Initializing SentenceTransformer model...")
-                _GLOBAL_EMBEDDING_MODEL = SentenceTransformer('all-MiniLM-L6-v2', local_files_only=True)
+                _GLOBAL_EMBEDDING_MODEL = get_embedding_model()
+                if _GLOBAL_EMBEDDING_MODEL is None:
+                    raise RuntimeError("embeddings disabled or unavailable")
                 queries = [q["query"] for q in SEED_QUERIES]
                 _GLOBAL_SEED_EMBEDDINGS = _GLOBAL_EMBEDDING_MODEL.encode(queries)
                 print(f"[Router] Successfully cached {len(queries)} seed embeddings.")
             except Exception as e:
-                print(f"Warning: Failed to load SentenceTransformer for fast router: {e}")
+                print(f"Warning: Semantic fast router off: {e}")
         self.embedding_model = _GLOBAL_EMBEDDING_MODEL
         self.seed_embeddings = _GLOBAL_SEED_EMBEDDINGS
 

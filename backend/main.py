@@ -145,13 +145,13 @@ async def shutdown_event():
 
 @app.on_event("startup")
 async def startup_event():
-    """Pre-warm SentenceTransformer in a thread pool so the first user
+    """Pre-warm the embedding model in a thread pool so the first user
     query does not block the event loop."""
     import asyncio
     from intent_classifier import IntentClassifier
     def _warmup():
         try:
-            print("[STARTUP] Pre-warming semantic router (SentenceTransformer)...")
+            print("[STARTUP] Pre-warming semantic router (embeddings)...")
             router = IntentClassifier(is_local=True)
             router._init_embeddings()
             print("[STARTUP] Semantic router warmed up successfully.")

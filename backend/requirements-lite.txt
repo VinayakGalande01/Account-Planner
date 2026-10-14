@@ -1,0 +1,22 @@
+# Render free (512 MB): requirements.txt without chromadb and sentence-transformers (no PyTorch).
+# FastEmbed runs the same MiniLM model on ONNX; see embeddings.py.
+fastapi
+uvicorn
+pandas
+numpy
+openpyxl
+openai
+pydantic
+python-dotenv
+httpx
+sqlalchemy
+psycopg2-binary
+passlib[bcrypt]
+python-jose[cryptography]
+email-validator
+python-multipart
+slowapi
+limits
+alembic
+json-repair>=0.28
+fastembed==0.8.0
