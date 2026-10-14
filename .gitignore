@@ -58,3 +58,7 @@ llm_cache.json
 
 # Real-name legacy dataset (use DATA_PATH to load your own export)
 backend/SF_AccountingAgent_DummyData.xlsx
+
+# Local run outputs
+backend/test_report.json
+backend/stream.txt

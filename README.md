@@ -4,6 +4,10 @@
 
 Built by **[Dataosis AI](https://dataosis.in)** as a working reference for what we implement on Salesforce and Agentforce.
 
+**Live demo: [account-planner-ten.vercel.app](https://account-planner-ten.vercel.app)**. Click **Log In**, then **Use demo account** (`demo@apex.example` / `ApexDemo#2026`).
+
+> The demo runs on free hosting. Outside about 10:30–19:30 IST the first visit can take ~3 minutes while the server wakes up. Data questions (at-risk accounts, revenue, deals closing) answer in seconds; full AI account plans use free AI models and take a few minutes.
+
 ![APEX dashboard: portfolio health and AI-detected risks](docs/images/dashboard.png)
 
 ---
@@ -45,7 +49,7 @@ Open **http://localhost:3000**, click **Log In**, then **Use demo account** (`de
 
 The first build downloads Python ML dependencies and takes several minutes. Later starts are fast.
 
-> **Model:** AI calls go through [OpenRouter](https://openrouter.ai) using free models only: `nvidia/nemotron-3-super-120b-a12b:free`, falling back to Gemma 4 when it is busy (change with `OPENROUTER_MODEL` / `OPENROUTER_FALLBACK_MODELS`). An account plan uses about 8 model calls. OpenRouter's free tier allows 50 requests per day, roughly 6 AI plans; data questions (revenue, contacts, at-risk lists) use none.
+> **Model:** AI calls go through [OpenRouter](https://openrouter.ai) using free models only: `nvidia/nemotron-3-super-120b-a12b:free`, falling back to Gemma 4 when it is busy (change with `OPENROUTER_MODEL` / `OPENROUTER_FALLBACK_MODELS`). An account plan uses about 12 model calls. OpenRouter's free tier allows 50 requests per day, roughly 4 AI plans; data questions (revenue, contacts, at-risk lists) use none.
 
 ---
 
@@ -69,11 +73,11 @@ flowchart LR
     P4 --> UI
 ```
 
-- **Backend:** Python, FastAPI, SQLAlchemy, pandas, ChromaDB, sentence-transformers
+- **Backend:** Python, FastAPI, SQLAlchemy, pandas, ChromaDB, sentence-transformers (the hosted demo runs the same embedding model on FastEmbed to fit in 512 MB)
 - **Frontend:** Next.js, React, TypeScript, Recharts, Framer Motion
 - **Data:** PostgreSQL / Supabase with multi-tenant row-level isolation, SQLite fallback for local runs
-- **AI:** any OpenRouter model (default Gemini 2.5 Flash-Lite), Google Gemini directly, or Ollama (fully local, no data leaves your network)
-- **Ops:** Docker Compose, GitHub Actions CI, eval harness and request tracing
+- **AI:** any OpenRouter model (default: free Nemotron 3 Super with Gemma 4 fallbacks), Google Gemini directly, or Ollama (fully local, no data leaves your network)
+- **Ops:** Docker Compose, GitHub Actions CI and keep-alive, eval harness and request tracing; hosted on Render (backend), Vercel (frontend) and Supabase (database)
 
 More detail: [architecture docs](docs/architecture/README.md) · [case study](docs/CASE_STUDY.md)
 
