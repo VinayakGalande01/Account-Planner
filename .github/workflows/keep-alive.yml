@@ -1,0 +1,34 @@
+# Keeps the free demo responsive:
+#  - pings the Render backend every 10 minutes during ~10:30-19:30 IST so visitors skip the ~3 minute cold start
+#    (shares Render's 750 free hours with the Document Q&A backend: ~9.5 h/day each ≈ 600 h/month together)
+#  - logs in as the demo user once a day; the login reads Supabase, so the free project isn't paused for inactivity
+# Repository secret: BACKEND_URL (e.g. https://account-planner-759r.onrender.com)
+name: keep-alive
+
+on:
+  schedule:
+    - cron: "*/10 5-13 * * *"   # every 10 min, 05:00-13:50 UTC ≈ 10:30-19:20 IST
+    - cron: "5 5 * * *"         # daily Supabase touch
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Ping backend
+        if: ${{ github.event.schedule != '5 5 * * *' }}
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+        run: |
+          curl -fsS --retry 3 --retry-delay 30 --max-time 240 "$BACKEND_URL/api/health" > /dev/null
+      - name: Touch Supabase (demo login)
+        if: ${{ github.event.schedule == '5 5 * * *' || github.event_name == 'workflow_dispatch' }}
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+        run: |
+          # Fictional demo account, already public in docker-compose.yml
+          curl -fsS --retry 3 --retry-delay 30 --max-time 240 -o /dev/null \
+            -H "Content-Type: application/json" \
+            -d '{"email":"demo@apex.example","password":"ApexDemo#2026"}' \
+            "$BACKEND_URL/auth/login"
