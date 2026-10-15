@@ -121,10 +121,10 @@ async def format_response_for_user(
     conversation_history: Optional[List[Dict[str, str]]] = None,
     urgency: Optional[str] = None,
 ) -> str:
-    """Formats the answer (see _format_response) and hides storage prefixes on CRM ids."""
-    return strip_storage_prefixes(
-        await _format_response(raw_output, persona, conversation_history, urgency)
-    )
+    """Formats the answer (see _format_response) and hides storage prefixes on CRM ids.
+    Returns raw_output unchanged when formatting fails: callers compare against it."""
+    formatted = await _format_response(raw_output, persona, conversation_history, urgency)
+    return formatted if formatted == raw_output else strip_storage_prefixes(formatted)
 
 
 async def _format_response(

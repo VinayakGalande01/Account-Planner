@@ -77,3 +77,18 @@ def test_urgency_override_replaces_llm_value(monkeypatch):
     import asyncio
     out = json.loads(asyncio.run(format_response_for_user(RAW, urgency="P3")))
     assert out["urgency"] == "P3"
+
+
+def test_storage_prefixes_hidden_from_users():
+    from response_formatter import strip_storage_prefixes
+    assert strip_storage_prefixes("escalate 26_CASE002 and 1_OPP004") == "escalate CASE002 and OPP004"
+    assert strip_storage_prefixes("ACC001, v1_2, 2_CASEX") == "ACC001, v1_2, 2_CASEX"
+
+
+def test_failed_formatting_returns_raw_output_unchanged(monkeypatch):
+    # main.py treats "result != raw_output" as success, so a failure must not alter the text
+    import reasoning_engine
+    monkeypatch.setattr(reasoning_engine, "call_gemini_api", lambda **kwargs: "not json at all")
+    import asyncio
+    raw = RAW + " Linked case 26_CASE002."
+    assert asyncio.run(format_response_for_user(raw, urgency="P3")) == raw

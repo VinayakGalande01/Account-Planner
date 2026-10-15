@@ -37,7 +37,7 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data_engine import DataEngine
-from response_formatter import format_response_for_user, should_skip_formatting, compute_urgency
+from response_formatter import format_response_for_user, should_skip_formatting, compute_urgency, strip_storage_prefixes
 from intelligence_layer import (
     generate_strategic_synthesis, curate_llm_context,
     RESPONSE_BUDGET, HumanizedPriority, SignalClassifier
@@ -2044,6 +2044,8 @@ async def chat(request: Request, body: ChatRequest, background_tasks: Background
         
         _contract_chunks = []
         async for chunk in _generate_stream_impl():
+            if isinstance(chunk, str):
+                chunk = strip_storage_prefixes(chunk)
             yield chunk
             if isinstance(chunk, str) and not chunk.startswith("sys_meta_log|"):
                 _contract_chunks.append(chunk)
