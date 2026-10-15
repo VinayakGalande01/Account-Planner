@@ -159,8 +159,8 @@ class PipelineLogger:
             logger.info(f"|  APEX PIPELINE COMPLETE  |  Status: {status:<10} Duration: {duration_ms}ms  |")
             logger.info(f"+{border}+")
             logger.info(f"|  LLM Calls    : {snapshot['total_llm_calls']:<3}                                           |")
-            logger.info(f"|  Prompt Tokens: {snapshot['prompt_tokens']:,:<12} Completion Tokens: {snapshot['completion_tokens']:,:<10} |")
-            logger.info(f"|  Total Tokens : {snapshot['total_tokens']:,:<12} Est. Cost (Flash): ${snapshot['estimated_cost_usd']:.6f} |")
+            logger.info(f"|  Prompt Tokens: {snapshot['prompt_tokens']:<12,} Completion Tokens: {snapshot['completion_tokens']:<10,} |")
+            logger.info(f"|  Total Tokens : {snapshot['total_tokens']:<12,} Est. Cost (Flash): ${snapshot['estimated_cost_usd']:.6f} |")
             logger.info(f"|  Confidence   : {conf_pct:.1f}%        Data Quality     : {dq_pct:.1f}%          |")
             logger.info(f"+{border}+\n")
         except Exception as finish_err:

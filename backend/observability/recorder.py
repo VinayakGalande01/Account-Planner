@@ -27,6 +27,18 @@ from database import SessionLocal
 
 logger = logging.getLogger("observability")
 
+
+def _as_text(value: Any) -> Optional[str]:
+    """Text columns: store dicts/lists (e.g. the reasoning plan) as JSON text."""
+    if value is None or isinstance(value, str):
+        return value
+    return json.dumps(value, default=str)
+
+
+def _as_json(value: Any) -> Any:
+    """JSON columns: drop anything json can't encode (dates, model objects) to strings."""
+    return json.loads(json.dumps(value, default=str))
+
 # --- SECTION 2: Telemetry Recorder Interfaces & SQL Implementation ---
 # Defines base record methods and SQL persistence implementations.
 class TelemetryRecorderInterface(ABC):
@@ -167,10 +179,10 @@ class PostgreSQLTelemetryRecorder(TelemetryRecorderInterface):
                 planner_prompt_hash=payload_data.get("planner_prompt_hash"),
                 reasoner_prompt_hash=payload_data.get("reasoner_prompt_hash"),
                 narrator_prompt_hash=payload_data.get("narrator_prompt_hash"),
-                planner_output=payload_data.get("planner_output"),
+                planner_output=_as_text(payload_data.get("planner_output")),
                 retrieved_context_summary=summary_sanitized,
-                retrieved_record_ids=payload_data.get("retrieved_record_ids", {}),
-                reasoning_package=payload_data.get("reasoning_package", {})
+                retrieved_record_ids=_as_json(payload_data.get("retrieved_record_ids", {})),
+                reasoning_package=_as_json(payload_data.get("reasoning_package", {}))
             )
             db.add(payload)
             db.commit()

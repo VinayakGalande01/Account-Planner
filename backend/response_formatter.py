@@ -315,14 +315,21 @@ Output ONLY valid raw JSON without preamble or markdown fences.
         for req in ("headline", "summary"):
             if not parsed.get(req):
                 raise ValueError(f"Missing schema key: {req}")
-        for key in ("opportunities", "risks", "recommended_actions", "next_steps_suggestions"):
-            if not isinstance(parsed.get(key), list):
-                parsed[key] = []
+        list_keys = ("opportunities", "risks", "recommended_actions", "next_steps_suggestions")
+        missing = [key for key in list_keys if not isinstance(parsed.get(key), list)]
+        if missing:
+            logger.warning(f"[ResponseFormatter] Model omitted sections {missing}; returned keys: {sorted(parsed.keys())}")
+        for key in missing:
+            parsed[key] = []
         for key in ("flag", "closing_question"):
             parsed.setdefault(key, "")
         parsed.setdefault("urgency", "P2")
 
+        counts_before = {key: len(parsed[key]) for key in list_keys}
         parsed = _ground_to_source(parsed, raw_output)
+        dropped = {key: counts_before[key] - len(parsed[key]) for key in list_keys if counts_before[key] != len(parsed[key])}
+        if dropped:
+            logger.warning(f"[ResponseFormatter] Grounding check removed items: {dropped}")
         if urgency:
             parsed["urgency"] = urgency
 
