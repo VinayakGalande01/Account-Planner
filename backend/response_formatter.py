@@ -107,7 +107,27 @@ def _ground_to_source(parsed: Dict[str, Any], raw_output: str) -> Dict[str, Any]
     return parsed
 
 
+# Per-user storage prefix on CRM ids ("1_CASE001"); users should only ever see "CASE001"
+_PREFIXED_ID = re.compile(r"\b\d+_((?:ACC|OPP|CON|CASE|ACT)\d+)\b")
+
+
+def strip_storage_prefixes(text: str) -> str:
+    return _PREFIXED_ID.sub(r"\1", text) if text else text
+
+
 async def format_response_for_user(
+    raw_output: str,
+    persona: str = "account_manager",
+    conversation_history: Optional[List[Dict[str, str]]] = None,
+    urgency: Optional[str] = None,
+) -> str:
+    """Formats the answer (see _format_response) and hides storage prefixes on CRM ids."""
+    return strip_storage_prefixes(
+        await _format_response(raw_output, persona, conversation_history, urgency)
+    )
+
+
+async def _format_response(
     raw_output: str,
     persona: str = "account_manager",
     conversation_history: Optional[List[Dict[str, str]]] = None,
@@ -290,11 +310,17 @@ Output ONLY valid raw JSON without preamble or markdown fences.
                 logger.error(f"[ResponseFormatter Error] json_repair also failed: {repair_err}. Returning raw output.")
                 return raw_output
 
-        # Validate required schema keys
-        required = ["headline", "urgency", "summary", "opportunities", "risks", "flag", "recommended_actions", "closing_question", "next_steps_suggestions"]
-        for req in required:
-            if req not in parsed:
+        # Validate required schema keys. Free models sometimes drop an empty section;
+        # only the headline and summary are essential, the rest default to empty.
+        for req in ("headline", "summary"):
+            if not parsed.get(req):
                 raise ValueError(f"Missing schema key: {req}")
+        for key in ("opportunities", "risks", "recommended_actions", "next_steps_suggestions"):
+            if not isinstance(parsed.get(key), list):
+                parsed[key] = []
+        for key in ("flag", "closing_question"):
+            parsed.setdefault(key, "")
+        parsed.setdefault("urgency", "P2")
 
         parsed = _ground_to_source(parsed, raw_output)
         if urgency:

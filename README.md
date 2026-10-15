@@ -6,7 +6,7 @@ Built by **[Dataosis AI](https://dataosis.in)** as a working reference for what 
 
 **Live demo: [account-planner-ten.vercel.app](https://account-planner-ten.vercel.app)**. Click **Log In**, then **Use demo account** (`demo@apex.example` / `ApexDemo#2026`).
 
-> The demo runs on free hosting. Outside about 10:30–19:30 IST the first visit can take ~3 minutes while the server wakes up. Data questions (at-risk accounts, revenue, deals closing) answer in seconds; full AI account plans use free AI models and take a few minutes.
+> The demo runs on free hosting. Outside about 10:30–19:30 IST the first visit can take ~3 minutes while the server wakes up. Data questions (at-risk accounts, revenue, deals closing) answer in seconds; full AI account plans use free AI models and take about 2 minutes.
 
 ![APEX dashboard: portfolio health and AI-detected risks](docs/images/dashboard.png)
 
@@ -49,7 +49,7 @@ Open **http://localhost:3000**, click **Log In**, then **Use demo account** (`de
 
 The first build downloads Python ML dependencies and takes several minutes. Later starts are fast.
 
-> **Model:** AI calls go through [OpenRouter](https://openrouter.ai) using free models only: `nvidia/nemotron-3-super-120b-a12b:free`, falling back to Gemma 4 when it is busy (change with `OPENROUTER_MODEL` / `OPENROUTER_FALLBACK_MODELS`). An account plan uses about 12 model calls. OpenRouter's free tier allows 50 requests per day, roughly 4 AI plans; data questions (revenue, contacts, at-risk lists) use none.
+> **Model:** AI calls go through [OpenRouter](https://openrouter.ai) using free models only: `nvidia/nemotron-3-super-120b-a12b:free`, falling back to Gemma 4 when it is busy (change with `OPENROUTER_MODEL` / `OPENROUTER_FALLBACK_MODELS`). An account plan uses about 3 model calls (`AI_FAST_MODE`, on by default; set `AI_FAST_MODE=0` for the full multi-stage pipeline, about 12 calls). OpenRouter's free tier allows 50 requests per day, roughly 15 AI plans; data questions (revenue, contacts, at-risk lists) use none.
 
 ---
 

@@ -76,7 +76,7 @@ class DecisionFramer:
     def __init__(self, model_name: str = "gemini-2.5-flash"):
         self.model_name = model_name
 
-    def frame_decision(self, query: str, account_context: dict) -> dict:
+    def frame_decision(self, query: str, account_context: dict, allow_llm: bool = True) -> dict:
         """
         Main entry: Determine the decision frame for this query.
         """
@@ -92,6 +92,15 @@ class DecisionFramer:
                 "reasoning": f"Matched keywords for {frame}"
             }
         
+        if not allow_llm:
+            return {
+                "frame": "health_assessment",
+                "method": "default",
+                "signals": self.DECISION_FRAMES["health_assessment"]["priority_signals"],
+                "ignore": self.DECISION_FRAMES["health_assessment"]["ignore_signals"],
+                "reasoning": "No keyword match; fast mode uses the default frame"
+            }
+
         # Fall back to LLM if heuristic fails
         return self._llm_frame(query, account_context)
     

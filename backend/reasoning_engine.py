@@ -1530,6 +1530,21 @@ def repair_json_string(text: str) -> str:
     return repaired
 
 
+def _compact_crm_records(account_data: Dict[str, Any], limit: int = 6) -> Dict[str, Any]:
+    """Small, factual slice of the account's records for the fast-mode crucible prompt."""
+    from intelligence_engine import open_opportunities
+    opps = open_opportunities(account_data.get("opportunities", []) or [])
+    cases = [c for c in account_data.get("cases", []) or [] if str(c.get("status", "")).lower() != "closed"]
+    activities = sorted(account_data.get("activities", []) or [], key=lambda a: str(a.get("date", "")), reverse=True)
+    return {
+        "pipeline": account_data.get("pipeline_breakdown") or {},
+        "open_opportunities": opps[:limit],
+        "contacts": (account_data.get("contacts", []) or [])[:limit],
+        "open_cases": cases[:limit],
+        "recent_activities": activities[:limit],
+    }
+
+
 def summarize_large_dataset(account_data: Dict[str, Any], requested_count: int = 5) -> Dict[str, Any]:
     """Summarize raw details to keep context window small and clean up empty/null fields."""
     if not account_data:
@@ -2154,12 +2169,15 @@ class ReasoningEngine:
         # ── LAYER 1.5 & LAYER 2.5: DECISION FRAMER & NARRATIVE BUILDER ──────────────
         frame_result = None
         narrative_result = None
+        # AI_FAST_MODE (default on): keyword framing, no narrative calls, no pre-reasoning agents.
+        # A plan then needs ~3 model calls (crucible, answer, formatter) instead of ~12.
+        fast_mode = os.getenv("AI_FAST_MODE", "1").lower() in ("1", "true")
         
         # Stage 1: Decision Framing
         try:
             from decision_framer import DecisionFramer
             framer = DecisionFramer()
-            frame_result = framer.frame_decision(user_query or "Assess health", account_data)
+            frame_result = framer.frame_decision(user_query or "Assess health", account_data, allow_llm=not fast_mode)
             print(f"[Governance] Decision Frame classified: {frame_result.get('frame')} (via {frame_result.get('method')})")
             state.intent = frame_result
             state.stage_reached = 1
@@ -2186,12 +2204,14 @@ class ReasoningEngine:
                 
                 state.evidence = focused_signals
                 
-                builder = NarrativeBuilder()
-                narrative_result = builder.build_narrative(focused_signals, frame_result.get("frame"), account_data)
-                print(f"[Governance] Strategic narrative generated. Confidence: {narrative_result.get('confidence', 0.5)}")
-                state.intelligence_brief = narrative_result
+                if not fast_mode:
+                    # Fast mode: the crucible reads the focused signals and CRM records directly
+                    builder = NarrativeBuilder()
+                    narrative_result = builder.build_narrative(focused_signals, frame_result.get("frame"), account_data)
+                    print(f"[Governance] Strategic narrative generated. Confidence: {narrative_result.get('confidence', 0.5)}")
+                    state.intelligence_brief = narrative_result
                 state.stage_reached = 2
-                report_progress("Stage 2/6: Strategic Narrative Built ✓")
+                report_progress("Stage 2/6: CRM Signals Focused ✓" if fast_mode else "Stage 2/6: Strategic Narrative Built ✓")
             except Exception as nb_err:
                 print(f"[Governance Warning] Narrative building failed: {nb_err}")
                 state.partial_data_mode = True
@@ -2204,7 +2224,12 @@ class ReasoningEngine:
         intelligence_brief = None
         reasoning_plan = None
 
-        if not state.partial_data_mode and state.stage_reached >= 2:
+        if fast_mode and not state.partial_data_mode and state.stage_reached >= 2:
+            # Fast mode: skip the three pre-reasoning agents (and their retry/repair calls);
+            # the crucible gets the CRM records directly. ~3 model calls per plan instead of ~12.
+            print("[Pre-Reasoning] AI_FAST_MODE: skipping evidence, brief and plan agents.")
+            report_progress("Stages 3-5/6: CRM Records Prepared (fast mode) ✓")
+        elif not state.partial_data_mode and state.stage_reached >= 2:
             try:
                 from pre_reasoning_layer import (
                     EvidenceSelectorAgent, IntelligenceBriefAgent,
@@ -2276,7 +2301,9 @@ class ReasoningEngine:
 Instead of debating raw metrics (numbers), you must validate whether the suggested action plan is strategic and executable:
 - Account Manager: Confirm relationship execution viability, next-steps, and resource gaps.
 - Strategic Director: Evaluate plan alignment, competitive risks, and mitigations.
-- CRO / Executive: Assess ARR at stake, budget alignment, and approve executive triggers."""
+- CRO / Executive: Assess ARR at stake, budget alignment, and approve executive triggers.
+
+Use only company names, people, amounts and dates that appear in the Context Payload. Never invent contacts or figures."""
 
         # Get pre-computed signals if available
         intelligence_signals = account_data.get("intelligence_signals", {})
@@ -2302,6 +2329,9 @@ Instead of debating raw metrics (numbers), you must validate whether the suggest
             context_payload["Pre-Computed Evidence Bundle"] = evidence_bundle.dict() if hasattr(evidence_bundle, 'dict') else (evidence_bundle if isinstance(evidence_bundle, dict) else {'content': str(evidence_bundle)})
         if intelligence_brief:
             context_payload["Intelligence Brief"] = intelligence_brief.dict() if hasattr(intelligence_brief, 'dict') else (intelligence_brief if isinstance(intelligence_brief, dict) else {'content': str(intelligence_brief)})
+        if fast_mode:
+            context_payload["Focused Signals"] = state.evidence or {}
+            context_payload["CRM Records"] = _compact_crm_records(account_data)
         if reasoning_plan:
             context_payload["Reasoning Plan"] = reasoning_plan.dict() if hasattr(reasoning_plan, 'dict') else (reasoning_plan if isinstance(reasoning_plan, dict) else {'content': str(reasoning_plan)})
 
