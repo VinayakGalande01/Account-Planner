@@ -6,6 +6,7 @@ urgency levels, conversation history context, and clean markdown presentation.
 
 # --- SECTION 1: Dependencies & LLM Endpoint Resolver ---
 # Imports HTTP clients, regex utilities, and loads active LLM configuration endpoints.
+import asyncio
 import os
 import json
 import logging
@@ -271,7 +272,10 @@ Output ONLY valid raw JSON without preamble or markdown fences.
         from reasoning_engine import call_gemini_api
         user_prompt = f"Raw Data Output to Format:\n{raw_output}"
         
-        result_text = call_gemini_api(
+        # In a worker thread: a 20-60 s model call must not block the event loop,
+        # or the server misses Render's 5 s health checks and gets restarted mid-answer.
+        result_text = await asyncio.to_thread(
+            call_gemini_api,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             api_key=gemini_key,
