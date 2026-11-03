@@ -2,13 +2,30 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/) [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Next.js 14](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/) [![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
-**APEX reads your CRM, tells you which accounts are about to slip and why, and writes the account plan to save them.**
+> **APEX reads your CRM, predicts which accounts are about to slip, explains the root causes, and generates grounded action plans to save them.**
 
-**Live demo: [account-planner-ten.vercel.app](https://account-planner-ten.vercel.app)**. Click **Log In**, then **Use demo account** (`demo@apex.example` / `ApexDemo#2026`).
+[🚀 Live Demo](https://account-planner-ten.vercel.app) &nbsp;•&nbsp; [🏗️ System Architecture](#architecture--system-design) &nbsp;•&nbsp; [⚡ Quick Start](#run-the-demo-one-command) &nbsp;•&nbsp; [📚 Documentation](docs/architecture/README.md) &nbsp;•&nbsp; [📊 Case Study](docs/CASE_STUDY.md)
 
-> The demo runs on free hosting. Outside about 10:30–19:30 IST the first visit can take ~3 minutes while the server wakes up. Data questions (at-risk accounts, revenue, deals closing) answer in seconds; full AI account plans use free AI models and take about 2 minutes.
+> [!TIP]
+> **Live Demo:** Try it instantly at **[account-planner-ten.vercel.app](https://account-planner-ten.vercel.app)**.  
+> Click **Log In**, then click **Use demo account** (fills `demo@apex.example` / `ApexDemo#2026`).  
+> *Note on free hosting:* If the server is asleep, the first request may take ~2-3 minutes to spin up. CRM data calculations are instant; AI generation plans take ~1-2 minutes.
 
 ![APEX dashboard: portfolio health and AI-detected risks](docs/images/dashboard.png)
+
+---
+
+## 📑 Table of Contents
+
+- [The Business Problem](#the-business-problem)
+- [Key Capabilities & Features](#what-apex-does)
+- [Quick Start: Run with Docker](#run-the-demo-one-command)
+- [Architecture & System Design](#architecture--system-design)
+  - [1. High-Level Architecture](#1-high-level-system-architecture)
+  - [2. End-to-End Data Flow](#2-end-to-end-data-flow)
+- [Technical Stack & Components](#technical-stack--components)
+- [Using Custom CRM Data](#use-your-own-data)
+- [Local Development (Without Docker)](#local-development-without-docker)
 
 ---
 
@@ -18,13 +35,13 @@ Renewals and expansions rarely die without warning. The signs are already in the
 
 ## What APEX does
 
-| | |
+| Feature | Description |
 |---|---|
-| **Account health score (0–100)** | Calculated for every account from pipeline vs. business won, contact coverage, engagement recency, deal progression and support quality. |
-| **Automatic risk detection** | Flags single-threaded deals, stalled strategic accounts, deals past close date, open critical cases and low CSAT. These are deterministic rules, so you can see exactly why an account is flagged. |
-| **One-click AI account plan** | Click a flagged account and APEX writes a plan grounded in that account's records: who to call, what's at stake and what to do this week. |
-| **Answers for each role** | The same data is framed for an Account Manager, a VP of Sales or an executive. |
-| **Grounding checks** | Each AI answer is scored against the CRM values it cites, and pipeline totals are itemised by a calculation auditor. |
+| 🎯 **Account Health Scoring (0–100)** | Calculated for every account from pipeline vs. business won, contact coverage, engagement recency, deal progression and support quality. |
+| 🚨 **Automated Risk Detection** | Flags single-threaded deals, stalled strategic accounts, deals past close date, open critical cases and low CSAT using deterministic logic with full explainability. |
+| ⚡ **1-Click AI Account Plans** | Click any flagged account and APEX generates a tactical plan grounded in that account's actual records: key contacts, stakes, and immediate next steps. |
+| 👥 **Multi-Role Perspectives** | The same CRM data is dynamically framed for an **Account Manager** (tactical), a **VP of Sales** (forecast risk), or an **Executive** (strategic summary). |
+| 🛡️ **Grounding & Hallucination Auditor** | Every AI assertion is checked and scored against cited CRM records, and pipeline totals are strictly audited against actual amounts. |
 
 | Accounts ranked by health | AI account plan for an at-risk account (one click from the dashboard) |
 |---|---|
@@ -36,20 +53,31 @@ Renewals and expansions rarely die without warning. The signs are already in the
 
 ## Run the demo (one command)
 
-Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+> [!IMPORTANT]
+> **Prerequisites:** Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
 
+#### **Step 1: Configure Environment (Optional)**
+Enable AI account plans by adding your OpenRouter key *(the dashboard and deterministic risk engines work fully without it)*:
 ```bash
-# Optional, enables AI account plans (dashboard and risk detection work without it)
 echo "OPENROUTER_API_KEY=your_key_here" > .env
-
-docker compose up --build
 ```
 
-Open **http://localhost:3000**, click **Log In**, then **Use demo account** (`demo@apex.example` / `ApexDemo#2026`).
+#### **Step 2: Build & Start Containers**
+```bash
+docker compose up --build
+```
+> *Note:* The first build downloads Python ML dependencies and takes a few minutes. Subsequent launches are instantaneous.
 
-The first build downloads Python ML dependencies and takes several minutes. Later starts are fast.
+#### **Step 3: Access & Test the Application**
+1. Open your browser to **http://localhost:3000**
+2. Click **Log In**
+3. Click **Use demo account** (pre-fills `demo@apex.example` / `ApexDemo#2026`)
 
-> **Model:** AI calls go through [OpenRouter](https://openrouter.ai) using free models only: `nvidia/nemotron-3-super-120b-a12b:free`, falling back to Gemma 4 when it is busy (change with `OPENROUTER_MODEL` / `OPENROUTER_FALLBACK_MODELS`). An account plan uses about 3 model calls (`AI_FAST_MODE`, on by default; set `AI_FAST_MODE=0` for the full multi-stage pipeline, about 12 calls). OpenRouter's free tier allows 50 requests per day, roughly 15 AI plans; data questions (revenue, contacts, at-risk lists) use none.
+> [!NOTE]
+> **Model Configuration:** AI calls route through [OpenRouter](https://openrouter.ai) using free-tier models (`nvidia/nemotron-3-super-120b-a12b:free`, falling back to Gemma 4 when busy).  
+> - An account plan uses ~3 model calls in default fast mode (`AI_FAST_MODE=1`).  
+> - Set `AI_FAST_MODE=0` for the deep multi-stage pipeline (~12 calls).  
+> - OpenRouter's free tier provides 50 requests/day (~15 AI plans). Pure deterministic questions (revenue, contacts, at-risk accounts) require 0 AI calls.
 
 ---
 
