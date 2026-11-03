@@ -1,8 +1,8 @@
 # APEX: AI Co-pilot for Account Planning
 
-**APEX reads your CRM, tells you which accounts are about to slip and why, and writes the account plan to save them.**
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/) [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Next.js 14](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/) [![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
-Built by **[Dataosis AI](https://dataosis.in)** as a working reference for what we implement on Salesforce and Agentforce.
+**APEX reads your CRM, tells you which accounts are about to slip and why, and writes the account plan to save them.**
 
 **Live demo: [account-planner-ten.vercel.app](https://account-planner-ten.vercel.app)**. Click **Log In**, then **Use demo account** (`demo@apex.example` / `ApexDemo#2026`).
 
@@ -53,31 +53,106 @@ The first build downloads Python ML dependencies and takes several minutes. Late
 
 ---
 
-## How it works
+## Architecture & System Design
+
+### 1. High-Level System Architecture
 
 ```mermaid
-flowchart LR
-    CRM[(CRM data<br/>Accounts · Opportunities<br/>Contacts · Activities · Cases)] --> DB[(PostgreSQL / Supabase<br/>SQLite fallback)]
-    DB --> ENG[Deterministic engines<br/>health score · risk rules · CRM hygiene]
-    ENG --> UI[Next.js dashboard]
-    UI -- "Build an account plan for X" --> P1
-
-    subgraph AI[AI pipeline, FastAPI]
-        P1[1. Intent classification] --> P2[2. Retrieval<br/>account records + ChromaDB<br/>search over activity notes]
-        P2 --> P3[3. Multi-perspective reasoning<br/>AM · VP · analyst]
-        P3 --> P4[4. Role-specific answer<br/>+ grounding score]
+flowchart TB
+    subgraph INGESTION["1. Data Ingestion & Storage"]
+        CRM["CRM Data Sources<br/>(Salesforce / HubSpot / Excel)"] --> SYNC["Sync Daemon / Ingestion Engine<br/>(backend/sync_daemon.py)"]
+        SYNC --> DB[("Primary Database<br/>PostgreSQL / Supabase<br/>(SQLite local fallback)")]
     end
 
-    P2 <--> DB
-    P3 <--> LLM{{OpenRouter / Gemini API<br/>or local Ollama}}
-    P4 --> UI
+    subgraph DETERMINISTIC["2. Deterministic Analytics Engine"]
+        DB --> HEALTH["Health Scoring Engine<br/>• Pipeline vs. Closed Won<br/>• Contact Coverage<br/>• Engagement Recency<br/>(Score: 0–100)"]
+        DB --> RISK["Risk Detection Rules<br/>• Single-Threaded Deals<br/>• Stalled Strategic Accounts<br/>• Stale Close Dates<br/>• Unresolved Critical Cases"]
+        DB --> HYGIENE["CRM Hygiene Auditor<br/>• Missing Contact Roles<br/>• Incomplete Fields"]
+    end
+
+    subgraph RAG["3. Vector Store & Semantic Retrieval"]
+        DB --> EMBED["FastEmbed / Sentence-Transformers<br/>(Activity & Note Embeddings)"]
+        EMBED --> CHROMA[("ChromaDB Vector Store<br/>Semantic Search")]
+    end
+
+    subgraph ORCHESTRATOR["4. AI Reasoning & Co-Pilot (FastAPI)"]
+        PROMPT["User Request / Query Router"] --> INTENT{"Intent Classification<br/>(Data Query vs. Plan)"}
+        INTENT -- "Data Query" --> SQL_EXEC["Deterministic Calculation & SQL"]
+        INTENT -- "Account Plan" --> AGENT_ORCH["Multi-Perspective Reasoning Engine"]
+        
+        CHROMA --> AGENT_ORCH
+        DB --> AGENT_ORCH
+        
+        subgraph AGENTS["Role Perspectives"]
+            AGENT_ORCH --> AM["Account Manager<br/>(Tactical steps & contacts)"]
+            AGENT_ORCH --> VP["VP of Sales<br/>(Revenue risk & forecasting)"]
+            AGENT_ORCH --> EXEC["Executive<br/>(High-level summary)"]
+        end
+
+        AGENTS --> AUDITOR["Grounding & Calculation Auditor<br/>(Verifies claims against CRM values)"]
+    end
+
+    subgraph LLM_LAYER["5. Model Provider Layer"]
+        AUDITOR <--> LLMS{{"LLM Providers<br/>• OpenRouter (Nemotron / Gemma)<br/>• Google Gemini API<br/>• Local Ollama"}}
+    end
+
+    subgraph PRESENTATION["6. Frontend Presentation (Next.js 14)"]
+        HEALTH --> DASHBOARD["Next.js Responsive Dashboard<br/>(React · TypeScript · Tailwind · Recharts)"]
+        RISK --> DASHBOARD
+        SQL_EXEC --> DASHBOARD
+        AUDITOR --> DASHBOARD
+        DASHBOARD --> USER(("Sales Team / Executive"))
+    end
 ```
 
-- **Backend:** Python, FastAPI, SQLAlchemy, pandas, ChromaDB, sentence-transformers (the hosted demo runs the same embedding model on FastEmbed to fit in 512 MB)
-- **Frontend:** Next.js, React, TypeScript, Recharts, Framer Motion
-- **Data:** PostgreSQL / Supabase with multi-tenant row-level isolation, SQLite fallback for local runs
-- **AI:** any OpenRouter model (default: free Nemotron 3 Super with Gemma 4 fallbacks), Google Gemini directly, or Ollama (fully local, no data leaves your network)
-- **Ops:** Docker Compose, GitHub Actions CI and keep-alive, eval harness and request tracing; hosted on Render (backend), Vercel (frontend) and Supabase (database)
+### 2. End-to-End Data Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Sales Rep / VP
+    participant UI as Next.js Dashboard
+    participant API as FastAPI Backend
+    participant Engine as Deterministic Engines
+    participant Vector as ChromaDB
+    participant DB as PostgreSQL / SQLite
+    participant LLM as Model Provider (OpenRouter / Gemini / Ollama)
+
+    User->>UI: View Portfolio / Request Account Plan
+    UI->>API: GET /api/accounts or POST /api/plan
+    activate API
+
+    alt Request: Portfolio & Health Status
+        API->>Engine: Run Deterministic Rules & Health Scoring
+        Engine->>DB: Query Accounts, Deals, Contacts, Cases
+        DB-->>Engine: Raw Records
+        Engine-->>API: Health Scores (0-100) & Flagged Risks
+        API-->>UI: Render Dashboard Cards & Risk Badges
+    else Request: AI Account Plan Generation
+        API->>DB: Fetch structured account data (pipeline, stage, team)
+        DB-->>API: Account metrics & contact records
+        API->>Vector: Query semantic context (recent activity logs, notes)
+        Vector-->>API: Relevant interaction snippets
+        API->>LLM: Prompt with CRM context + Multi-Role Reasoning instructions
+        LLM-->>API: Synthesized strategy & action plan
+        API->>Engine: Grounding check (Audit figures vs. CRM ground truth)
+        Engine-->>API: Grounding score & audited plan
+        API-->>UI: Display role-specific plan with grounded recommendations
+    end
+
+    deactivate API
+    UI-->>User: Visualized insights & actionable next steps
+```
+
+---
+
+## Technical Stack & Components
+
+- **Backend:** Python 3.11+, FastAPI, SQLAlchemy, pandas, ChromaDB, FastEmbed / sentence-transformers
+- **Frontend:** Next.js, React, TypeScript, Tailwind CSS, Recharts, Framer Motion
+- **Database:** PostgreSQL / Supabase with multi-tenant row-level isolation (SQLite fallback for local runs)
+- **AI Models:** OpenRouter API (Nemotron 3 Super, Gemma 4 fallback), Google Gemini API, or fully local Ollama
+- **DevOps & Infrastructure:** Docker, Docker Compose, GitHub Actions CI, Render (backend), Vercel (frontend), Supabase (database)
 
 More detail: [architecture docs](docs/architecture/README.md) · [case study](docs/CASE_STUDY.md)
 
@@ -102,13 +177,3 @@ BACKEND_URL=http://localhost:8002 AUTH_URL=http://localhost:8002 npm run dev
 ```
 
 Without `DATABASE_URL` the backend uses a local SQLite file. Optional backend settings (environment variables or `backend/.env`): `OPENROUTER_API_KEY` / `OPENROUTER_MODEL`, `GEMINI_API_KEY`, `DATABASE_URL`, `LLM_URL` / `MODEL_NAME` for a local Ollama model.
-
----
-
-## Want this on your Salesforce?
-
-We implement this pattern inside your org, as Agentforce actions or a custom app on your real pipeline, with your own risk rules.
-
-**Dataosis AI**: [dataosis.in](https://dataosis.in)
-
-*Proprietary. All rights reserved.*
